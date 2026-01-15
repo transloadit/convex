@@ -401,7 +401,7 @@ describeE2e("e2e upload flow", () => {
     const browser = await chromium.launch();
     const page = await browser.newPage();
 
-    await page.goto(serverUrl, { waitUntil: "networkidle" });
+    await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
 
     const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
     const imagePath = join(tempDir, "sample.png");
