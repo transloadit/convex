@@ -1,7 +1,7 @@
 {
   "name": "@transloadit/convex",
   "description": "Transloadit component for Convex",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "packageManager": "yarn@4.5.0",
   "repository": {
@@ -27,6 +27,7 @@
     "test:watch": "vitest --typecheck",
     "lint": "biome check .",
     "format": "biome format . --write",
+    "check": "yarn format && yarn lint && yarn typecheck && yarn test",
     "prepack": "yarn build",
     "smoke": "dotenv -q -- node scripts/smoke-test.ts",
     "template:ensure": "dotenv -q -- node scripts/ensure-template.ts",
