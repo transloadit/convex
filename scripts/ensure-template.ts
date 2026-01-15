@@ -63,7 +63,11 @@ if (existing?.id) {
     existing.id,
     templateFile,
   ]);
-  const modifyPayload = parseJsonLines(modifyOutput).at(-1);
+  const modifyPayloads = parseJsonLines(modifyOutput);
+  const modifyPayload =
+    modifyPayloads.length > 0
+      ? modifyPayloads[modifyPayloads.length - 1]
+      : undefined;
   templateId = modifyPayload?.id ?? existing.id;
 } else {
   const createOutput = run([
@@ -73,7 +77,11 @@ if (existing?.id) {
     templateName,
     templateFile,
   ]);
-  const createPayload = parseJsonLines(createOutput).at(-1);
+  const createPayloads = parseJsonLines(createOutput);
+  const createPayload =
+    createPayloads.length > 0
+      ? createPayloads[createPayloads.length - 1]
+      : undefined;
   templateId = createPayload?.id ?? createPayload?.template_id ?? "";
 }
 
