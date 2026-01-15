@@ -46,15 +46,31 @@ yarn template:ensure
 Releases are automated via GitHub Actions and published to npm using OIDC (Trusted Publisher).
 
 1. Ensure CI is green on `main`.
-2. Update `package.json` version.
-3. Tag and push the release:
+2. Run the local check suite:
 
 ```bash
-git tag v0.0.1
-git push origin v0.0.1
+yarn check
 ```
 
-4. The `Publish to npm` workflow will:
+3. Update `package.json` version and commit it:
+
+```bash
+git checkout main
+git pull
+# edit package.json version, then:
+git add package.json
+git commit -m "Release v0.0.2"
+git push
+```
+
+4. Tag and push the release:
+
+```bash
+git tag v0.0.2
+git push origin v0.0.2
+```
+
+5. The `Publish to npm` workflow will:
    - build and pack a `.tgz` artifact,
    - create a **draft** GitHub release,
    - publish the tarball to npm with provenance.
