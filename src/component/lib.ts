@@ -1,6 +1,5 @@
 import { type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
-import type { Id } from "./_generated/dataModel.js";
 import {
   action,
   internalMutation,
@@ -261,7 +260,7 @@ export const generateUploadParams = action({
     signature: v.string(),
     url: v.string(),
   }),
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     const { paramsString } = buildTransloaditParams({
       authKey: args.config.authKey,
       templateId: args.templateId,

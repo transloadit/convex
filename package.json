@@ -34,7 +34,10 @@
     "qa:full": "dotenv -q -- node scripts/qa-full.ts",
     "qa:full:verbose": "dotenv -q -- node scripts/qa-full.ts --verbose"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -71,7 +74,7 @@
     "tus-js-client": "^4.1.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.2.4",
     "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^20.19.0",
     "@types/react": "^19.1.10",

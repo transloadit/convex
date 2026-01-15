@@ -16,13 +16,29 @@ const log = (...args: unknown[]) => {
   }
 };
 
+type TemplateInfo = {
+  templateId: string;
+  templateName: string;
+};
+
+type TunnelInfo = {
+  url: string;
+  notifyUrl?: string;
+};
+
+type WebhookPayload = {
+  ok?: string;
+  assembly_id?: string;
+  [key: string]: unknown;
+};
+
 if (!authKey || !authSecret) {
   throw new Error(
     "Missing TRANSLOADIT_KEY/TRANSLOADIT_SECRET (or TRANSLOADIT_AUTH_KEY/TRANSLOADIT_AUTH_SECRET)",
   );
 }
 
-function runScript(scriptPath) {
+function runScript(scriptPath: string) {
   const result = spawnSync("node", [scriptPath], {
     encoding: "utf8",
     stdio: "pipe",
@@ -37,7 +53,7 @@ function runScript(scriptPath) {
   return result.stdout?.trim() ?? "";
 }
 
-function parseJson(output) {
+function parseJson<T>(output: string): T {
   const trimmed = output.trim();
   if (!trimmed) {
     throw new Error("Expected JSON output but got empty string");
@@ -64,7 +80,7 @@ if (buildResult.status !== 0) {
 
 log("Ensuring template...");
 const ensureTemplateOutput = runScript(resolve("scripts/ensure-template.ts"));
-const templateInfo = parseJson(ensureTemplateOutput);
+const templateInfo = parseJson<TemplateInfo>(ensureTemplateOutput);
 log("Template info:", templateInfo);
 
 const serverPort = 8790;
@@ -81,9 +97,9 @@ const tunnelProcess = spawn(
   { stdio: ["ignore", "pipe", "pipe"] },
 );
 
-const tunnelInfo = await new Promise((resolvePromise, reject) => {
+const tunnelInfo = await new Promise<TunnelInfo>((resolvePromise, reject) => {
   let buffer = "";
-  const onData = (chunk) => {
+  const onData = (chunk: Buffer) => {
     buffer += chunk.toString();
     const newlineIndex = buffer.indexOf("\n");
     if (newlineIndex !== -1) {
@@ -91,7 +107,7 @@ const tunnelInfo = await new Promise((resolvePromise, reject) => {
       buffer = buffer.slice(newlineIndex + 1);
       if (!line) return;
       try {
-        resolvePromise(parseJson(line));
+        resolvePromise(parseJson<TunnelInfo>(line));
       } catch (error) {
         reject(error);
       }
@@ -104,7 +120,6 @@ const tunnelInfo = await new Promise((resolvePromise, reject) => {
 });
 
 log("Tunnel info:", tunnelInfo);
-const notifyUrl = tunnelInfo.notifyUrl;
 
 const componentDist = resolve("dist/component");
 const schemaModule = await import(
@@ -134,8 +149,8 @@ const modules = {
 const t = convexTest(schemaModule.default, modules);
 const { api } = apiModule;
 
-function splitBuffer(buffer, delimiter) {
-  const parts = [];
+function splitBuffer(buffer: Buffer, delimiter: Buffer) {
+  const parts: Buffer[] = [];
   let start = 0;
   let index = buffer.indexOf(delimiter, start);
   while (index !== -1) {
@@ -147,7 +162,7 @@ function splitBuffer(buffer, delimiter) {
   return parts;
 }
 
-function parseMultipart(buffer, contentType) {
+function parseMultipart(buffer: Buffer, contentType: string) {
   const match = /boundary=(.+)$/i.exec(contentType || "");
   if (!match) {
     throw new Error("Missing multipart boundary");
@@ -155,7 +170,7 @@ function parseMultipart(buffer, contentType) {
   const boundary = match[1].replace(/^"|"$/g, "");
   const delimiter = Buffer.from(`--${boundary}`);
   const parts = splitBuffer(buffer, delimiter);
-  const fields = {};
+  const fields: Record<string, string> = {};
 
   for (const part of parts) {
     if (part.length === 0) continue;
@@ -180,7 +195,7 @@ function parseMultipart(buffer, contentType) {
   return fields;
 }
 
-const webhookReceived = new Promise((resolve, reject) => {
+const webhookReceived = new Promise<WebhookPayload>((resolve, reject) => {
   const server = createServer(async (req, res) => {
     if (req.method !== "POST") {
       res.writeHead(405);
@@ -188,8 +203,8 @@ const webhookReceived = new Promise((resolve, reject) => {
       return;
     }
 
-    const chunks = [];
-    req.on("data", (chunk) => chunks.push(chunk));
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
     req.on("end", async () => {
       try {
         const body = Buffer.concat(chunks);
@@ -197,12 +212,12 @@ const webhookReceived = new Promise((resolve, reject) => {
 
         let rawPayload = "";
         let signature = "";
-        let payload: Record<string, unknown> | undefined;
+        let payload: WebhookPayload | undefined;
 
         if (contentType.includes("multipart/form-data")) {
           const fields = parseMultipart(body, contentType);
-          rawPayload = fields.transloadit;
-          signature = fields.signature;
+          rawPayload = fields.transloadit ?? "";
+          signature = fields.signature ?? "";
           if (!rawPayload) {
             res.writeHead(400);
             res.end("Missing transloadit payload");
@@ -221,19 +236,22 @@ const webhookReceived = new Promise((resolve, reject) => {
           payload = JSON.parse(rawPayload);
         } else {
           rawPayload = body.toString("utf8");
-          payload = JSON.parse(rawPayload);
+          payload = JSON.parse(rawPayload) as WebhookPayload;
           signature = (
             req.headers["x-transloadit-signature"] ||
             req.headers["x-signature"] ||
             req.headers["transloadit-signature"] ||
             ""
           ).toString();
-          if (payload?.transloadit && typeof payload.transloadit === "string") {
-            rawPayload = payload.transloadit;
-            payload = JSON.parse(rawPayload);
+          const payloadRecord = payload as Record<string, unknown>;
+          const nestedPayload = payloadRecord.transloadit;
+          if (typeof nestedPayload === "string") {
+            rawPayload = nestedPayload;
+            payload = JSON.parse(rawPayload) as WebhookPayload;
           }
-          if (payload?.signature && typeof payload.signature === "string") {
-            signature = payload.signature;
+          const nestedSignature = payloadRecord.signature;
+          if (typeof nestedSignature === "string") {
+            signature = nestedSignature;
           }
         }
 
@@ -318,12 +336,15 @@ if (!assemblyId) {
 }
 
 let timeoutId: ReturnType<typeof setTimeout> | undefined;
-const webhookTimeout = new Promise((_, reject) => {
+const webhookTimeout = new Promise<WebhookPayload>((_, reject) => {
   timeoutId = setTimeout(() => reject(new Error("Webhook timeout")), 120000);
 });
 
 log("Waiting for webhook...");
-const webhookPayload = await Promise.race([webhookReceived, webhookTimeout]);
+const webhookPayload = await Promise.race<WebhookPayload>([
+  webhookReceived,
+  webhookTimeout,
+]);
 if (timeoutId) {
   clearTimeout(timeoutId);
 }

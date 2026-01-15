@@ -23,7 +23,7 @@ if (!env.TRANSLOADIT_KEY || !env.TRANSLOADIT_SECRET) {
   );
 }
 
-function run(args) {
+function run(args: string[]) {
   const result = spawnSync("npx", ["--yes", "transloadit", ...args], {
     env,
     encoding: "utf8",
@@ -35,13 +35,19 @@ function run(args) {
   return result.stdout.trim();
 }
 
-function parseJsonLines(output) {
+type TemplateRecord = {
+  id?: string;
+  name?: string;
+  template_id?: string;
+};
+
+function parseJsonLines(output: string): TemplateRecord[] {
   if (!output) return [];
   return output
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => JSON.parse(line));
+    .map((line) => JSON.parse(line) as TemplateRecord);
 }
 
 const listOutput = run(["templates", "list", "-j", "--fields", "id,name"]);

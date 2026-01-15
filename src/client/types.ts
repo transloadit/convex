@@ -33,17 +33,18 @@ export type QueryCtx = RunQueryCtx & {
   storage: StorageReader;
 };
 
-export type OpaqueIds<T> = T extends GenericId<infer _T>
-  ? string
-  : T extends (infer U)[]
-    ? OpaqueIds<U>[]
-    : T extends ArrayBuffer
-      ? ArrayBuffer
-      : T extends object
-        ? {
-            [K in keyof T]: OpaqueIds<T[K]>;
-          }
-        : T;
+export type OpaqueIds<T> =
+  T extends GenericId<infer _T>
+    ? string
+    : T extends (infer U)[]
+      ? OpaqueIds<U>[]
+      : T extends ArrayBuffer
+        ? ArrayBuffer
+        : T extends object
+          ? {
+              [K in keyof T]: OpaqueIds<T[K]>;
+            }
+          : T;
 
 export type UseApi<API> = Expand<{
   [mod in keyof API]: API[mod] extends FunctionReference<

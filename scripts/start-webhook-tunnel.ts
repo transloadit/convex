@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 const isWindows = process.platform === "win32";
 const binaryName = isWindows ? "cloudflared.exe" : "cloudflared";
 
-function isExecutable(path) {
+function isExecutable(path: string) {
   try {
     const stats = statSync(path);
     if (!stats.isFile()) return false;
@@ -16,7 +16,7 @@ function isExecutable(path) {
   }
 }
 
-function findOnPath(name) {
+function findOnPath(name: string) {
   const pathEntries = (process.env.PATH || "").split(
     process.platform === "win32" ? ";" : ":",
   );
@@ -108,7 +108,7 @@ const tunnel = spawn(
 let printed = false;
 const urlPattern = /(https:\/\/[-\w]+\.trycloudflare\.com)/i;
 
-function handleOutput(chunk) {
+function handleOutput(chunk: Buffer) {
   const text = chunk.toString();
   const match = text.match(urlPattern);
   if (match?.[1] && !printed) {
