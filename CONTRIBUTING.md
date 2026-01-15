@@ -24,7 +24,29 @@ yarn typecheck
 yarn test
 ```
 
-End-to-end flow (uses Transloadit credentials and a Cloudflare tunnel):
+Smoke test (creates a minimal assembly and prints the response JSON):
+
+```bash
+cp .env.example .env
+# Set TRANSLOADIT_KEY and TRANSLOADIT_SECRET
+yarn smoke
+```
+
+Local webhook testing with cloudflared:
+
+```bash
+yarn tunnel
+```
+
+Use the generated public URL as `notifyUrl` when creating Assemblies or set
+`VITE_TRANSLOADIT_NOTIFY_URL` for the example app.
+
+You can also run `yarn tunnel --once` to print the URL and exit.
+
+Full QA flow (template + tunnel + webhook):
+
+This runs an end-to-end webhook QA flow against Transloadit using a local webhook
+server and cloudflared (auto-downloaded if missing):
 
 ```bash
 cp .env.example .env
@@ -34,6 +56,8 @@ yarn qa:full
 # Or with verbose logging
 yarn qa:full:verbose
 ```
+
+It prints a JSON summary including the assembly id, webhook status, and number of stored results.
 
 Template management (idempotent):
 

@@ -118,29 +118,9 @@ http.route({
 export default http;
 ```
 
-### Local webhook testing with cloudflared
+### Local testing and QA
 
-If you want to test webhooks locally, tunnel your Convex dev HTTP endpoint:
-
-```bash
-yarn tunnel
-```
-
-Use the generated public URL as `notifyUrl` when creating Assemblies or set
-`VITE_TRANSLOADIT_NOTIFY_URL` for the example app.
-
-You can also run `yarn tunnel --once` to print the URL and exit.
-
-### Full QA flow (template + tunnel + webhook)
-
-This runs an end-to-end webhook QA flow against Transloadit using a local webhook server
-and cloudflared (auto-downloaded if missing):
-
-```bash
-yarn qa:full
-```
-
-It prints a JSON summary including the assembly id, webhook status, and number of stored results.
+Local webhook testing, the full QA flow, and smoke tests are documented in `CONTRIBUTING.md`.
 
 ## React usage
 
