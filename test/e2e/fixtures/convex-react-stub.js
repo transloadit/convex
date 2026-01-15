@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export function useAction(ref) {
   return useCallback(
@@ -14,8 +14,7 @@ export function useAction(ref) {
 
 export function useQuery(ref, args) {
   const [data, setData] = useState(null);
-  const argsRef = useRef(args ?? {});
-  argsRef.current = args ?? {};
+  const argsValue = args ?? {};
 
   useEffect(() => {
     let active = true;
@@ -24,7 +23,7 @@ export function useQuery(ref, args) {
     const run = async () => {
       if (!globalThis.__convexQuery) return;
       try {
-        const result = await globalThis.__convexQuery(ref, argsRef.current);
+        const result = await globalThis.__convexQuery(ref, argsValue);
         if (active) {
           setData(result ?? null);
         }
@@ -47,7 +46,7 @@ export function useQuery(ref, args) {
         globalThis.clearTimeout(timerId);
       }
     };
-  }, [ref]);
+  }, [ref, argsValue]);
 
   return data;
 }
