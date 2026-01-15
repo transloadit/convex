@@ -7,21 +7,9 @@
     <script>
       globalThis.__notifyUrl = __NOTIFY_URL__;
     </script>
-    <script type="importmap">
-      {
-        "imports": {
-          "react": "https://esm.sh/react@18?bundle",
-          "react-dom/client": "https://esm.sh/react-dom@18/client?bundle",
-          "react/jsx-runtime": "https://esm.sh/react@18/jsx-runtime?bundle",
-          "convex/react": "/fixtures/convex-react-stub.js",
-          "@transloadit/convex/react": "/dist/react/index.js",
-          "tus-js-client": "https://esm.sh/tus-js-client@4?bundle"
-        }
-      }
-    </script>
+    <script type="module" src="/fixtures/app.js"></script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/fixtures/app.js"></script>
   </body>
 </html>

@@ -4,9 +4,10 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
-import { extname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { convexTest } from "convex-test";
+import { build } from "esbuild";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { api } from "../../src/component/_generated/api.js";
 import schema from "../../src/component/schema.js";
@@ -47,11 +48,12 @@ function splitBuffer(buffer: Buffer, delimiter: Buffer) {
 }
 
 function parseMultipart(buffer: Buffer, contentType: string) {
-  const match = /boundary=(.+)$/i.exec(contentType || "");
-  if (!match) {
+  const match = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType || "") ?? [];
+  const boundaryMatch = match[1] || match[2];
+  if (!boundaryMatch) {
     throw new Error("Missing multipart boundary");
   }
-  const boundary = match[1].replace(/^"|"$/g, "");
+  const boundary = boundaryMatch;
   const delimiter = Buffer.from(`--${boundary}`);
   const parts = splitBuffer(buffer, delimiter);
   const fields: Record<string, string> = {};
@@ -119,19 +121,15 @@ async function startTunnel(port: number) {
   return { process, info };
 }
 
-function contentTypeFor(pathname: string) {
-  const extension = extname(pathname);
-  if (extension === ".html") return "text/html";
-  if (extension === ".js") return "text/javascript";
-  if (extension === ".map" || extension === ".json") return "application/json";
-  return "application/octet-stream";
-}
-
 describeE2e("e2e upload flow", () => {
   let serverUrl = "";
   let notifyUrl = "";
   let tunnelProcess: ReturnType<typeof spawn> | null = null;
   let server: ReturnType<typeof createServer> | null = null;
+  let bundlePath = "";
+  let webhookCount = 0;
+  let lastWebhookPayload: WebhookPayload | null = null;
+  let lastWebhookError: unknown = null;
 
   const t = convexTest(schema, modules);
 
@@ -147,10 +145,39 @@ describeE2e("e2e upload flow", () => {
       join(fixturesDir, "index.html"),
       "utf8",
     );
-    const appScript = await readFile(join(fixturesDir, "app.js"));
-    const convexStub = await readFile(
-      join(fixturesDir, "convex-react-stub.js"),
-    );
+    const convexStubPath = join(fixturesDir, "convex-react-stub.js");
+    const bundleDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-bundle-"));
+    bundlePath = join(bundleDir, "app.js");
+
+    const escapeRegex = (value: string) =>
+      value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    const aliasPlugin = (aliases: Record<string, string>) => ({
+      name: "alias",
+      setup(buildInstance: Parameters<typeof build>[0]) {
+        for (const [from, to] of Object.entries(aliases)) {
+          const filter = new RegExp(`^${escapeRegex(from)}$`);
+          buildInstance.onResolve({ filter }, () => ({ path: to }));
+        }
+      },
+    });
+
+    await build({
+      entryPoints: [join(fixturesDir, "app.tsx")],
+      bundle: true,
+      format: "esm",
+      platform: "browser",
+      outfile: bundlePath,
+      logLevel: "silent",
+      define: {
+        "process.env.NODE_ENV": '"production"',
+      },
+      plugins: [
+        aliasPlugin({
+          "convex/react": convexStubPath,
+        }),
+      ],
+    });
 
     const steps = {
       ":original": {
@@ -181,35 +208,13 @@ describeE2e("e2e upload flow", () => {
       }
 
       if (method === "GET" && url.pathname === "/fixtures/app.js") {
-        res.writeHead(200, { "content-type": "text/javascript" });
-        res.end(appScript);
-        return;
-      }
-
-      if (
-        method === "GET" &&
-        url.pathname === "/fixtures/convex-react-stub.js"
-      ) {
-        res.writeHead(200, { "content-type": "text/javascript" });
-        res.end(convexStub);
-        return;
-      }
-
-      if (method === "GET" && url.pathname.startsWith("/dist/")) {
-        const relativePath = url.pathname.replace("/dist/", "");
-        const filePath = join(distDir, relativePath);
-        if (!filePath.startsWith(distDir)) {
-          res.writeHead(403);
-          res.end();
-          return;
-        }
         try {
-          const file = await readFile(filePath);
-          res.writeHead(200, { "content-type": contentTypeFor(filePath) });
+          const file = await readFile(bundlePath);
+          res.writeHead(200, { "content-type": "text/javascript" });
           res.end(file);
         } catch {
-          res.writeHead(404);
-          res.end();
+          res.writeHead(500);
+          res.end("Missing bundle");
         }
         return;
       }
@@ -345,12 +350,22 @@ describeE2e("e2e upload flow", () => {
           return;
         }
 
-        await t.action(api.lib.handleWebhook, {
-          payload,
-          rawBody: rawPayload,
-          signature,
-          verifySignature: true,
-        });
+        try {
+          await t.action(api.lib.handleWebhook, {
+            payload,
+            rawBody: rawPayload,
+            signature,
+            verifySignature: true,
+          });
+          webhookCount += 1;
+          lastWebhookPayload = payload;
+        } catch (error) {
+          lastWebhookError = error;
+          console.error("Webhook handler failed", error);
+          res.writeHead(500);
+          res.end("Webhook handler failed");
+          return;
+        }
 
         res.writeHead(204);
         res.end();
@@ -406,7 +421,7 @@ describeE2e("e2e upload flow", () => {
     const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
     const imagePath = join(tempDir, "sample.png");
     const pngBase64 =
-      "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAB7GkOtAAAADUlEQVR4nGP4z8DwHwAF7gL+5K9I5QAAAABJRU5ErkJggg==";
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
     await writeFile(imagePath, Buffer.from(pngBase64, "base64"));
 
     await page.setInputFiles('[data-testid="file-input"]', imagePath);
@@ -415,16 +430,28 @@ describeE2e("e2e upload flow", () => {
       timeout: 120_000,
     });
 
-    await page.waitForFunction(
-      () => {
-        const el = document.querySelector('[data-testid="results-json"]');
-        return el?.textContent && el.textContent.length > 0;
-      },
-      { timeout: 180_000 },
-    );
+    const assemblyText = await page.textContent('[data-testid="assembly-id"]');
+    const assemblyId = assemblyText?.replace("ID:", "").trim() ?? "";
+    expect(assemblyId).not.toBe("");
 
-    const resultsText = await page.textContent('[data-testid="results-json"]');
-    const results = resultsText ? JSON.parse(resultsText) : [];
+    const waitForResults = async () => {
+      const start = Date.now();
+      while (Date.now() - start < 180_000) {
+        const results = await t.query(api.lib.listResults, { assemblyId });
+        if (results.length > 0) {
+          return results;
+        }
+        await new Promise((resolvePromise) => setTimeout(resolvePromise, 1500));
+      }
+      return [];
+    };
+
+    const results = await waitForResults();
+    if (!results.length) {
+      console.log("Webhook count:", webhookCount);
+      console.log("Last webhook payload:", lastWebhookPayload);
+      console.log("Last webhook error:", lastWebhookError);
+    }
 
     const resized = Array.isArray(results)
       ? results.find((result) => result?.stepName === "resize")
@@ -434,10 +461,10 @@ describeE2e("e2e upload flow", () => {
     expect(typeof resized.sslUrl).toBe("string");
     expect(resized.sslUrl).toMatch(/^https:\/\//);
 
-    const statusText = await page.textContent(
-      '[data-testid="assembly-status"]',
-    );
-    expect(statusText).toContain("ASSEMBLY_COMPLETED");
+    const storedStatus = await t.query(api.lib.getAssemblyStatus, {
+      assemblyId,
+    });
+    expect(storedStatus?.ok).toBe("ASSEMBLY_COMPLETED");
 
     await browser.close();
   });
