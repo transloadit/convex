@@ -24,6 +24,14 @@ yarn typecheck
 yarn test
 ```
 
+E2E browser test (uploads a file via the React example and validates webhook results):
+
+```bash
+cp .env.example .env
+# Set TRANSLOADIT_KEY and TRANSLOADIT_SECRET
+yarn test:e2e
+```
+
 Smoke test (creates a minimal assembly and prints the response JSON):
 
 ```bash
@@ -58,6 +66,7 @@ yarn qa:full:verbose
 ```
 
 It prints a JSON summary including the assembly id, webhook status, and number of stored results.
+After that completes, it runs `yarn test:e2e`.
 
 Template management (idempotent):
 

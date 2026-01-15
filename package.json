@@ -25,6 +25,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --typecheck",
     "test:watch": "vitest --typecheck",
+    "test:e2e": "dotenv -q -- node scripts/run-e2e.ts",
     "lint": "biome check .",
     "format": "biome format . --write",
     "check": "yarn format && yarn lint && yarn typecheck && yarn test",
@@ -32,8 +33,8 @@
     "smoke": "dotenv -q -- node scripts/smoke-test.ts",
     "template:ensure": "dotenv -q -- node scripts/ensure-template.ts",
     "tunnel": "node scripts/start-webhook-tunnel.ts",
-    "qa:full": "dotenv -q -- node scripts/qa-full.ts",
-    "qa:full:verbose": "dotenv -q -- node scripts/qa-full.ts --verbose"
+    "qa:full": "dotenv -q -- node scripts/qa-full.ts && yarn test:e2e",
+    "qa:full:verbose": "dotenv -q -- node scripts/qa-full.ts --verbose && yarn test:e2e"
   },
   "files": [
     "dist",
@@ -77,6 +78,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.3.11",
     "@edge-runtime/vm": "^5.0.0",
+    "@playwright/test": "^1.57.0",
     "@types/node": "^25.0.8",
     "@types/react": "^19.2.8",
     "convex": "^1.31.4",

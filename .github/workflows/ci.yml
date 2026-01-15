@@ -68,6 +68,25 @@ jobs:
       - run: yarn install --immutable
       - run: yarn test
 
+  e2e:
+    name: E2E tests
+    if: >
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn exec playwright install --with-deps chromium
+      - run: yarn test:e2e
+        env:
+          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
+          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
+
   release:
     name: Publish to npm
     runs-on: ubuntu-latest
@@ -76,6 +95,7 @@ jobs:
       - biome
       - typescript
       - unit
+      - e2e
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
       id-token: write
