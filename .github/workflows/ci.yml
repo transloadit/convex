@@ -88,8 +88,18 @@ jobs:
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
+      - name: Check if version already published
+        id: npm_check
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if npm view @transloadit/convex@"${VERSION}" version >/dev/null 2>&1; then
+            echo "already_published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_published=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/download-artifact@v4
         with:
           name: package
       - run: npm install -g npm@^11.5.1
       - run: npm publish *.tgz --provenance
+        if: steps.npm_check.outputs.already_published != 'true'
