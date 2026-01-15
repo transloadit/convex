@@ -1,0 +1,35 @@
+{
+  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
+  "organizeImports": { "enabled": true },
+  "files": {
+    "ignore": ["dist/**", "src/component/_generated/**"]
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2
+  },
+  "overrides": [
+    {
+      "include": ["src/component/_generated/**"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
+      "include": ["src/component/setup.test.ts"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExportsInTest": "off"
+          }
+        }
+      }
+    }
+  ]
+}

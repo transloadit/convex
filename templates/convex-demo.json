@@ -1,0 +1,10 @@
+{
+  "resize": {
+    "use": ":original",
+    "robot": "/image/resize",
+    "width": 800,
+    "height": 800,
+    "resize_strategy": "fit",
+    "result": true
+  }
+}

@@ -1,0 +1,15 @@
+node_modules
+dist
+.dist-cache
+coverage
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.yarn/sdks
+.pnp.*
+.DS_Store
+.env
+.env.*
+.tools
+*.tsbuildinfo

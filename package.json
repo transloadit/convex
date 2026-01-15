@@ -1,0 +1,82 @@
+{
+  "name": "@transloadit/convex",
+  "description": "Transloadit component for Convex",
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "yarn@4.5.0",
+  "repository": "github:transloadit/convex",
+  "license": "Apache-2.0",
+  "author": "Transloadit",
+  "keywords": [
+    "convex",
+    "component",
+    "transloadit",
+    "upload",
+    "assembly",
+    "tus",
+    "media"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/emit-package-json.ts",
+    "build:watch": "tsc -p tsconfig.build.json --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --typecheck",
+    "test:watch": "vitest --typecheck",
+    "lint": "biome check .",
+    "format": "biome format . --write",
+    "smoke": "dotenv -q -- node scripts/smoke-test.ts",
+    "template:ensure": "dotenv -q -- node scripts/ensure-template.ts",
+    "tunnel": "node scripts/start-webhook-tunnel.ts",
+    "qa:full": "dotenv -q -- node scripts/qa-full.ts",
+    "qa:full:verbose": "dotenv -q -- node scripts/qa-full.ts --verbose"
+  },
+  "files": ["dist", "src"],
+  "exports": {
+    "./package.json": "./package.json",
+    ".": {
+      "@convex-dev/component-source": "./src/client/index.ts",
+      "types": "./dist/client/index.d.ts",
+      "default": "./dist/client/index.js"
+    },
+    "./react": {
+      "@convex-dev/component-source": "./src/react/index.tsx",
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
+    },
+    "./lib": {
+      "@convex-dev/component-source": "./src/component/lib.ts",
+      "types": "./dist/component/lib.d.ts",
+      "default": "./dist/component/lib.js"
+    },
+    "./convex.config": {
+      "@convex-dev/component-source": "./src/component/convex.config.ts",
+      "types": "./dist/component/convex.config.d.ts",
+      "default": "./dist/component/convex.config.js"
+    }
+  },
+  "peerDependencies": {
+    "convex": "^1.24.8",
+    "react": "^18.3.1 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "tus-js-client": "^4.1.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@edge-runtime/vm": "^5.0.0",
+    "@types/node": "^20.19.0",
+    "@types/react": "^19.1.10",
+    "convex": "^1.24.8",
+    "convex-test": "0.0.37",
+    "dotenv-cli": "^8.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "3.2.4"
+  },
+  "types": "./dist/client/index.d.ts",
+  "module": "./dist/client/index.js"
+}
