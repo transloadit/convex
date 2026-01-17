@@ -1,3 +1,4 @@
+import type { AssemblyInstructionsInput } from "@transloadit/types/template";
 import { type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
 import {
@@ -188,10 +189,10 @@ export const createAssembly = action({
     const { paramsString, params } = buildTransloaditParams({
       authKey: args.config.authKey,
       templateId: args.templateId,
-      steps: args.steps as Record<string, unknown> | undefined,
-      fields: args.fields as Record<string, unknown> | undefined,
+      steps: args.steps as AssemblyInstructionsInput["steps"],
+      fields: args.fields as AssemblyInstructionsInput["fields"],
       notifyUrl: args.notifyUrl,
-      numExpectedUploadFiles: args.numExpectedUploadFiles,
+      numExpectedUploadFiles: undefined,
       expires: args.expires,
       additionalParams: args.additionalParams as
         | Record<string, unknown>
@@ -206,6 +207,12 @@ export const createAssembly = action({
     const formData = new FormData();
     formData.append("params", paramsString);
     formData.append("signature", signature);
+    if (typeof args.numExpectedUploadFiles === "number") {
+      formData.append(
+        "tus_num_expected_upload_files",
+        String(args.numExpectedUploadFiles),
+      );
+    }
 
     const response = await fetch(TRANSLOADIT_ASSEMBLY_URL, {
       method: "POST",
@@ -250,43 +257,6 @@ export const createAssembly = action({
   },
 });
 
-export const generateUploadParams = action({
-  args: {
-    config: vTransloaditConfig,
-    ...vAssemblyBaseArgs,
-  },
-  returns: v.object({
-    params: v.string(),
-    signature: v.string(),
-    url: v.string(),
-  }),
-  handler: async (_ctx, args) => {
-    const { paramsString } = buildTransloaditParams({
-      authKey: args.config.authKey,
-      templateId: args.templateId,
-      steps: args.steps as Record<string, unknown> | undefined,
-      fields: args.fields as Record<string, unknown> | undefined,
-      notifyUrl: args.notifyUrl,
-      numExpectedUploadFiles: args.numExpectedUploadFiles,
-      expires: args.expires,
-      additionalParams: args.additionalParams as
-        | Record<string, unknown>
-        | undefined,
-    });
-
-    const signature = await signTransloaditParams(
-      paramsString,
-      args.config.authSecret,
-    );
-
-    return {
-      params: paramsString,
-      signature,
-      url: TRANSLOADIT_ASSEMBLY_URL,
-    };
-  },
-});
-
 export const handleWebhook = action({
   args: {
     payload: v.any(),
@@ -307,15 +277,11 @@ export const handleWebhook = action({
     const rawBody = args.rawBody ?? JSON.stringify(args.payload ?? {});
     const shouldVerify = args.verifySignature ?? true;
     const authSecret =
-      args.config?.authSecret ??
-      process.env.TRANSLOADIT_AUTH_SECRET ??
-      process.env.TRANSLOADIT_SECRET;
+      args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
 
     if (shouldVerify) {
       if (!authSecret) {
-        throw new Error(
-          "Missing TRANSLOADIT_AUTH_SECRET for webhook validation",
-        );
+        throw new Error("Missing TRANSLOADIT_SECRET for webhook validation");
       }
       const verified = await verifyWebhookSignature({
         rawBody,

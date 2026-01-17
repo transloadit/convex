@@ -1,3 +1,5 @@
+import type { AssemblyInstructionsInput } from "@transloadit/types/template";
+
 export interface TransloaditAuthConfig {
   authKey: string;
   authSecret: string;
@@ -6,8 +8,8 @@ export interface TransloaditAuthConfig {
 export interface BuildParamsOptions {
   authKey: string;
   templateId?: string;
-  steps?: Record<string, unknown>;
-  fields?: Record<string, unknown>;
+  steps?: AssemblyInstructionsInput["steps"];
+  fields?: AssemblyInstructionsInput["fields"];
   notifyUrl?: string;
   numExpectedUploadFiles?: number;
   expires?: string;
