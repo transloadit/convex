@@ -27,7 +27,7 @@ Notes:
 
 ### Type safety
 - [x] Expand `@transloadit/types` usage beyond steps/fields (Assembly status, results, webhook payload).
-- [ ] Replace `v.any()` in responses/results where concrete Transloadit types exist.
+- [x] Replace `v.any()` in responses/results where concrete Transloadit types exist.
 
 ### Durability + reliability
 - [x] Optional background queue or retry flow for webhook processing.

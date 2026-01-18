@@ -35,9 +35,9 @@ export const vAssemblyResponse = v.object({
   templateId: v.optional(v.string()),
   notifyUrl: v.optional(v.string()),
   numExpectedUploadFiles: v.optional(v.number()),
-  fields: v.optional(v.any()),
-  uploads: v.optional(v.any()),
-  results: v.optional(v.any()),
+  fields: v.optional(v.record(v.string(), v.any())),
+  uploads: v.optional(v.array(v.any())),
+  results: v.optional(v.record(v.string(), v.array(v.any()))),
   error: v.optional(v.any()),
   raw: v.optional(v.any()),
   createdAt: v.number(),
@@ -65,12 +65,12 @@ export type AssemblyResultResponse = Infer<typeof vAssemblyResultResponse>;
 
 export const vCreateAssemblyArgs = v.object({
   templateId: v.optional(v.string()),
-  steps: v.optional(v.any()),
-  fields: v.optional(v.any()),
+  steps: v.optional(v.record(v.string(), v.any())),
+  fields: v.optional(v.record(v.string(), v.any())),
   notifyUrl: v.optional(v.string()),
   numExpectedUploadFiles: v.optional(v.number()),
   expires: v.optional(v.string()),
-  additionalParams: v.optional(v.any()),
+  additionalParams: v.optional(v.record(v.string(), v.any())),
   userId: v.optional(v.string()),
 });
 
@@ -286,7 +286,7 @@ export function makeTransloaditAPI(
       args: {
         assemblyId: v.string(),
         userId: v.optional(v.string()),
-        fields: v.optional(v.any()),
+        fields: v.optional(v.record(v.string(), v.any())),
       },
       returns: v.union(vAssemblyResponse, v.null()),
       handler: async (ctx, args) => {
