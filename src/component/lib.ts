@@ -56,6 +56,18 @@ const resolveAssemblyId = (payload: AssemblyStatus): string => {
   return "";
 };
 
+const resolveWebhookRawBody = (args: {
+  payload: unknown;
+  rawBody?: string;
+  verifySignature?: boolean;
+}) => {
+  if (typeof args.rawBody === "string") return args.rawBody;
+  if (args.verifySignature === false) {
+    return JSON.stringify(args.payload ?? {});
+  }
+  return null;
+};
+
 const buildSignedAssemblyUrl = async (
   assemblyId: string,
   authKey: string,
@@ -185,6 +197,9 @@ export const upsertAssembly = internalMutation({
   },
   returns: v.id("assemblies"),
   handler: async (ctx, args) => {
+    // Note: we persist full `raw` + `results` for debugging/fidelity. Large
+    // assemblies can hit Convex document size limits; trim or externalize
+    // payloads if this becomes an issue for your workload.
     const existing = await ctx.db
       .query("assemblies")
       .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
@@ -244,6 +259,8 @@ export const replaceResultsForAssembly = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    // We store raw result payloads for fidelity. For very large assemblies,
+    // consider trimming or externalizing these fields to avoid size limits.
     const existingResults = await ctx.db
       .query("results")
       .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
@@ -371,11 +388,14 @@ export const processWebhook = internalAction({
     status: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
-    const rawBody = args.rawBody ?? JSON.stringify(args.payload ?? {});
+    const rawBody = resolveWebhookRawBody(args);
     const shouldVerify = args.verifySignature ?? true;
     const authSecret = args.authSecret ?? process.env.TRANSLOADIT_SECRET;
 
     if (shouldVerify) {
+      if (!rawBody) {
+        throw new Error("Missing rawBody for webhook verification");
+      }
       if (!authSecret) {
         throw new Error("Missing TRANSLOADIT_SECRET for webhook validation");
       }
@@ -437,6 +457,28 @@ export const queueWebhook = action({
     const assemblyId = resolveAssemblyId(payload);
     if (!assemblyId) {
       throw new Error("Webhook payload missing assembly_id");
+    }
+
+    const rawBody = resolveWebhookRawBody(args);
+    const shouldVerify = args.verifySignature ?? true;
+    const authSecret =
+      args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
+
+    if (shouldVerify) {
+      if (!rawBody) {
+        throw new Error("Missing rawBody for webhook verification");
+      }
+      if (!authSecret) {
+        throw new Error("Missing TRANSLOADIT_SECRET for webhook validation");
+      }
+      const verified = await verifyWebhookSignature({
+        rawBody,
+        signatureHeader: args.signature,
+        authSecret,
+      });
+      if (!verified) {
+        throw new Error("Invalid Transloadit webhook signature");
+      }
     }
 
     await ctx.scheduler.runAfter(0, internal.lib.processWebhook, {

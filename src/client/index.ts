@@ -212,6 +212,8 @@ export function makeTransloaditAPI(
       returns: v.object({
         assemblyId: v.string(),
         resultCount: v.number(),
+        ok: v.optional(v.string()),
+        status: v.optional(v.string()),
       }),
       handler: async (ctx, args) => {
         return ctx.runAction(component.lib.handleWebhook, {

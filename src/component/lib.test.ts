@@ -61,6 +61,37 @@ describe("Transloadit component lib", () => {
     expect(results[0]?.stepName).toBe("resized");
   });
 
+  test("handleWebhook requires rawBody when verifying signature", async () => {
+    const t = convexTest(schema, modules);
+    const payload = { assembly_id: "asm_missing" };
+    const signature = createHmac("sha1", "test-secret")
+      .update(JSON.stringify(payload))
+      .digest("hex");
+
+    await expect(
+      t.action(api.lib.handleWebhook, {
+        payload,
+        signature: `sha1:${signature}`,
+        verifySignature: true,
+      }),
+    ).rejects.toThrow("Missing rawBody for webhook verification");
+  });
+
+  test("queueWebhook rejects invalid signature", async () => {
+    const t = convexTest(schema, modules);
+    const payload = { assembly_id: "asm_bad" };
+    const rawBody = JSON.stringify(payload);
+
+    await expect(
+      t.action(api.lib.queueWebhook, {
+        payload,
+        rawBody,
+        signature: "sha1:bad",
+        verifySignature: true,
+      }),
+    ).rejects.toThrow("Invalid Transloadit webhook signature");
+  });
+
   test("refreshAssembly fetches status and stores results", async () => {
     const t = convexTest(schema, modules);
 

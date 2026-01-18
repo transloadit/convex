@@ -1,6 +1,6 @@
 import { useAction, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload } from "tus-js-client";
 
 export type CreateAssemblyFn = FunctionReference<
@@ -281,6 +281,11 @@ export function useAssemblyStatusWithPolling(
 ) {
   const status = useQuery(getStatus, { assemblyId });
   const refresh = useAction(refreshAssembly);
+  const statusRef = useRef(status);
+
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
   useEffect(() => {
     if (!assemblyId) return;
@@ -289,9 +294,10 @@ export function useAssemblyStatusWithPolling(
 
     const isTerminal = () => {
       if (!options?.stopOnTerminal) return false;
-      if (!status || typeof status !== "object") return false;
+      const current = statusRef.current;
+      if (!current || typeof current !== "object") return false;
       const ok =
-        "ok" in status && typeof status.ok === "string" ? status.ok : "";
+        "ok" in current && typeof current.ok === "string" ? current.ok : "";
       return (
         ok === "ASSEMBLY_COMPLETED" ||
         ok === "ASSEMBLY_FAILED" ||
@@ -302,27 +308,27 @@ export function useAssemblyStatusWithPolling(
     if (isTerminal()) return;
 
     let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
     const tick = async () => {
       if (cancelled) return;
+      if (isTerminal()) {
+        if (intervalId) clearInterval(intervalId);
+        cancelled = true;
+        return;
+      }
       await refresh({ assemblyId });
     };
 
-    void tick();
-    const id = setInterval(() => {
+    intervalId = setInterval(() => {
       void tick();
     }, intervalMs);
+    void tick();
 
     return () => {
       cancelled = true;
-      clearInterval(id);
+      if (intervalId) clearInterval(intervalId);
     };
-  }, [
-    assemblyId,
-    options?.pollIntervalMs,
-    options?.stopOnTerminal,
-    refresh,
-    status,
-  ]);
+  }, [assemblyId, options?.pollIntervalMs, options?.stopOnTerminal, refresh]);
 
   return status;
 }

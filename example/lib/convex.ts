@@ -60,6 +60,7 @@ export const runAction = async (
     });
   }
   if (name === "queueWebhook") {
+    // Local harness does not run scheduled jobs, so process immediately.
     return testClient.action(api.lib.handleWebhook, {
       ...args,
       config: config ? { authSecret: config.authSecret } : undefined,
