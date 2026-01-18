@@ -5,7 +5,7 @@ A Convex component for creating Transloadit Assemblies, tracking their status/re
 ## Features
 
 - Create Assemblies with templates or inline steps.
-- Resumable uploads via tus (client-side hook).
+- Resumable uploads via tus (client-side hook; form uploads are intentionally not supported).
 - Webhook ingestion with signature verification.
 - Persist Assembly status + results in Convex.
 - Typed API wrappers and React hooks.
