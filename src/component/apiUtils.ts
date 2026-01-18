@@ -67,30 +67,27 @@ async function hmacHex(
   key: string,
   data: string,
 ): Promise<string> {
-  if (globalThis.crypto?.subtle) {
-    const encoder = new TextEncoder();
-    const cryptoKey = await globalThis.crypto.subtle.importKey(
-      "raw",
-      encoder.encode(key),
-      { name: "HMAC", hash: { name: algorithm } },
-      false,
-      ["sign"],
-    );
-    const signature = await globalThis.crypto.subtle.sign(
-      "HMAC",
-      cryptoKey,
-      encoder.encode(data),
-    );
-    const bytes = new Uint8Array(signature);
-    return Array.from(bytes)
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
+  if (!globalThis.crypto?.subtle) {
+    throw new Error("Web Crypto is required to sign Transloadit payloads");
   }
 
-  const { createHmac } = await import("node:crypto");
-  return createHmac(algorithm.replace("-", "").toLowerCase(), key)
-    .update(data)
-    .digest("hex");
+  const encoder = new TextEncoder();
+  const cryptoKey = await globalThis.crypto.subtle.importKey(
+    "raw",
+    encoder.encode(key),
+    { name: "HMAC", hash: { name: algorithm } },
+    false,
+    ["sign"],
+  );
+  const signature = await globalThis.crypto.subtle.sign(
+    "HMAC",
+    cryptoKey,
+    encoder.encode(data),
+  );
+  const bytes = new Uint8Array(signature);
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export async function signTransloaditParams(
