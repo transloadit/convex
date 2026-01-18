@@ -71,6 +71,22 @@ export const {
 
 Note: if you don’t supply `expires`, the component defaults it to 1 hour from now.
 
+## Data model
+
+The component stores Transloadit metadata in two tables:
+
+```
+assemblies 1 ──── * results
+```
+
+- `assemblies`: one row per Transloadit Assembly (status/ok, notify URL, uploads, raw payload, etc).
+- `results`: one row per output file, keyed by `assemblyId` + `stepName` with the raw result payload.
+
+Lifecycle:
+1. `createAssembly` inserts the initial `assemblies` row.
+2. `handleWebhook`, `queueWebhook`, or `refreshAssembly` upserts the assembly + replaces results.
+3. `listResults` returns flattened step outputs for use in UIs.
+
 ## Client wrapper
 
 If you prefer a class-based API (similar to other Convex components), use `Transloadit`:

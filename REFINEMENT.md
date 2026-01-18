@@ -34,13 +34,13 @@ Notes:
 - [x] Optional polling fallback when webhooks are unavailable.
 
 ### Docs + examples
-- [ ] Add a diagram or short explanation of the `assemblies` + `results` tables and lifecycle.
-- [ ] Provide a minimal end‑to‑end snippet that uses the helper for webhook parsing.
-- [ ] Mention how `_generated` files are produced and why.
+- [x] Add a diagram or short explanation of the `assemblies` + `results` tables and lifecycle.
+- [x] Provide a minimal end‑to‑end snippet that uses the helper for webhook parsing.
+- [x] Mention how `_generated` files are produced and why.
 
 ### QA
 - [x] Confirm browser test covers template preflight + upload + webhook store.
-- [ ] Validate CLI helper behavior stays compatible with Transloadit CLI updates.
+- [x] Validate CLI helper behavior stays compatible with Transloadit CLI updates.
 
 ## References (re‑check as needed)
 

@@ -57,6 +57,13 @@ import { createTransloaditTest } from "@transloadit/convex/test";
 const t = createTransloaditTest();
 ```
 
+## Generated files
+
+`src/component/_generated` is Convex codegen output. It is checked in so tests
+and component consumers have stable API references. If you change component
+functions or schemas, regenerate with Convex codegen (for example via
+`npx convex dev` or `npx convex codegen`) and commit the updated files.
+
 ## Release process
 
 Releases are automated via GitHub Actions and published to npm using OIDC (Trusted Publisher).

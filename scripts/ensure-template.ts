@@ -34,8 +34,22 @@ type TemplateRecord = {
 };
 
 function parseJsonLines(output: string): TemplateRecord[] {
-  if (!output) return [];
-  return output
+  const trimmed = output.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed as TemplateRecord[];
+    }
+    if (parsed && typeof parsed === "object") {
+      return [parsed as TemplateRecord];
+    }
+  } catch {
+    // fall back to line-delimited JSON
+  }
+
+  return trimmed
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
