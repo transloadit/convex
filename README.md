@@ -225,7 +225,7 @@ const status = useAssemblyStatusWithPolling(
 
 ## Example app (Next.js + Uppy wedding gallery)
 
-The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on the client and a Next API route that talks to Convex.
+The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on the client and a Next API route that talks to Convex. If you do not set `CONVEX_URL`/`CONVEX_ADMIN_KEY`, the example uses the in-process Convex test harness.
 
 Quick start (local):
 
@@ -278,7 +278,8 @@ Additional commands:
 Notes:
 - `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
-- `yarn verify:cloud` needs `CONVEX_DEPLOY_KEY`, `TRANSLOADIT_KEY`, and `TRANSLOADIT_SECRET`.
+- `yarn verify:local` and `yarn verify:cloud` need `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`.
+- `yarn verify:cloud` also needs `CONVEX_DEPLOY_KEY`.
 
 ## Component test helpers
 
