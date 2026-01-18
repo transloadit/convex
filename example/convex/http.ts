@@ -1,3 +1,4 @@
+import { parseTransloaditWebhook } from "@transloadit/convex";
 import { httpAction, httpRouter } from "convex/server";
 import { api } from "./_generated/api";
 
@@ -7,23 +8,16 @@ http.route({
   path: "/transloadit/webhook",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const formData = await request.formData();
-    const rawPayload = formData.get("transloadit");
-    const signature = formData.get("signature");
+    const { payload, rawBody, signature } =
+      await parseTransloaditWebhook(request);
 
-    if (typeof rawPayload !== "string") {
-      return new Response("Missing payload", { status: 400 });
-    }
-
-    const payload = JSON.parse(rawPayload);
-
-    await ctx.runAction(api.transloadit.handleWebhook, {
+    await ctx.runAction(api.transloadit.queueWebhook, {
       payload,
-      rawBody: rawPayload,
-      signature: typeof signature === "string" ? signature : undefined,
+      rawBody,
+      signature,
     });
 
-    return new Response(null, { status: 204 });
+    return new Response(null, { status: 202 });
   }),
 });
 
