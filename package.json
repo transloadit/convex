@@ -28,6 +28,7 @@
     "verify": "yarn check && yarn verify:browser",
     "verify:browser": "dotenv -q -- node scripts/run-browser.ts",
     "verify:example": "dotenv -q -- node scripts/run-browser.ts --app example",
+    "verify:convex": "dotenv -q -- node scripts/verify-convex.ts",
     "lint": "biome check .",
     "format": "biome format . --write",
     "check": "yarn format && yarn lint && yarn typecheck && yarn test",
