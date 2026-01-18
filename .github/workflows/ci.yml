@@ -93,7 +93,7 @@ jobs:
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
       - run: yarn exec playwright install --with-deps chromium
         if: steps.secrets.outputs.hasSecrets == 'true'
-      - run: yarn verify:browser
+      - run: yarn verify:local
         if: steps.secrets.outputs.hasSecrets == 'true'
         env:
           PLAYWRIGHT_SKIP_INSTALL: "1"
@@ -124,7 +124,7 @@ jobs:
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-      - run: yarn verify:convex
+      - run: yarn verify:real
         if: steps.secrets.outputs.hasSecrets == 'true'
         env:
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}

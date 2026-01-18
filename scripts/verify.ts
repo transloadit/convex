@@ -1,30 +1,18 @@
 import { spawnSync } from "node:child_process";
-import { createReadStream } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AssemblyInstructionsInput } from "@transloadit/types/template";
-import { Upload } from "tus-js-client";
 import { loadEnv } from "./load-env.js";
 
 loadEnv();
 
-type Mode = "browser" | "example" | "convex";
+type Mode = "local" | "real";
 
 type RunOptions = {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   stdio?: "inherit" | "pipe";
-};
-
-type AssemblyResponse = {
-  assemblyId: string;
-  data?: {
-    tus_url?: string;
-    assembly_ssl_url?: string;
-    assembly_url?: string;
-  };
 };
 
 const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -52,9 +40,6 @@ const run = (command: string, args: string[], options: RunOptions = {}) => {
 
   return `${result.stdout ?? ""}${result.stderr ?? ""}`;
 };
-
-const sleep = (ms: number) =>
-  new Promise((resolvePromise) => setTimeout(resolvePromise, ms));
 
 const parseArgs = (args: string[]) => {
   let mode: string | undefined;
@@ -100,6 +85,11 @@ const parseJson = <T>(output: string): T => {
 const runBrowser = async (options: {
   appVariant: "fixture" | "example";
   useTemplate: boolean;
+  mode: Mode;
+  remote?: {
+    deploymentUrl: string;
+    notifyUrl: string;
+  };
 }) => {
   const skipInstall = process.env.PLAYWRIGHT_SKIP_INSTALL === "1";
 
@@ -123,6 +113,7 @@ const runBrowser = async (options: {
     ...process.env,
     E2E_APP: options.appVariant,
     E2E_USE_TEMPLATE: options.useTemplate ? "1" : "0",
+    E2E_MODE: options.mode,
   };
 
   if (options.useTemplate) {
@@ -130,6 +121,12 @@ const runBrowser = async (options: {
       throw new Error("Missing templateId for browser test");
     }
     testEnv.TRANSLOADIT_TEMPLATE_ID = templateInfo.templateId;
+  }
+
+  if (options.remote) {
+    testEnv.E2E_REMOTE_URL = options.remote.deploymentUrl;
+    testEnv.E2E_REMOTE_NOTIFY_URL = options.remote.notifyUrl;
+    testEnv.E2E_REMOTE_ADMIN_KEY = requireEnv("CONVEX_DEPLOY_KEY");
   }
 
   run("yarn", ["exec", "vitest", "run", "--config", "vitest.e2e.config.ts"], {
@@ -145,13 +142,23 @@ const toPreviewName = () => {
 };
 
 const parseDeployOutput = (output: string) => {
-  const match =
-    /https:\/\/([a-z0-9-]+)\.convex\.cloud/i.exec(output) ??
-    /https:\/\/([a-z0-9-]+)\.convex\.site/i.exec(output);
-  if (!match) {
-    throw new Error(`Unable to find deployment URL in output:\n${output}`);
+  const cloudMatch = /https:\/\/([a-z0-9-]+)\.convex\.cloud/i.exec(output);
+  if (cloudMatch?.[1]) {
+    return {
+      deploymentName: cloudMatch[1],
+      deploymentUrl: `https://${cloudMatch[1]}.convex.cloud`,
+    };
   }
-  return match[1];
+
+  const siteMatch = /https:\/\/([a-z0-9-]+)\.convex\.site/i.exec(output);
+  if (siteMatch?.[1]) {
+    return {
+      deploymentName: siteMatch[1],
+      deploymentUrl: `https://${siteMatch[1]}.convex.cloud`,
+    };
+  }
+
+  throw new Error(`Unable to find deployment URL in output:\n${output}`);
 };
 
 const writeAppFiles = async (projectDir: string, tgzPath: string) => {
@@ -248,66 +255,7 @@ const writeAppFiles = async (projectDir: string, tgzPath: string) => {
   );
 };
 
-const convexRun = (
-  projectDir: string,
-  previewName: string,
-  fn: string,
-  args?: unknown,
-) => {
-  const output = run(
-    "npx",
-    [
-      "convex",
-      "run",
-      fn,
-      args ? JSON.stringify(args) : "{}",
-      "--preview-name",
-      previewName,
-      "--typecheck",
-      "disable",
-      "--codegen",
-      "disable",
-    ],
-    {
-      cwd: projectDir,
-      env: {
-        ...process.env,
-        CONVEX_DEPLOY_KEY: requireEnv("CONVEX_DEPLOY_KEY"),
-      },
-      stdio: "pipe",
-    },
-  ).trim();
-
-  return output ? (JSON.parse(output) as unknown) : null;
-};
-
-const runUpload = async (
-  tusUrl: string,
-  assemblyUrl: string,
-  filePath: string,
-) => {
-  const upload = new Upload(createReadStream(filePath), {
-    endpoint: tusUrl,
-    chunkSize: 1024 * 256,
-    metadata: {
-      filename: "sample.png",
-      filetype: "image/png",
-      fieldname: "file",
-      assembly_url: assemblyUrl,
-    },
-    onError: (error) => {
-      throw error;
-    },
-  });
-
-  await new Promise<void>((resolvePromise, reject) => {
-    upload.options.onSuccess = () => resolvePromise();
-    upload.options.onError = (error) => reject(error);
-    upload.start();
-  });
-};
-
-const runConvex = async () => {
+const setupRemoteDeployment = async () => {
   requireEnv("TRANSLOADIT_KEY");
   requireEnv("TRANSLOADIT_SECRET");
   requireEnv("CONVEX_DEPLOY_KEY");
@@ -319,12 +267,8 @@ const runConvex = async () => {
     qaDir = await mkdtemp(join(tmpdir(), "transloadit-convex-qa-"));
     const projectDir = join(qaDir, "app");
     const tgzPath = join(qaDir, "transloadit-convex.tgz");
-    const imagePath = join(qaDir, "sample.png");
-    const pngBase64 =
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
 
     await mkdir(projectDir, { recursive: true });
-    await writeFile(imagePath, Buffer.from(pngBase64, "base64"));
 
     console.log(`Packing @transloadit/convex into ${tgzPath}...`);
     run("yarn", ["pack", "-o", tgzPath], { cwd: rootDir });
@@ -357,7 +301,7 @@ const runConvex = async () => {
       },
     );
 
-    const deploymentName = parseDeployOutput(deployOutput);
+    const { deploymentName, deploymentUrl } = parseDeployOutput(deployOutput);
     const notifyUrl = `https://${deploymentName}.convex.site/transloadit/webhook`;
 
     console.log("Setting env vars on preview deployment...");
@@ -400,105 +344,12 @@ const runConvex = async () => {
       },
     );
 
-    const steps: AssemblyInstructionsInput["steps"] = {
-      ":original": { robot: "/upload/handle" },
-      resize: {
-        use: ":original",
-        robot: "/image/resize",
-        width: 320,
-        height: 320,
-        resize_strategy: "fit",
-        result: true,
-      },
-    };
-
-    console.log("Creating assembly...");
-    const createResult = convexRun(
-      projectDir,
+    return {
       previewName,
-      "transloadit:createAssembly",
-      {
-        steps,
-        notifyUrl,
-        numExpectedUploadFiles: 1,
-      },
-    ) as AssemblyResponse;
-
-    const assemblyId = createResult?.assemblyId ?? "";
-    const data = createResult?.data ?? {};
-    const tusUrl = data.tus_url ?? "";
-    const assemblyUrl = data.assembly_ssl_url ?? data.assembly_url ?? "";
-
-    if (!assemblyId || !tusUrl || !assemblyUrl) {
-      throw new Error("Missing assembly data from createAssembly");
-    }
-
-    console.log("Uploading via tus...");
-    await runUpload(tusUrl, assemblyUrl, imagePath);
-
-    const deadline = Date.now() + 120_000;
-    let results: unknown[] = [];
-
-    while (Date.now() < deadline) {
-      results =
-        (convexRun(projectDir, previewName, "transloadit:listResults", {
-          assemblyId,
-        }) as unknown[]) ?? [];
-      if (Array.isArray(results) && results.length > 0) {
-        break;
-      }
-      await sleep(3000);
-    }
-
-    if (!results.length) {
-      const status = convexRun(
-        projectDir,
-        previewName,
-        "transloadit:refreshAssembly",
-        {
-          assemblyId,
-        },
-      ) as Record<string, unknown> | null;
-      console.log("Final status:", status);
-      results =
-        (convexRun(projectDir, previewName, "transloadit:listResults", {
-          assemblyId,
-        }) as unknown[]) ?? [];
-    }
-
-    if (!results.length) {
-      throw new Error("Timed out waiting for results");
-    }
-
-    const resized = Array.isArray(results)
-      ? results.find(
-          (result) => (result as { stepName?: string }).stepName === "resize",
-        )
-      : null;
-
-    if (!resized) {
-      throw new Error("Missing resize result");
-    }
-
-    const resizedUrl = (resized as { sslUrl?: string }).sslUrl ?? null;
-    if (!resizedUrl) {
-      throw new Error("Missing sslUrl on resize result");
-    }
-
-    console.log(
-      JSON.stringify(
-        {
-          previewName,
-          deploymentName,
-          notifyUrl,
-          assemblyId,
-          resizeUrl: resizedUrl,
-          resultCount: Array.isArray(results) ? results.length : 0,
-        },
-        null,
-        2,
-      ),
-    );
+      deploymentName,
+      deploymentUrl,
+      notifyUrl,
+    };
   } finally {
     if (qaDir && !process.env.QA_KEEP_TEMP) {
       await rm(qaDir, { recursive: true, force: true });
@@ -507,23 +358,32 @@ const runConvex = async () => {
 };
 
 const args = parseArgs(process.argv.slice(2));
-const mode = (args.mode ?? process.env.VERIFY_MODE ?? "browser") as Mode;
+const rawMode = args.mode ?? process.env.VERIFY_MODE ?? "local";
+const resolvedMode: Mode =
+  rawMode === "real" || rawMode === "convex" ? "real" : "local";
 const appVariant =
-  mode === "example" || args.app === "example" ? "example" : "fixture";
+  rawMode === "example" || args.app === "example" ? "example" : "fixture";
 const useTemplate =
   args.useTemplate ||
   process.env.E2E_USE_TEMPLATE === "1" ||
-  mode === "example";
+  appVariant === "example";
 
 const runMain = async () => {
-  if (mode === "convex") {
-    await runConvex();
+  if (resolvedMode === "real") {
+    const remote = await setupRemoteDeployment();
+    await runBrowser({
+      appVariant,
+      useTemplate,
+      mode: "real",
+      remote,
+    });
     return;
   }
 
   await runBrowser({
     appVariant,
     useTemplate,
+    mode: "local",
   });
 };
 

@@ -6,6 +6,8 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "@playwright/test";
+import { assemblyStatusSchema } from "@transloadit/zod/v3/assemblyStatus";
+import { ConvexHttpClient } from "convex/browser";
 import { convexTest } from "convex-test";
 import { build } from "esbuild";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -15,6 +17,11 @@ import { modules } from "../../src/component/setup.test.js";
 
 const authKey = process.env.TRANSLOADIT_KEY ?? "";
 const authSecret = process.env.TRANSLOADIT_SECRET ?? "";
+const mode = process.env.E2E_MODE ?? "local";
+const useRemote = mode === "real";
+const remoteUrl = process.env.E2E_REMOTE_URL ?? "";
+const remoteAdminKey = process.env.E2E_REMOTE_ADMIN_KEY ?? "";
+const remoteNotifyUrl = process.env.E2E_REMOTE_NOTIFY_URL ?? "";
 const appVariant = process.env.E2E_APP === "example" ? "example" : "fixture";
 const templateId =
   process.env.TRANSLOADIT_TEMPLATE_ID ??
@@ -26,7 +33,8 @@ const useTemplate =
 const fixturesDir = resolve("test/e2e/fixtures");
 const distDir = resolve("dist");
 
-const describeE2e = authKey && authSecret ? describe : describe.skip;
+const shouldRun = useRemote || (authKey && authSecret);
+const describeE2e = shouldRun ? describe : describe.skip;
 
 type TunnelInfo = {
   url: string;
@@ -157,7 +165,56 @@ describeE2e("e2e upload flow", () => {
   let lastWebhookPayload: WebhookPayload | null = null;
   let lastWebhookError: unknown = null;
 
-  const t = convexTest(schema, modules);
+  const t = useRemote ? null : convexTest(schema, modules);
+  let remoteClient: ConvexHttpClient | null = null;
+
+  const runAction = async (name: string, args: Record<string, unknown>) => {
+    if (remoteClient) {
+      return remoteClient.action(`transloadit:${name}`, args);
+    }
+
+    if (!t) {
+      throw new Error("Missing Convex test harness");
+    }
+
+    const config = authKey && authSecret ? { authKey, authSecret } : undefined;
+
+    if (name === "createAssembly") {
+      return t.action(api.lib.createAssembly, { ...args, config });
+    }
+    if (name === "handleWebhook") {
+      return t.action(api.lib.handleWebhook, {
+        ...args,
+        config: config ? { authSecret: config.authSecret } : undefined,
+      });
+    }
+    if (name === "refreshAssembly") {
+      return t.action(api.lib.refreshAssembly, { ...args, config });
+    }
+
+    throw new Error(`Unknown action ${name}`);
+  };
+
+  const runQuery = async (name: string, args: Record<string, unknown>) => {
+    if (remoteClient) {
+      return remoteClient.query(`transloadit:${name}`, args);
+    }
+
+    if (!t) {
+      throw new Error("Missing Convex test harness");
+    }
+
+    if (name === "getAssemblyStatus") {
+      return t.query(api.lib.getAssemblyStatus, {
+        assemblyId: args.assemblyId as string,
+      });
+    }
+    if (name === "listResults") {
+      return t.query(api.lib.listResults, args);
+    }
+
+    throw new Error(`Unknown query ${name}`);
+  };
 
   beforeAll(async () => {
     const distEntry = join(distDir, "react", "index.js");
@@ -165,6 +222,17 @@ describeE2e("e2e upload flow", () => {
       throw new Error(
         "Missing dist artifacts. Run `yarn build` before running e2e tests.",
       );
+    }
+
+    if (useRemote) {
+      if (!remoteUrl || !remoteAdminKey) {
+        throw new Error(
+          "Missing E2E_REMOTE_URL or E2E_REMOTE_ADMIN_KEY for real mode",
+        );
+      }
+      remoteClient = new ConvexHttpClient(remoteUrl, { logger: false });
+      remoteClient.setAdminAuth(remoteAdminKey);
+      remoteClient.setDebug(false);
     }
 
     const indexTemplate = await readFile(
@@ -253,11 +321,7 @@ describeE2e("e2e upload flow", () => {
             : templateId || undefined
           : undefined;
 
-        const actionResult = await t.action(api.lib.createAssembly, {
-          config: {
-            authKey,
-            authSecret,
-          },
+        const actionResult = await runAction("createAssembly", {
           steps,
           templateId: resolvedTemplateId,
           notifyUrl:
@@ -268,6 +332,12 @@ describeE2e("e2e upload flow", () => {
           additionalParams: args.additionalParams,
           userId: args.userId,
         });
+
+        const assemblyData = (actionResult as { data?: unknown })?.data;
+        if (!assemblyData || typeof assemblyData !== "object") {
+          throw new Error("Missing Transloadit assembly data");
+        }
+        assemblyStatusSchema.parse(assemblyData);
 
         res.writeHead(200, { "content-type": "application/json" });
         res.end(JSON.stringify(actionResult));
@@ -288,9 +358,7 @@ describeE2e("e2e upload flow", () => {
             res.end("null");
             return;
           }
-          const result = await t.query(api.lib.getAssemblyStatus, {
-            assemblyId,
-          });
+          const result = await runQuery("getAssemblyStatus", { assemblyId });
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify(result));
           return;
@@ -303,9 +371,7 @@ describeE2e("e2e upload flow", () => {
             res.end("[]");
             return;
           }
-          const result = await t.query(api.lib.listResults, {
-            assemblyId,
-          });
+          const result = await runQuery("listResults", { assemblyId });
           res.writeHead(200, { "content-type": "application/json" });
           res.end(JSON.stringify(result));
           return;
@@ -372,7 +438,8 @@ describeE2e("e2e upload flow", () => {
         }
 
         try {
-          await t.action(api.lib.handleWebhook, {
+          assemblyStatusSchema.parse(payload);
+          await runAction("handleWebhook", {
             payload,
             rawBody: rawPayload,
             signature,
@@ -404,10 +471,22 @@ describeE2e("e2e upload flow", () => {
     const address = server?.address() as AddressInfo;
     serverUrl = `http://localhost:${address.port}`;
 
-    const tunnel = await startTunnel(address.port);
-    tunnelProcess = tunnel.process;
-    notifyUrl =
-      tunnel.info.notifyUrl ?? `${tunnel.info.url}/transloadit/webhook`;
+    if (useRemote) {
+      if (remoteNotifyUrl) {
+        notifyUrl = remoteNotifyUrl;
+      } else {
+        const match = /https:\/\/([a-z0-9-]+)\.convex\.cloud/i.exec(remoteUrl);
+        if (!match?.[1]) {
+          throw new Error("Unable to derive notifyUrl from E2E_REMOTE_URL");
+        }
+        notifyUrl = `https://${match[1]}.convex.site/transloadit/webhook`;
+      }
+    } else {
+      const tunnel = await startTunnel(address.port);
+      tunnelProcess = tunnel.process;
+      notifyUrl =
+        tunnel.info.notifyUrl ?? `${tunnel.info.url}/transloadit/webhook`;
+    }
 
     if (appVariant === "example" && !templateId) {
       throw new Error("Missing templateId for example e2e app");
@@ -579,7 +658,7 @@ describeE2e("e2e upload flow", () => {
       const waitForResults = async (timeoutMs: number) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-          const results = await t.query(api.lib.listResults, { assemblyId });
+          const results = await runQuery("listResults", { assemblyId });
           if (results.length > 0) {
             return results;
           }
@@ -603,10 +682,7 @@ describeE2e("e2e upload flow", () => {
               authKey && authSecret
                 ? { assemblyId, config: { authKey, authSecret } }
                 : { assemblyId };
-            const refresh = await t.action(
-              api.lib.refreshAssembly,
-              refreshArgs,
-            );
+            const refresh = await runAction("refreshAssembly", refreshArgs);
 
             const ok = typeof refresh.ok === "string" ? refresh.ok : "";
             if (ok === "ASSEMBLY_COMPLETED") {
@@ -640,7 +716,7 @@ describeE2e("e2e upload flow", () => {
       expect(typeof resized.sslUrl).toBe("string");
       expect(resized.sslUrl).toMatch(/^https:\/\//);
 
-      const storedStatus = await t.query(api.lib.getAssemblyStatus, {
+      const storedStatus = await runQuery("getAssemblyStatus", {
         assemblyId,
       });
       expect(storedStatus?.ok).toBe("ASSEMBLY_COMPLETED");
