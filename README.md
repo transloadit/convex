@@ -1,14 +1,19 @@
 # Transloadit Convex Component
 
-A Convex component for creating Transloadit Assemblies, tracking their status/results, and supporting resumable tus uploads.
+A Convex component for creating Transloadit Assemblies, handling resumable uploads with tus, and persisting status/results in Convex.
 
 ## Features
 
 - Create Assemblies with templates or inline steps.
-- Resumable uploads via tus (client-side hook; form uploads are intentionally not supported).
-- Webhook ingestion with signature verification.
-- Persist Assembly status + results in Convex.
+- Resumable uploads via tus (client-side hook; form/XHR uploads are intentionally not supported).
+- Webhook ingestion with signature verification (direct or queued).
+- Persist Assembly status + results in Convex tables.
 - Typed API wrappers and React hooks.
+
+## Requirements
+
+- Node.js 24+
+- Yarn 4 (Corepack)
 
 ## Install
 
@@ -46,9 +51,7 @@ We use the Transloadit CLI under the hood for the best DX and to avoid hand-roll
 yarn template:ensure
 ```
 
-The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`,
-creates or updates the template `convex-demo`, and prints the template id.
-Use that id as `VITE_TRANSLOADIT_TEMPLATE_ID` in `example/.env` when running the demo app.
+The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`, creates or updates the template `convex-demo`, and prints the template id. Use that id as `VITE_TRANSLOADIT_TEMPLATE_ID` in `example/.env` when running the demo app.
 
 ## Backend API
 
@@ -87,20 +90,6 @@ Lifecycle:
 2. `handleWebhook`, `queueWebhook`, or `refreshAssembly` upserts the assembly + replaces results.
 3. `listResults` returns flattened step outputs for use in UIs.
 
-## Client wrapper
-
-If you prefer a class-based API (similar to other Convex components), use `Transloadit`:
-
-```ts
-import { Transloadit } from "@transloadit/convex";
-import { components } from "./_generated/api";
-
-const transloadit = new Transloadit(components.transloadit, {
-  authKey: process.env.TRANSLOADIT_KEY!,
-  authSecret: process.env.TRANSLOADIT_SECRET!,
-});
-```
-
 ## Webhook route
 
 Transloadit sends webhooks as `multipart/form-data` with `transloadit` (JSON) and `signature` fields.
@@ -133,8 +122,7 @@ http.route({
 export default http;
 ```
 
-If you want to queue webhook processing (durable retry via Convex scheduling), use `queueWebhook`
-and return HTTP 202:
+If you want to queue webhook processing (durable retry via Convex scheduling), use `queueWebhook` and return HTTP 202:
 
 ```ts
 await ctx.runAction(api.transloadit.queueWebhook, {
@@ -146,9 +134,19 @@ await ctx.runAction(api.transloadit.queueWebhook, {
 return new Response(null, { status: 202 });
 ```
 
-### Local testing and QA
+## Client wrapper
 
-Local webhook testing and browser tests are documented in `CONTRIBUTING.md`.
+If you prefer a class-based API (similar to other Convex components), use `Transloadit`:
+
+```ts
+import { Transloadit } from "@transloadit/convex";
+import { components } from "./_generated/api";
+
+const transloadit = new Transloadit(components.transloadit, {
+  authKey: process.env.TRANSLOADIT_KEY!,
+  authSecret: process.env.TRANSLOADIT_SECRET!,
+});
+```
 
 ## React usage
 
@@ -179,8 +177,7 @@ function TusUpload() {
 }
 ```
 
-Note: Transloadit expects tus metadata `fieldname`. The hook sets it to `file` by default; override via `fieldName` or `metadata.fieldname`.
-You can also use `onAssemblyCreated` to access the assembly id before the upload finishes.
+Note: Transloadit expects tus metadata `fieldname`. The hook sets it to `file` by default; override via `fieldName` or `metadata.fieldname`. You can also use `onAssemblyCreated` to access the assembly id before the upload finishes.
 
 ### Reactive status/results
 
@@ -220,4 +217,91 @@ const status = useAssemblyStatusWithPolling(
 
 ## Example app
 
-See `example/README.md` for setup and usage.
+The `example/` directory contains a minimal Vite + React app wired to the component.
+
+```bash
+cd example
+yarn install
+npx convex dev
+# In another terminal:
+yarn dev
+```
+
+Set environment variables in Convex:
+
+```bash
+npx convex env set TRANSLOADIT_KEY <your_auth_key>
+npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
+```
+
+Add `example/.env` based on `example/.env.example`, and set `VITE_TRANSLOADIT_TEMPLATE_ID` (use `yarn template:ensure` to create one). To test webhooks locally, run `yarn tunnel` and set `VITE_TRANSLOADIT_NOTIFY_URL` to the generated URL.
+
+## Verification and QA
+
+Fast checks:
+
+```bash
+yarn check
+```
+
+This runs format, lint, typecheck, and unit tests. Additional commands:
+
+- `yarn lint` (Biome)
+- `yarn format` (Biome write)
+- `yarn typecheck` (tsc)
+- `yarn test` (Vitest unit tests)
+- `yarn test:browser` (browser + webhook QA flow)
+- `yarn build` (tsc build + emit package json)
+
+Notes:
+- `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
+- CI should run non-mutating checks; local `yarn check` may format/fix.
+
+## Generated files
+
+`src/component/_generated` is Convex codegen output. It is checked in so tests and component consumers have stable API references. If you change component functions or schemas, regenerate with Convex codegen (for example via `npx convex dev` or `npx convex codegen`) and commit the updated files.
+
+## Release process
+
+Releases are automated via GitHub Actions and published to npm using OIDC (Trusted Publisher).
+
+1. Ensure CI is green on `main`.
+2. Run local checks:
+
+```bash
+yarn check
+```
+
+3. Update `package.json` version and commit it:
+
+```bash
+git checkout main
+git pull
+# edit package.json version, then:
+git add package.json
+git commit -m "Release vX.Y.Z"
+git push
+```
+
+4. Tag and push the release:
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+5. The `Publish to npm` workflow will:
+   - build and pack a `.tgz` artifact,
+   - create a draft GitHub release,
+   - publish the tarball to npm with provenance.
+
+## Roadmap (condensed)
+
+- Completed: tus-only uploads, webhook handling, polling fallback, typed API wrappers, React hooks, browser QA.
+- Possible next steps: richer typed step/result validators, automated webhook retries with backoff, additional templates/recipes.
+
+## References
+
+- Convex components authoring guide
+- Convex official components (e.g. Resend, Aggregate)
+- Transloadit API docs (assembly status + resumable uploads)
