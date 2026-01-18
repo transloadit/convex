@@ -1,6 +1,7 @@
 import { parseTransloaditWebhook } from "@transloadit/convex";
-import { httpAction, httpRouter } from "convex/server";
+import { httpRouter } from "convex/server";
 import { api } from "./_generated/api";
+import { httpAction } from "./_generated/server";
 
 const http = httpRouter();
 

@@ -96,9 +96,10 @@ Transloadit sends webhooks as `multipart/form-data` with `transloadit` (JSON) an
 
 ```ts
 // convex/http.ts
-import { httpAction, httpRouter } from "convex/server";
+import { httpRouter } from "convex/server";
 import { parseTransloaditWebhook } from "@transloadit/convex";
 import { api } from "./_generated/api";
+import { httpAction } from "./_generated/server";
 
 const http = httpRouter();
 
