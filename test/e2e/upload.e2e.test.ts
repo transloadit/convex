@@ -6,13 +6,9 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { assemblyStatusSchema } from "@transloadit/zod/v3/assemblyStatus";
-import { ConvexHttpClient } from "convex/browser";
-import { convexTest } from "convex-test";
 import { build } from "esbuild";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { api } from "../../src/component/_generated/api.js";
-import schema from "../../src/component/schema.js";
-import { modules } from "../../src/component/setup.test.js";
+import { createConvexRunner } from "./support/convex.js";
 import { parseMultipart, readRequestBody } from "./support/http.js";
 import { runtime } from "./support/runtime.js";
 import { startTunnel } from "./support/tunnel.js";
@@ -51,56 +47,13 @@ describeE2e("e2e upload flow", () => {
   let lastWebhookPayload: WebhookPayload | null = null;
   let lastWebhookError: unknown = null;
 
-  const t = useRemote ? null : convexTest(schema, modules);
-  let remoteClient: ConvexHttpClient | null = null;
-
-  const runAction = async (name: string, args: Record<string, unknown>) => {
-    if (remoteClient) {
-      return remoteClient.action(`transloadit:${name}`, args);
-    }
-
-    if (!t) {
-      throw new Error("Missing Convex test harness");
-    }
-
-    const config = authKey && authSecret ? { authKey, authSecret } : undefined;
-
-    if (name === "createAssembly") {
-      return t.action(api.lib.createAssembly, { ...args, config });
-    }
-    if (name === "handleWebhook") {
-      return t.action(api.lib.handleWebhook, {
-        ...args,
-        config: config ? { authSecret: config.authSecret } : undefined,
-      });
-    }
-    if (name === "refreshAssembly") {
-      return t.action(api.lib.refreshAssembly, { ...args, config });
-    }
-
-    throw new Error(`Unknown action ${name}`);
-  };
-
-  const runQuery = async (name: string, args: Record<string, unknown>) => {
-    if (remoteClient) {
-      return remoteClient.query(`transloadit:${name}`, args);
-    }
-
-    if (!t) {
-      throw new Error("Missing Convex test harness");
-    }
-
-    if (name === "getAssemblyStatus") {
-      return t.query(api.lib.getAssemblyStatus, {
-        assemblyId: args.assemblyId as string,
-      });
-    }
-    if (name === "listResults") {
-      return t.query(api.lib.listResults, args);
-    }
-
-    throw new Error(`Unknown query ${name}`);
-  };
+  const { connect, runAction, runQuery } = createConvexRunner({
+    useRemote,
+    remoteUrl,
+    remoteAdminKey,
+    authKey,
+    authSecret,
+  });
 
   beforeAll(async () => {
     const distEntry = join(distDir, "react", "index.js");
@@ -111,14 +64,7 @@ describeE2e("e2e upload flow", () => {
     }
 
     if (useRemote) {
-      if (!remoteUrl || !remoteAdminKey) {
-        throw new Error(
-          "Missing E2E_REMOTE_URL or E2E_REMOTE_ADMIN_KEY for real mode",
-        );
-      }
-      remoteClient = new ConvexHttpClient(remoteUrl, { logger: false });
-      remoteClient.setAdminAuth(remoteAdminKey);
-      remoteClient.setDebug(false);
+      connect();
     }
 
     const indexTemplate = await readFile(
