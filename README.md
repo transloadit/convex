@@ -260,12 +260,14 @@ Additional commands:
 - `yarn verify:local` (browser + webhook QA flow against local Convex test harness)
 - `yarn verify:example` (runs the same flow against the example app)
 - `yarn verify:cloud` (deploys a preview Convex app and runs the same browser flow against it)
+- `yarn verify:cloud:slow` (same as `verify:cloud` but uses a small MP4 fixture + longer timeouts)
 - `yarn build` (tsc build + emit package json)
 
 Notes:
 - `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
 - `yarn verify:cloud` needs `CONVEX_DEPLOY_KEY`, `TRANSLOADIT_KEY`, and `TRANSLOADIT_SECRET`.
+- `yarn verify:cloud:slow` uses `test/e2e/fixtures/sample.mp4`.
 
 ## Component test helpers
 

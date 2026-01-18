@@ -21,13 +21,54 @@ const {
   templateId,
   useTemplate,
   shouldRun,
+  slowMode,
 } = runtime;
 
+const fixturesDir = resolve("test/e2e/fixtures");
 const distDir = resolve("dist");
 
 const describeE2e = shouldRun ? describe : describe.skip;
 
 describeE2e("e2e upload flow", () => {
+  const steps = slowMode
+    ? {
+        ":original": {
+          robot: "/upload/handle",
+        },
+        encode: {
+          use: ":original",
+          robot: "/video/encode",
+          preset: "mp4",
+          result: true,
+        },
+      }
+    : {
+        ":original": {
+          robot: "/upload/handle",
+        },
+        resize: {
+          use: ":original",
+          robot: "/image/resize",
+          width: 320,
+          height: 320,
+          resize_strategy: "fit",
+          result: true,
+        },
+      };
+  const expectedStepName = slowMode ? "encode" : "resize";
+  const timeouts = slowMode
+    ? {
+        outcome: 120_000,
+        upload: 180_000,
+        results: 120_000,
+        assembly: 240_000,
+      }
+    : {
+        outcome: 90_000,
+        upload: 120_000,
+        results: 60_000,
+        assembly: 120_000,
+      };
   let serverUrl = "";
   let harness: Awaited<ReturnType<typeof setupHarness>> | null = null;
   let webhookCount = 0;
@@ -61,6 +102,7 @@ describeE2e("e2e upload flow", () => {
       useRemote,
       remoteUrl,
       remoteNotifyUrl,
+      steps,
       runAction,
       runQuery,
       onWebhook: (payload) => {
@@ -111,12 +153,20 @@ describeE2e("e2e upload flow", () => {
       await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
 
       const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
-      const imagePath = join(tempDir, "sample.png");
-      const pngBase64 =
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
-      await writeFile(imagePath, Buffer.from(pngBase64, "base64"));
+      let uploadPath = "";
+      if (slowMode) {
+        uploadPath = join(fixturesDir, "sample.mp4");
+        if (!existsSync(uploadPath)) {
+          throw new Error("Missing sample.mp4 fixture for slow e2e run");
+        }
+      } else {
+        uploadPath = join(tempDir, "sample.png");
+        const pngBase64 =
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
+        await writeFile(uploadPath, Buffer.from(pngBase64, "base64"));
+      }
 
-      await page.setInputFiles('[data-testid="file-input"]', imagePath);
+      await page.setInputFiles('[data-testid="file-input"]', uploadPath);
 
       const readText = async (selector: string) => {
         const element = await page.$(selector);
@@ -126,7 +176,7 @@ describeE2e("e2e upload flow", () => {
       };
 
       const waitForOutcome = async () => {
-        const deadline = Date.now() + 90_000;
+        const deadline = Date.now() + timeouts.outcome;
         while (Date.now() < deadline) {
           const assemblyText = await readText('[data-testid="assembly-id"]');
           if (assemblyText) {
@@ -163,7 +213,7 @@ describeE2e("e2e upload flow", () => {
 
       const waitForUploadCompletion = async () => {
         const start = Date.now();
-        const deadline = start + 120_000;
+        const deadline = start + timeouts.upload;
         let sawProgress = false;
         while (Date.now() < deadline) {
           const uploadError = await readText('[data-testid="upload-error"]');
@@ -184,7 +234,7 @@ describeE2e("e2e upload flow", () => {
         }
 
         if (sawProgress) {
-          throw new Error("Upload did not complete within 120s");
+          throw new Error("Upload did not complete within timeout");
         }
       };
 
@@ -202,14 +252,14 @@ describeE2e("e2e upload flow", () => {
         return [];
       };
 
-      let results = await waitForResults(60_000);
+      let results = await waitForResults(timeouts.results);
       if (!results.length) {
         console.log("Webhook count:", webhookCount);
         console.log("Last webhook payload:", lastWebhookPayload);
         console.log("Last webhook error:", lastWebhookError);
 
         const waitForAssembly = async () => {
-          const deadline = Date.now() + 120_000;
+          const deadline = Date.now() + timeouts.assembly;
           while (Date.now() < deadline) {
             const refreshArgs =
               !useRemote && authKey && authSecret
@@ -236,11 +286,11 @@ describeE2e("e2e upload flow", () => {
 
         await waitForAssembly();
 
-        results = await waitForResults(60_000);
+        results = await waitForResults(timeouts.results);
       }
 
       const resized = Array.isArray(results)
-        ? results.find((result) => result?.stepName === "resize")
+        ? results.find((result) => result?.stepName === expectedStepName)
         : null;
 
       expect(resized).toBeTruthy();

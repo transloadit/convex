@@ -18,6 +18,7 @@ type HarnessOptions = {
   useRemote: boolean;
   remoteUrl: string;
   remoteNotifyUrl: string;
+  steps: Record<string, unknown>;
   runAction: (name: string, args: Record<string, unknown>) => Promise<unknown>;
   runQuery: (name: string, args: Record<string, unknown>) => Promise<unknown>;
   onWebhook: (payload: WebhookPayload) => void;
@@ -114,19 +115,7 @@ export const setupHarness = async (
   let serverUrl = "";
   let tunnelProcess: ReturnType<typeof startTunnel>["process"] | null = null;
 
-  const steps = {
-    ":original": {
-      robot: "/upload/handle",
-    },
-    resize: {
-      use: ":original",
-      robot: "/image/resize",
-      width: 320,
-      height: 320,
-      resize_strategy: "fit",
-      result: true,
-    },
-  };
+  const steps = options.steps;
 
   const server = createServer(async (req, res) => {
     const method = req.method ?? "GET";

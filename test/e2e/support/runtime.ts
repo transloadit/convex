@@ -13,6 +13,7 @@ export type RuntimeConfig = {
   templateId: string;
   useTemplate: boolean;
   shouldRun: boolean;
+  slowMode: boolean;
 };
 
 export const getRuntimeConfig = (): RuntimeConfig => {
@@ -33,6 +34,7 @@ export const getRuntimeConfig = (): RuntimeConfig => {
   const useTemplate =
     process.env.E2E_USE_TEMPLATE === "1" || appVariant === "example";
   const shouldRun = useRemote || Boolean(authKey && authSecret);
+  const slowMode = process.env.E2E_SLOW === "1";
 
   return {
     authKey,
@@ -46,6 +48,7 @@ export const getRuntimeConfig = (): RuntimeConfig => {
     templateId,
     useTemplate,
     shouldRun,
+    slowMode,
   };
 };
 

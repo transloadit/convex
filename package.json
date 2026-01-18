@@ -28,6 +28,7 @@
     "verify": "yarn check && yarn verify:local",
     "verify:local": "node scripts/verify.ts --mode local",
     "verify:cloud": "node scripts/verify.ts --mode cloud",
+    "verify:cloud:slow": "E2E_SLOW=1 node scripts/verify.ts --mode cloud",
     "verify:real": "yarn verify:cloud",
     "verify:browser": "yarn verify:local",
     "verify:convex": "yarn verify:cloud",
