@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 import { writeAppFiles } from "./qa/app-template.js";
-import { parseDeployOutput, parseJson, requireEnv, run } from "./qa/run.js";
+import { parseDeployOutput, requireEnv, run } from "./qa/run.js";
 
 config({ path: process.env.DOTENV_CONFIG_PATH });
 
@@ -14,32 +14,19 @@ const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 const parseArgs = (args: string[]) => {
   let mode: string | undefined;
-  let app: string | undefined;
-  let useTemplate = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === "--mode") {
       mode = args[index + 1];
       index += 1;
-      continue;
-    }
-    if (arg === "--app") {
-      app = args[index + 1];
-      index += 1;
-      continue;
-    }
-    if (arg === "--use-template") {
-      useTemplate = true;
     }
   }
 
-  return { mode, app, useTemplate };
+  return { mode };
 };
 
 const runBrowser = async (options: {
-  appVariant: "fixture" | "example";
-  useTemplate: boolean;
   mode: Mode;
   remote?: {
     deploymentUrl: string;
@@ -52,35 +39,15 @@ const runBrowser = async (options: {
     run("yarn", ["exec", "playwright", "install", "chromium"]);
   }
 
-  let templateInfo: { templateId: string } | null = null;
-  if (options.useTemplate) {
-    console.log("Ensuring template...");
-    const templateOutput = run("node", ["scripts/ensure-template.ts"], {
-      stdio: "pipe",
-      env: process.env,
-    });
-    templateInfo = parseJson<{ templateId: string }>(templateOutput);
-  }
-
   run("yarn", ["build"]);
 
   const testEnv: NodeJS.ProcessEnv = {
     ...process.env,
-    E2E_APP: options.appVariant,
-    E2E_USE_TEMPLATE: options.useTemplate ? "1" : "0",
     E2E_MODE: options.mode,
   };
 
-  if (options.useTemplate) {
-    if (!templateInfo?.templateId) {
-      throw new Error("Missing templateId for browser test");
-    }
-    testEnv.TRANSLOADIT_TEMPLATE_ID = templateInfo.templateId;
-  }
-
   if (options.remote) {
     testEnv.E2E_REMOTE_URL = options.remote.deploymentUrl;
-    testEnv.E2E_REMOTE_NOTIFY_URL = options.remote.notifyUrl;
     testEnv.E2E_REMOTE_ADMIN_KEY = requireEnv("CONVEX_DEPLOY_KEY");
   }
 
@@ -207,19 +174,10 @@ const resolvedMode: Mode =
   rawMode === "convex"
     ? "cloud"
     : "local";
-const appVariant =
-  rawMode === "example" || args.app === "example" ? "example" : "fixture";
-const useTemplate =
-  args.useTemplate ||
-  process.env.E2E_USE_TEMPLATE === "1" ||
-  appVariant === "example";
-
 const runMain = async () => {
   if (resolvedMode === "cloud") {
     const remote = await setupRemoteDeployment();
     await runBrowser({
-      appVariant,
-      useTemplate,
       mode: "cloud",
       remote,
     });
@@ -227,8 +185,6 @@ const runMain = async () => {
   }
 
   await runBrowser({
-    appVariant,
-    useTemplate,
     mode: "local",
   });
 };

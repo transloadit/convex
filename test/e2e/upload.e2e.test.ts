@@ -4,124 +4,46 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { createConvexRunner } from "./support/convex.js";
-import { setupHarness } from "./support/harness.js";
+import { weddingStepNames } from "../../example/lib/transloadit";
+import { startExampleApp } from "./support/example-app.js";
 import { runtime } from "./support/runtime.js";
 import { sleep } from "./support/sleep.js";
-import type { WebhookPayload } from "./support/webhook.js";
 
-const {
-  authKey,
-  authSecret,
-  useRemote,
-  remoteUrl,
-  remoteAdminKey,
-  remoteNotifyUrl,
-  appVariant,
-  templateId,
-  useTemplate,
-  shouldRun,
-  slowMode,
-} = runtime;
+const { authKey, authSecret, useRemote, remoteUrl, remoteAdminKey, shouldRun } =
+  runtime;
 
 const fixturesDir = resolve("test/e2e/fixtures");
-const distDir = resolve("dist");
 
 const describeE2e = shouldRun ? describe : describe.skip;
 
 describeE2e("e2e upload flow", () => {
-  const steps = slowMode
-    ? {
-        ":original": {
-          robot: "/upload/handle",
-        },
-        encode: {
-          use: ":original",
-          robot: "/video/encode",
-          preset: "mp4",
-          result: true,
-        },
-      }
-    : {
-        ":original": {
-          robot: "/upload/handle",
-        },
-        resize: {
-          use: ":original",
-          robot: "/image/resize",
-          width: 320,
-          height: 320,
-          resize_strategy: "fit",
-          result: true,
-        },
-      };
-  const expectedStepName = slowMode ? "encode" : "resize";
-  const timeouts = slowMode
-    ? {
-        outcome: 120_000,
-        upload: 180_000,
-        results: 120_000,
-        assembly: 240_000,
-      }
-    : {
-        outcome: 90_000,
-        upload: 120_000,
-        results: 60_000,
-        assembly: 120_000,
-      };
+  const timeouts = {
+    outcome: 180_000,
+    results: 180_000,
+    refresh: 240_000,
+  };
   let serverUrl = "";
-  let harness: Awaited<ReturnType<typeof setupHarness>> | null = null;
-  let webhookCount = 0;
-  let lastWebhookPayload: WebhookPayload | null = null;
-  let lastWebhookError: unknown = null;
-
-  const { connect, runAction, runQuery } = createConvexRunner({
-    useRemote,
-    remoteUrl,
-    remoteAdminKey,
-    authKey,
-    authSecret,
-  });
+  let app: Awaited<ReturnType<typeof startExampleApp>> | null = null;
 
   beforeAll(async () => {
-    const distEntry = join(distDir, "react", "index.js");
-    if (!existsSync(distEntry)) {
-      throw new Error(
-        "Missing dist artifacts. Run `yarn build` before running e2e tests.",
-      );
-    }
-
-    if (useRemote) {
-      connect();
-    }
-
-    harness = await setupHarness({
-      appVariant,
-      useTemplate,
-      templateId,
-      useRemote,
-      remoteUrl,
-      remoteNotifyUrl,
-      steps,
-      runAction,
-      runQuery,
-      onWebhook: (payload) => {
-        webhookCount += 1;
-        lastWebhookPayload = payload;
-      },
-      onWebhookError: (error) => {
-        lastWebhookError = error;
+    app = await startExampleApp({
+      env: {
+        E2E_MODE: useRemote ? "cloud" : "local",
+        E2E_REMOTE_URL: remoteUrl,
+        E2E_REMOTE_ADMIN_KEY: remoteAdminKey,
+        TRANSLOADIT_KEY: authKey,
+        TRANSLOADIT_SECRET: authSecret,
       },
     });
-    serverUrl = harness.serverUrl;
+    serverUrl = app.url;
   });
 
   afterAll(async () => {
-    await harness?.close();
-    harness = null;
+    await app?.close();
+    app = null;
   });
 
-  test("uploads and receives resized webhook payload", async () => {
+  test("uploads wedding photos and videos", async () => {
     const browser = await chromium.launch();
     const page = await browser.newPage();
     const consoleMessages: string[] = [];
@@ -153,20 +75,23 @@ describeE2e("e2e upload flow", () => {
       await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
 
       const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
-      let uploadPath = "";
-      if (slowMode) {
-        uploadPath = join(fixturesDir, "sample.mp4");
-        if (!existsSync(uploadPath)) {
-          throw new Error("Missing sample.mp4 fixture for slow e2e run");
-        }
-      } else {
-        uploadPath = join(tempDir, "sample.png");
-        const pngBase64 =
-          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
-        await writeFile(uploadPath, Buffer.from(pngBase64, "base64"));
+      const imagePath = join(tempDir, "sample.png");
+      const pngBase64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
+      await writeFile(imagePath, Buffer.from(pngBase64, "base64"));
+      const videoPath = join(fixturesDir, "sample.mp4");
+      if (!existsSync(videoPath)) {
+        throw new Error("Missing sample.mp4 fixture for e2e run");
       }
 
-      await page.setInputFiles('[data-testid="file-input"]', uploadPath);
+      await page.waitForSelector(
+        '[data-testid="uppy-dashboard"] input[type="file"]',
+      );
+      await page.setInputFiles(
+        '[data-testid="uppy-dashboard"] input[type="file"]',
+        [imagePath, videoPath],
+      );
+      await page.click('[data-testid="start-upload"]');
 
       const readText = async (selector: string) => {
         const element = await page.$(selector);
@@ -188,11 +113,6 @@ describeE2e("e2e upload flow", () => {
             return { type: "error", text: uploadError };
           }
 
-          const configError = await readText('[data-testid="config-error"]');
-          if (configError) {
-            return { type: "config", text: configError };
-          }
-
           await page.waitForTimeout(1000);
         }
 
@@ -211,96 +131,64 @@ describeE2e("e2e upload flow", () => {
       const assemblyId = assemblyText?.replace("ID:", "").trim() ?? "";
       expect(assemblyId).not.toBe("");
 
-      const waitForUploadCompletion = async () => {
-        const start = Date.now();
-        const deadline = start + timeouts.upload;
-        let sawProgress = false;
-        while (Date.now() < deadline) {
-          const uploadError = await readText('[data-testid="upload-error"]');
-          if (uploadError) {
-            throw new Error(`Upload failed: ${uploadError}`);
-          }
-
-          const progress = await page.$('[data-testid="upload-progress"]');
-          if (progress) {
-            sawProgress = true;
-          } else if (sawProgress) {
-            return;
-          } else if (Date.now() - start > 10_000) {
-            return;
-          }
-
-          await page.waitForTimeout(1000);
+      const fetchAssembly = async (refresh = false) => {
+        const params = new URLSearchParams({ assemblyId });
+        if (refresh) params.set("refresh", "1");
+        const response = await fetch(
+          `${serverUrl}/api/assemblies?${params.toString()}`,
+        );
+        if (!response.ok) {
+          throw new Error("Failed to fetch assembly results");
         }
-
-        if (sawProgress) {
-          throw new Error("Upload did not complete within timeout");
-        }
+        return (await response.json()) as {
+          status: { ok?: string } | null;
+          results: Array<{ stepName?: string; sslUrl?: string }>;
+        };
       };
-
-      await waitForUploadCompletion();
 
       const waitForResults = async (timeoutMs: number) => {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
-          const results = await runQuery("listResults", { assemblyId });
-          if (results.length > 0) {
-            return results;
+          const data = await fetchAssembly();
+          if (data.results.length > 0) {
+            return data;
           }
-          await sleep(1500);
+          await sleep(2000);
         }
-        return [];
+        return null;
       };
 
-      let results = await waitForResults(timeouts.results);
-      if (!results.length) {
-        console.log("Webhook count:", webhookCount);
-        console.log("Last webhook payload:", lastWebhookPayload);
-        console.log("Last webhook error:", lastWebhookError);
-
-        const waitForAssembly = async () => {
-          const deadline = Date.now() + timeouts.assembly;
-          while (Date.now() < deadline) {
-            const refreshArgs =
-              !useRemote && authKey && authSecret
-                ? { assemblyId, config: { authKey, authSecret } }
-                : { assemblyId };
-            const refresh = await runAction("refreshAssembly", refreshArgs);
-
-            const ok = typeof refresh.ok === "string" ? refresh.ok : "";
-            if (ok === "ASSEMBLY_COMPLETED") {
-              return refresh;
-            }
-            if (
-              ok &&
-              ok !== "ASSEMBLY_EXECUTING" &&
-              ok !== "ASSEMBLY_UPLOADING"
-            ) {
-              throw new Error(`Assembly failed with status ${ok}`);
-            }
-
-            await sleep(3000);
-          }
-          return null;
-        };
-
-        await waitForAssembly();
-
-        results = await waitForResults(timeouts.results);
+      let data = await waitForResults(timeouts.results);
+      if (!data) {
+        data = await fetchAssembly(true);
+        const refreshDeadline = Date.now() + timeouts.refresh;
+        while (
+          Date.now() < refreshDeadline &&
+          (!data.results || data.results.length === 0)
+        ) {
+          await sleep(3000);
+          data = await fetchAssembly(true);
+        }
       }
 
-      const resized = Array.isArray(results)
-        ? results.find((result) => result?.stepName === expectedStepName)
-        : null;
+      if (!data || data.results.length === 0) {
+        throw new Error("No processed results returned");
+      }
 
-      expect(resized).toBeTruthy();
-      expect(typeof resized.sslUrl).toBe("string");
-      expect(resized.sslUrl).toMatch(/^https:\/\//);
+      const image = data.results.find(
+        (result) => result.stepName === weddingStepNames.image,
+      );
+      const video = data.results.find(
+        (result) => result.stepName === weddingStepNames.video,
+      );
 
-      const storedStatus = await runQuery("getAssemblyStatus", {
-        assemblyId,
+      expect(image?.sslUrl).toMatch(/^https:\/\//);
+      expect(video?.sslUrl).toMatch(/^https:\/\//);
+      expect(data.status?.ok).toBe("ASSEMBLY_COMPLETED");
+
+      await page.waitForSelector('[data-testid="gallery"]', {
+        timeout: 30_000,
       });
-      expect(storedStatus?.ok).toBe("ASSEMBLY_COMPLETED");
     } catch (error) {
       if (consoleMessages.length) {
         console.log("Browser console logs:", consoleMessages);

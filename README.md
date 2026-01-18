@@ -43,7 +43,7 @@ npx convex env set TRANSLOADIT_KEY <your_auth_key>
 npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
 ```
 
-### 3) Create a demo template (idempotent)
+### 3) (Optional) Create a demo template (idempotent)
 
 We use the Transloadit CLI under the hood for the best DX and to avoid hand-rolling API calls.
 
@@ -51,7 +51,14 @@ We use the Transloadit CLI under the hood for the best DX and to avoid hand-roll
 yarn template:ensure
 ```
 
-The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`, creates or updates the template `convex-demo`, and prints the template id. Use that id as `VITE_TRANSLOADIT_TEMPLATE_ID` in `example/.env` when running the demo app.
+The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`, creates or updates the template `convex-demo`, and prints the template id. The wedding example uses inline steps, so a template is optional.
+
+## Flow overview
+
+1. A Convex action creates the Assembly (secret stays server-side).
+2. The client uploads via tus using `tus_url` + `assembly_ssl_url`.
+3. Transloadit posts a signed webhook; we `queueWebhook` to persist results.
+4. The UI queries results/status and renders the gallery.
 
 ## Backend API
 
@@ -216,26 +223,33 @@ const status = useAssemblyStatusWithPolling(
 );
 ```
 
-## Example app
+## Example app (Next.js + Uppy wedding gallery)
 
-The `example/` directory contains a minimal Vite + React app wired to the component.
+The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on the client and a Next API route that talks to Convex.
 
-```bash
-cd example
-yarn install
-npx convex dev
-# In another terminal:
-yarn dev
-```
-
-Set environment variables in Convex:
+Quick start (local):
 
 ```bash
-npx convex env set TRANSLOADIT_KEY <your_auth_key>
-npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
+# In repo root
+export TRANSLOADIT_KEY=...
+export TRANSLOADIT_SECRET=...
+
+# Get a public webhook URL (cloudflared is auto-downloaded if needed)
+yarn tunnel --once
+# Set TRANSLOADIT_NOTIFY_URL to the printed notifyUrl
+export TRANSLOADIT_NOTIFY_URL=...
+
+yarn example:dev
 ```
 
-Create `example/.env` and set `VITE_TRANSLOADIT_TEMPLATE_ID` (use `yarn template:ensure` to create one). To test webhooks locally, run `yarn tunnel` and set `VITE_TRANSLOADIT_NOTIFY_URL` to the generated URL.
+If you want the API routes to talk to an existing Convex deployment, set:
+
+```bash
+export CONVEX_URL=...
+export CONVEX_ADMIN_KEY=...
+```
+
+The example exposes `POST /transloadit/webhook` and forwards webhooks into Convex via `queueWebhook`.
 
 ## Verification and QA
 
@@ -257,17 +271,14 @@ Additional commands:
 - `yarn format` (Biome write)
 - `yarn typecheck` (tsc)
 - `yarn test` (Vitest unit tests)
-- `yarn verify:local` (browser + webhook QA flow against local Convex test harness)
-- `yarn verify:example` (runs the same flow against the example app)
+- `yarn verify:local` (runs the Next.js wedding example + uploads an image + video)
 - `yarn verify:cloud` (deploys a preview Convex app and runs the same browser flow against it)
-- `yarn verify:cloud:slow` (same as `verify:cloud` but uses a small MP4 fixture + longer timeouts)
 - `yarn build` (tsc build + emit package json)
 
 Notes:
 - `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
 - `yarn verify:cloud` needs `CONVEX_DEPLOY_KEY`, `TRANSLOADIT_KEY`, and `TRANSLOADIT_SECRET`.
-- `yarn verify:cloud:slow` uses `test/e2e/fixtures/sample.mp4`.
 
 ## Component test helpers
 
