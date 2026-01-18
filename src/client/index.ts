@@ -3,6 +3,8 @@ import { type Infer, v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
 import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.js";
 
+export { parseTransloaditWebhook } from "../component/apiUtils.js";
+
 export interface TransloaditConfig {
   authKey: string;
   authSecret: string;
@@ -79,12 +81,8 @@ export class TransloaditClient {
   ) {
     this.component = component;
     this.config = {
-      authKey:
-        config?.authKey ??
-        requireEnv(["TRANSLOADIT_AUTH_KEY", "TRANSLOADIT_KEY"]),
-      authSecret:
-        config?.authSecret ??
-        requireEnv(["TRANSLOADIT_AUTH_SECRET", "TRANSLOADIT_SECRET"]),
+      authKey: config?.authKey ?? requireEnv(["TRANSLOADIT_KEY"]),
+      authSecret: config?.authSecret ?? requireEnv(["TRANSLOADIT_SECRET"]),
     };
   }
 
@@ -97,16 +95,6 @@ export class TransloaditClient {
     args: Infer<typeof vCreateAssemblyArgs>,
   ) {
     return ctx.runAction(this.component.lib.createAssembly, {
-      ...args,
-      config: this.config,
-    });
-  }
-
-  async generateUploadParams(
-    ctx: RunActionCtx,
-    args: Infer<typeof vCreateAssemblyArgs>,
-  ) {
-    return ctx.runAction(this.component.lib.generateUploadParams, {
       ...args,
       config: this.config,
     });
@@ -162,12 +150,8 @@ export function makeTransloaditAPI(
   config?: Partial<TransloaditConfig>,
 ) {
   const resolvedConfig: TransloaditConfig = {
-    authKey:
-      config?.authKey ??
-      requireEnv(["TRANSLOADIT_AUTH_KEY", "TRANSLOADIT_KEY"]),
-    authSecret:
-      config?.authSecret ??
-      requireEnv(["TRANSLOADIT_AUTH_SECRET", "TRANSLOADIT_SECRET"]),
+    authKey: config?.authKey ?? requireEnv(["TRANSLOADIT_KEY"]),
+    authSecret: config?.authSecret ?? requireEnv(["TRANSLOADIT_SECRET"]),
   };
 
   return {
@@ -179,20 +163,6 @@ export function makeTransloaditAPI(
       }),
       handler: async (ctx, args) => {
         return ctx.runAction(component.lib.createAssembly, {
-          ...args,
-          config: resolvedConfig,
-        });
-      },
-    }),
-    generateUploadParams: actionGeneric({
-      args: vCreateAssemblyArgs,
-      returns: v.object({
-        params: v.string(),
-        signature: v.string(),
-        url: v.string(),
-      }),
-      handler: async (ctx, args) => {
-        return ctx.runAction(component.lib.generateUploadParams, {
           ...args,
           config: resolvedConfig,
         });

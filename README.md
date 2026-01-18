@@ -1,11 +1,10 @@
 # Transloadit Convex Component
 
-A Convex component for creating Transloadit Assemblies, tracking their status/results, and supporting both form uploads and resumable tus uploads.
+A Convex component for creating Transloadit Assemblies, tracking their status/results, and supporting resumable tus uploads.
 
 ## Features
 
 - Create Assemblies with templates or inline steps.
-- Generate signed upload params for browser form uploads.
 - Resumable uploads via tus (client-side hook).
 - Webhook ingestion with signature verification.
 - Persist Assembly status + results in Convex.
@@ -34,15 +33,6 @@ export default app;
 
 ### 2) Set environment variables
 
-Preferred names:
-
-```bash
-npx convex env set TRANSLOADIT_AUTH_KEY <your_auth_key>
-npx convex env set TRANSLOADIT_AUTH_SECRET <your_auth_secret>
-```
-
-Aliases also supported:
-
 ```bash
 npx convex env set TRANSLOADIT_KEY <your_auth_key>
 npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
@@ -56,7 +46,7 @@ We use the Transloadit CLI under the hood for the best DX and to avoid hand-roll
 yarn template:ensure
 ```
 
-The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` (or `TRANSLOADIT_AUTH_KEY/TRANSLOADIT_AUTH_SECRET`) from `.env`,
+The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`,
 creates or updates the template `convex-demo`, and prints the template id.
 Use that id as `VITE_TRANSLOADIT_TEMPLATE_ID` in `example/.env` when running the demo app.
 
@@ -69,7 +59,6 @@ import { components } from "./_generated/api";
 
 export const {
   createAssembly,
-  generateUploadParams,
   handleWebhook,
   getAssemblyStatus,
   listAssemblies,
@@ -87,6 +76,7 @@ Transloadit sends webhooks as `multipart/form-data` with `transloadit` (JSON) an
 ```ts
 // convex/http.ts
 import { httpAction, httpRouter } from "convex/server";
+import { parseTransloaditWebhook } from "@transloadit/convex";
 import { api } from "./_generated/api";
 
 const http = httpRouter();
@@ -95,20 +85,13 @@ http.route({
   path: "/transloadit/webhook",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const formData = await request.formData();
-    const rawPayload = formData.get("transloadit");
-    const signature = formData.get("signature");
-
-    if (typeof rawPayload !== "string") {
-      return new Response("Missing payload", { status: 400 });
-    }
-
-    const payload = JSON.parse(rawPayload);
+    const { payload, rawBody, signature } =
+      await parseTransloaditWebhook(request);
 
     await ctx.runAction(api.transloadit.handleWebhook, {
       payload,
-      rawBody: rawPayload,
-      signature: typeof signature === "string" ? signature : undefined,
+      rawBody,
+      signature,
     });
 
     return new Response(null, { status: 204 });
@@ -120,37 +103,9 @@ export default http;
 
 ### Local testing and QA
 
-Local webhook testing, the full QA flow, and smoke tests are documented in `CONTRIBUTING.md`.
+Local webhook testing and browser tests are documented in `CONTRIBUTING.md`.
 
 ## React usage
-
-### Form upload
-
-```tsx
-import { useTransloaditUpload } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-function UploadButton() {
-  const { upload, isUploading, progress, error } = useTransloaditUpload(
-    api.transloadit.generateUploadParams,
-  );
-
-  const handleUpload = async (file: File) => {
-    await upload(file, {
-      templateId: "template_id_here",
-      onProgress: (percent) => console.log(percent),
-    });
-  };
-
-  return (
-    <div>
-      <input type="file" onChange={(e) => handleUpload(e.target.files![0])} />
-      {isUploading && <p>Uploading: {progress}%</p>}
-      {error && <p>{error.message}</p>}
-    </div>
-  );
-}
-```
 
 ### Resumable tus upload
 
@@ -166,6 +121,7 @@ function TusUpload() {
   const handleUpload = async (file: File) => {
     await upload(file, {
       templateId: "template_id_here",
+      onAssemblyCreated: (assembly) => console.log(assembly.assemblyId),
     });
   };
 
@@ -177,6 +133,9 @@ function TusUpload() {
   );
 }
 ```
+
+Note: Transloadit expects tus metadata `fieldname`. The hook sets it to `file` by default; override via `fieldName` or `metadata.fieldname`.
+You can also use `onAssemblyCreated` to access the assembly id before the upload finishes.
 
 ### Reactive status/results
 
@@ -199,16 +158,6 @@ function AssemblyStatus({ assemblyId }: { assemblyId: string }) {
   );
 }
 ```
-
-## Smoke test
-
-Create a `.env` file in the repo root and run:
-
-```bash
-yarn smoke
-```
-
-Expected output: a JSON blob containing `assemblyId` and (when available) `tusUrl`.
 
 ## Example app
 

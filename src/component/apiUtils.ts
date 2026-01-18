@@ -100,6 +100,30 @@ export async function signTransloaditParams(
   return `sha384:${signature}`;
 }
 
+export type ParsedWebhookRequest = {
+  payload: unknown;
+  rawBody: string;
+  signature?: string;
+};
+
+export async function parseTransloaditWebhook(
+  request: Request,
+): Promise<ParsedWebhookRequest> {
+  const formData = await request.formData();
+  const rawPayload = formData.get("transloadit");
+  const signature = formData.get("signature");
+
+  if (typeof rawPayload !== "string") {
+    throw new Error("Missing transloadit payload");
+  }
+
+  return {
+    payload: JSON.parse(rawPayload),
+    rawBody: rawPayload,
+    signature: typeof signature === "string" ? signature : undefined,
+  };
+}
+
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let mismatch = 0;

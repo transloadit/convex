@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import {
   buildTransloaditParams,
+  parseTransloaditWebhook,
   signTransloaditParams,
   verifyWebhookSignature,
 } from "./apiUtils.js";
@@ -44,5 +45,33 @@ describe("apiUtils", () => {
     });
 
     expect(verified).toBe(true);
+  });
+
+  test("parseTransloaditWebhook returns payload and signature", async () => {
+    const payload = { ok: "ASSEMBLY_COMPLETED", assembly_id: "asm_123" };
+    const formData = new FormData();
+    formData.append("transloadit", JSON.stringify(payload));
+    formData.append("signature", "sha384:abc");
+
+    const request = new Request("http://localhost", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await parseTransloaditWebhook(request);
+    expect(result.payload).toEqual(payload);
+    expect(result.rawBody).toBe(JSON.stringify(payload));
+    expect(result.signature).toBe("sha384:abc");
+  });
+
+  test("parseTransloaditWebhook throws on missing payload", async () => {
+    const request = new Request("http://localhost", {
+      method: "POST",
+      body: new FormData(),
+    });
+
+    await expect(parseTransloaditWebhook(request)).rejects.toThrow(
+      "Missing transloadit payload",
+    );
   });
 });
