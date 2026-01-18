@@ -3,10 +3,10 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
-import { writeAppFiles } from "./qa/app-template.js";
-import { parseDeployOutput, requireEnv, run } from "./qa/run.js";
+import { writeAppFiles } from "./qa/app-template.ts";
+import { parseDeployOutput, requireEnv, run } from "./qa/run.ts";
 
-config({ path: process.env.DOTENV_CONFIG_PATH });
+config({ path: process.env.DOTENV_CONFIG_PATH, quiet: true });
 
 type Mode = "local" | "cloud";
 

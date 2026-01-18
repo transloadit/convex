@@ -1,7 +1,7 @@
 "use client";
 
 import Uppy from "@uppy/core";
-import { Dashboard } from "@uppy/react";
+import Dashboard from "@uppy/react/dashboard";
 import Tus from "@uppy/tus";
 import { useEffect, useMemo, useState } from "react";
 import { weddingStepNames } from "../lib/transloadit";

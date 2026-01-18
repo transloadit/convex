@@ -86,6 +86,7 @@ describeE2e("e2e upload flow", () => {
 
       await page.waitForSelector(
         '[data-testid="uppy-dashboard"] input[type="file"]',
+        { state: "attached" },
       );
       await page.setInputFiles(
         '[data-testid="uppy-dashboard"] input[type="file"]',

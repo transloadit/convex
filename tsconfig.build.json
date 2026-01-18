@@ -5,6 +5,7 @@
   "compilerOptions": {
     "rootDir": "./src",
     "module": "ESNext",
-    "moduleResolution": "Bundler"
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": false
   }
 }

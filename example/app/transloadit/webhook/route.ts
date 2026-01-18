@@ -1,4 +1,4 @@
-import { parseTransloaditWebhook } from "@transloadit/convex";
+import { parseTransloaditWebhook } from "../../../../dist/client/index.js";
 import { runAction } from "../../../lib/convex";
 
 export async function POST(request: Request) {

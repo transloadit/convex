@@ -5,13 +5,13 @@ export const weddingSteps = {
   images_filtered: {
     use: ":original",
     robot: "/file/filter",
-    accepts: [[String.raw`\${file.mime}`, "regex", "^image"]],
+    accepts: [["$" + "{file.mime}", "regex", "^image"]],
     error_on_decline: false,
   },
   videos_filtered: {
     use: ":original",
     robot: "/file/filter",
-    accepts: [[String.raw`\${file.mime}`, "regex", "^video"]],
+    accepts: [["$" + "{file.mime}", "regex", "^video"]],
     error_on_decline: false,
   },
   images_resized: {
@@ -25,7 +25,7 @@ export const weddingSteps = {
   videos_encoded: {
     use: "videos_filtered",
     robot: "/video/encode",
-    preset: "mp4",
+    preset: "ipad-high",
     result: true,
   },
 };

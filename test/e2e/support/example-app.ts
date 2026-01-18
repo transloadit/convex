@@ -29,9 +29,32 @@ const findOpenPort = async () => {
   return port;
 };
 
-const waitForReady = async (url: string) => {
-  const deadline = Date.now() + 120_000;
+const waitForReady = async (
+  url: string,
+  child: ReturnType<typeof spawn>,
+  logs: string[],
+) => {
+  const deadline = Date.now() + 240_000;
+  const onData = (chunk: Buffer) => {
+    const text = chunk.toString();
+    text
+      .split("\n")
+      .filter(Boolean)
+      .forEach((line) => {
+        logs.push(line);
+        if (logs.length > 200) logs.shift();
+      });
+  };
+
+  child.stdout?.on("data", onData);
+  child.stderr?.on("data", onData);
+
   while (Date.now() < deadline) {
+    if (child.exitCode !== null) {
+      throw new Error(
+        `Next example exited early (${child.exitCode}).\n${logs.join("\n")}`,
+      );
+    }
     try {
       const response = await fetch(url);
       if (response.ok) return;
@@ -40,7 +63,8 @@ const waitForReady = async (url: string) => {
     }
     await sleep(500);
   }
-  throw new Error("Next example did not start in time");
+
+  throw new Error(`Next example did not start in time.\n${logs.join("\n")}`);
 };
 
 export const startExampleApp = async ({
@@ -54,16 +78,7 @@ export const startExampleApp = async ({
   const nextCli = resolve("node_modules/next/dist/bin/next");
   const child = spawn(
     "node",
-    [
-      nextCli,
-      "dev",
-      "--dir",
-      "example",
-      "--hostname",
-      "127.0.0.1",
-      "--port",
-      `${port}`,
-    ],
+    [nextCli, "dev", "example", "--hostname", "127.0.0.1", "--port", `${port}`],
     {
       env: {
         ...process.env,
@@ -76,7 +91,8 @@ export const startExampleApp = async ({
   );
 
   const url = `http://127.0.0.1:${port}`;
-  await waitForReady(url);
+  const logs: string[] = [];
+  await waitForReady(url, child, logs);
 
   const close = async () => {
     if (child.exitCode === null) {

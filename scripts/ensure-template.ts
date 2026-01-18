@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { config } from "dotenv";
 
-config({ path: process.env.DOTENV_CONFIG_PATH });
+config({ path: process.env.DOTENV_CONFIG_PATH, quiet: true });
 
 const templateName = process.env.TRANSLOADIT_TEMPLATE_NAME ?? "convex-demo";
 const templateFile = resolve("templates/convex-demo.json");

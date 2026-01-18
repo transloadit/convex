@@ -1,8 +1,8 @@
 import { ConvexHttpClient } from "convex/browser";
 import { convexTest } from "convex-test";
-import { api } from "../../src/component/_generated/api.js";
-import schema from "../../src/component/schema.js";
-import { modules } from "../../src/component/setup.test.js";
+import { api } from "../../dist/component/_generated/api.js";
+import schema from "../../dist/component/schema.js";
+import { modules } from "../../dist/test/nodeModules.js";
 
 type Mode = "local" | "cloud";
 
@@ -60,7 +60,7 @@ export const runAction = async (
     });
   }
   if (name === "queueWebhook") {
-    return testClient.action(api.lib.queueWebhook, {
+    return testClient.action(api.lib.handleWebhook, {
       ...args,
       config: config ? { authSecret: config.authSecret } : undefined,
     });
