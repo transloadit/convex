@@ -54,6 +54,10 @@
       "types": "./dist/component/lib.d.ts",
       "default": "./dist/component/lib.js"
     },
+    "./test": {
+      "types": "./dist/test/index.d.ts",
+      "default": "./dist/test/index.js"
+    },
     "./convex.config": {
       "@convex-dev/component-source": "./src/component/convex.config.ts",
       "types": "./dist/component/convex.config.d.ts",

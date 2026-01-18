@@ -69,6 +69,20 @@ export const {
 
 Note: if you don’t supply `expires`, the component defaults it to 1 hour from now.
 
+## Client wrapper
+
+If you prefer a class-based API (similar to other Convex components), use `Transloadit`:
+
+```ts
+import { Transloadit } from "@transloadit/convex";
+import { components } from "./_generated/api";
+
+const transloadit = new Transloadit(components.transloadit, {
+  authKey: process.env.TRANSLOADIT_KEY!,
+  authSecret: process.env.TRANSLOADIT_SECRET!,
+});
+```
+
 ## Webhook route
 
 Transloadit sends webhooks as `multipart/form-data` with `transloadit` (JSON) and `signature` fields.

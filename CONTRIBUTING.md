@@ -24,20 +24,12 @@ yarn typecheck
 yarn test
 ```
 
-E2E browser test (uploads a file via the React example and validates webhook results):
+Browser test (template preflight + upload + webhook validation):
 
 ```bash
 cp .env.example .env
 # Set TRANSLOADIT_KEY and TRANSLOADIT_SECRET
-yarn test:e2e
-```
-
-Smoke test (creates a minimal assembly and prints the response JSON):
-
-```bash
-cp .env.example .env
-# Set TRANSLOADIT_KEY and TRANSLOADIT_SECRET
-yarn smoke
+yarn test:browser
 ```
 
 Local webhook testing with cloudflared:
@@ -51,27 +43,18 @@ Use the generated public URL as `notifyUrl` when creating Assemblies or set
 
 You can also run `yarn tunnel --once` to print the URL and exit.
 
-Full QA flow (template + tunnel + webhook):
-
-This runs an end-to-end webhook QA flow against Transloadit using a local webhook
-server and cloudflared (auto-downloaded if missing):
-
-```bash
-cp .env.example .env
-# Set TRANSLOADIT_KEY and TRANSLOADIT_SECRET
-yarn qa:full
-
-# Or with verbose logging
-yarn qa:full:verbose
-```
-
-It prints a JSON summary including the assembly id, webhook status, and number of stored results.
-After that completes, it runs `yarn test:e2e`.
-
 Template management (idempotent):
 
 ```bash
 yarn template:ensure
+```
+
+Component test helpers (for `convex-test`):
+
+```ts
+import { createTransloaditTest } from "@transloadit/convex/test";
+
+const t = createTransloaditTest();
 ```
 
 ## Release process

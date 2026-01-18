@@ -1,9 +1,12 @@
+import type { AssemblyStatus } from "@transloadit/types/assemblyStatus";
+import type { AssemblyInstructionsInput } from "@transloadit/types/template";
 import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
 import { type Infer, v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.js";
 import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.js";
 
 export { parseTransloaditWebhook } from "../component/apiUtils.js";
+export type { AssemblyStatus, AssemblyInstructionsInput };
 
 export interface TransloaditConfig {
   authKey: string;
@@ -143,6 +146,15 @@ export class TransloaditClient {
   api() {
     return makeTransloaditAPI(this.component, this.config);
   }
+}
+
+export class Transloadit extends TransloaditClient {}
+
+export function createTransloadit(
+  component: TransloaditComponent,
+  config?: Partial<TransloaditConfig>,
+) {
+  return new Transloadit(component, config);
 }
 
 export function makeTransloaditAPI(

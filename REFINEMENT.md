@@ -21,12 +21,12 @@ Notes:
 ## Todo list
 
 ### DX + API ergonomics
-- [ ] Add a `handleWebhookRequest` helper that accepts a `Request` and returns `{ payload, rawBody, signature }` to cut boilerplate in Convex HTTP routes.
-- [ ] Provide a class‑based wrapper (single public entrypoint) so usage mirrors other Convex components.
-- [ ] Export `@transloadit/convex/test` helpers for `convex-test` to mock component behavior.
+- [x] Add a `parseTransloaditWebhook` helper that accepts a `Request` and returns `{ payload, rawBody, signature }` to cut boilerplate in Convex HTTP routes.
+- [x] Provide a class‑based wrapper (single public entrypoint) so usage mirrors other Convex components.
+- [x] Export `@transloadit/convex/test` helpers for `convex-test` to mock component behavior.
 
 ### Type safety
-- [ ] Expand `@transloadit/types` usage beyond steps/fields (Assembly status, results, webhook payload).
+- [x] Expand `@transloadit/types` usage beyond steps/fields (Assembly status, results, webhook payload).
 - [ ] Replace `v.any()` in responses/results where concrete Transloadit types exist.
 
 ### Durability + reliability

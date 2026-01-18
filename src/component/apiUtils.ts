@@ -1,3 +1,4 @@
+import type { AssemblyStatusResults } from "@transloadit/types/assemblyStatus";
 import type { AssemblyInstructionsInput } from "@transloadit/types/template";
 
 export interface TransloaditAuthConfig {
@@ -162,13 +163,15 @@ export async function verifyWebhookSignature(options: {
   return safeCompare(expected, sig);
 }
 
+export type AssemblyResult = AssemblyStatusResults[string][number];
+
 export type AssemblyResultRecord = {
   stepName: string;
-  result: Record<string, unknown>;
+  result: AssemblyResult;
 };
 
 export function flattenResults(
-  results: Record<string, Array<Record<string, unknown>>> | undefined,
+  results: AssemblyStatusResults | undefined,
 ): AssemblyResultRecord[] {
   if (!results) return [];
   const output: AssemblyResultRecord[] = [];

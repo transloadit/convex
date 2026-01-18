@@ -1,3 +1,4 @@
+import type { AssemblyStatus } from "@transloadit/types/assemblyStatus";
 import type { AssemblyInstructionsInput } from "@transloadit/types/template";
 import { type Infer, v } from "convex/values";
 import { internal } from "./_generated/api.js";
@@ -293,7 +294,7 @@ export const handleWebhook = action({
       }
     }
 
-    const payload = args.payload as Record<string, unknown>;
+    const payload = args.payload as AssemblyStatus;
     const assemblyId =
       typeof payload.assembly_id === "string"
         ? payload.assembly_id
@@ -305,10 +306,7 @@ export const handleWebhook = action({
       throw new Error("Webhook payload missing assembly_id");
     }
 
-    const results = flattenResults(
-      (payload.results as Record<string, Array<Record<string, unknown>>>) ??
-        undefined,
-    );
+    const results = flattenResults(payload.results ?? undefined);
 
     await ctx.runMutation(internal.lib.upsertAssembly, {
       assemblyId,
