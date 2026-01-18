@@ -71,14 +71,9 @@ jobs:
   browser:
     name: Browser tests
     if: >
-      (github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository) &&
-      env.TRANSLOADIT_KEY != '' &&
-      env.TRANSLOADIT_SECRET != ''
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
-    env:
-      TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
-      TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -86,8 +81,23 @@ jobs:
           node-version: 24
       - run: corepack enable
       - run: yarn install --immutable
+      - id: secrets
+        run: |
+          if [ -z "${TRANSLOADIT_KEY}" ] || [ -z "${TRANSLOADIT_SECRET}" ]; then
+            echo "hasSecrets=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "hasSecrets=true" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
+          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
       - run: yarn exec playwright install --with-deps chromium
+        if: steps.secrets.outputs.hasSecrets == 'true'
       - run: yarn test:browser
+        if: steps.secrets.outputs.hasSecrets == 'true'
+        env:
+          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
+          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
 
   release:
     name: Publish to npm
