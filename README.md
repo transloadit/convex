@@ -234,7 +234,7 @@ npx convex env set TRANSLOADIT_KEY <your_auth_key>
 npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
 ```
 
-Add `example/.env` based on `example/.env.example`, and set `VITE_TRANSLOADIT_TEMPLATE_ID` (use `yarn template:ensure` to create one). To test webhooks locally, run `yarn tunnel` and set `VITE_TRANSLOADIT_NOTIFY_URL` to the generated URL.
+Create `example/.env` and set `VITE_TRANSLOADIT_TEMPLATE_ID` (use `yarn template:ensure` to create one). To test webhooks locally, run `yarn tunnel` and set `VITE_TRANSLOADIT_NOTIFY_URL` to the generated URL.
 
 ## Verification and QA
 
@@ -256,6 +256,16 @@ This runs format, lint, typecheck, and unit tests. Additional commands:
 Notes:
 - `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
+
+## Component test helpers
+
+For `convex-test`, you can use the built-in helper:
+
+```ts
+import { createTransloaditTest } from "@transloadit/convex/test";
+
+const t = createTransloaditTest();
+```
 
 ## Generated files
 
