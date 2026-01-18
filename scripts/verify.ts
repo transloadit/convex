@@ -1,46 +1,16 @@
-import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
 import { writeAppFiles } from "./qa/app-template.js";
+import { parseDeployOutput, parseJson, requireEnv, run } from "./qa/run.js";
 
 config({ path: process.env.DOTENV_CONFIG_PATH });
 
 type Mode = "local" | "cloud";
 
-type RunOptions = {
-  cwd?: string;
-  env?: NodeJS.ProcessEnv;
-  stdio?: "inherit" | "pipe";
-};
-
 const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
-
-const requireEnv = (name: string) => {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing ${name} environment variable`);
-  }
-  return value;
-};
-
-const run = (command: string, args: string[], options: RunOptions = {}) => {
-  const result = spawnSync(command, args, {
-    cwd: options.cwd,
-    env: options.env,
-    stdio: options.stdio ?? "inherit",
-    encoding: "utf8",
-  });
-
-  if (result.status !== 0) {
-    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-    throw new Error(`Command failed: ${command} ${args.join(" ")}\n${output}`);
-  }
-
-  return `${result.stdout ?? ""}${result.stderr ?? ""}`;
-};
 
 const parseArgs = (args: string[]) => {
   let mode: string | undefined;
@@ -65,22 +35,6 @@ const parseArgs = (args: string[]) => {
   }
 
   return { mode, app, useTemplate };
-};
-
-const parseJson = <T>(output: string): T => {
-  const trimmed = output.trim();
-  if (!trimmed) {
-    throw new Error("Template preflight returned empty output");
-  }
-  if (trimmed.startsWith("{")) {
-    return JSON.parse(trimmed) as T;
-  }
-  const first = trimmed.indexOf("{");
-  const last = trimmed.lastIndexOf("}");
-  if (first === -1 || last === -1 || last <= first) {
-    throw new Error(`Unable to parse JSON from output: ${trimmed}`);
-  }
-  return JSON.parse(trimmed.slice(first, last + 1)) as T;
 };
 
 const runBrowser = async (options: {
@@ -140,26 +94,6 @@ const toPreviewName = () => {
   if (explicit) return explicit;
   const suffix = Math.random().toString(36).slice(2, 8);
   return `transloadit-qa-${Date.now().toString(36)}-${suffix}`;
-};
-
-const parseDeployOutput = (output: string) => {
-  const cloudMatch = /https:\/\/([a-z0-9-]+)\.convex\.cloud/i.exec(output);
-  if (cloudMatch?.[1]) {
-    return {
-      deploymentName: cloudMatch[1],
-      deploymentUrl: `https://${cloudMatch[1]}.convex.cloud`,
-    };
-  }
-
-  const siteMatch = /https:\/\/([a-z0-9-]+)\.convex\.site/i.exec(output);
-  if (siteMatch?.[1]) {
-    return {
-      deploymentName: siteMatch[1],
-      deploymentUrl: `https://${siteMatch[1]}.convex.cloud`,
-    };
-  }
-
-  throw new Error(`Unable to find deployment URL in output:\n${output}`);
 };
 
 const setupRemoteDeployment = async () => {
