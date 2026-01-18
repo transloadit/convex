@@ -1,9 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { config } from "dotenv";
+import { loadEnv } from "./env.ts";
 
-config({ path: process.env.DOTENV_CONFIG_PATH, quiet: true });
+loadEnv();
 
 const templateName = process.env.TRANSLOADIT_TEMPLATE_NAME ?? "convex-demo";
 const templateFile = resolve("templates/convex-demo.json");

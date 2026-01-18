@@ -2,11 +2,11 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { config } from "dotenv";
+import { loadEnv } from "./env.ts";
 import { writeAppFiles } from "./qa/app-template.ts";
 import { parseDeployOutput, requireEnv, run } from "./qa/run.ts";
 
-config({ path: process.env.DOTENV_CONFIG_PATH, quiet: true });
+loadEnv();
 
 type Mode = "local" | "cloud";
 

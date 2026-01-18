@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { chmodSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { config } from "dotenv";
+import { loadEnv } from "./env.ts";
 
-config({ path: process.env.DOTENV_CONFIG_PATH, quiet: true });
+loadEnv();
 
 const isWindows = process.platform === "win32";
 const binaryName = isWindows ? "cloudflared.exe" : "cloudflared";
