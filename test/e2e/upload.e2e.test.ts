@@ -1,7 +1,6 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { createServer, type IncomingMessage } from "node:http";
+import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -14,146 +13,33 @@ import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { api } from "../../src/component/_generated/api.js";
 import schema from "../../src/component/schema.js";
 import { modules } from "../../src/component/setup.test.js";
+import { parseMultipart, readRequestBody } from "./support/http.js";
+import { runtime } from "./support/runtime.js";
+import { startTunnel } from "./support/tunnel.js";
 
-const authKey = process.env.TRANSLOADIT_KEY ?? "";
-const authSecret = process.env.TRANSLOADIT_SECRET ?? "";
-const mode = process.env.E2E_MODE ?? "local";
-const useRemote = mode === "cloud";
-const remoteUrl = process.env.E2E_REMOTE_URL ?? "";
-const remoteAdminKey = process.env.E2E_REMOTE_ADMIN_KEY ?? "";
-const remoteNotifyUrl = process.env.E2E_REMOTE_NOTIFY_URL ?? "";
-const appVariant = process.env.E2E_APP === "example" ? "example" : "fixture";
-const templateId =
-  process.env.TRANSLOADIT_TEMPLATE_ID ??
-  process.env.VITE_TRANSLOADIT_TEMPLATE_ID ??
-  "";
-const useTemplate =
-  process.env.E2E_USE_TEMPLATE === "1" || appVariant === "example";
+const {
+  authKey,
+  authSecret,
+  useRemote,
+  remoteUrl,
+  remoteAdminKey,
+  remoteNotifyUrl,
+  appVariant,
+  templateId,
+  useTemplate,
+  shouldRun,
+} = runtime;
 
 const fixturesDir = resolve("test/e2e/fixtures");
 const distDir = resolve("dist");
 
-const shouldRun = useRemote || (authKey && authSecret);
 const describeE2e = shouldRun ? describe : describe.skip;
-
-type TunnelInfo = {
-  url: string;
-  notifyUrl?: string;
-};
 
 type WebhookPayload = {
   ok?: string;
   assembly_id?: string;
   [key: string]: unknown;
 };
-
-function splitBuffer(buffer: Buffer, delimiter: Buffer) {
-  const parts: Buffer[] = [];
-  let start = 0;
-  let index = buffer.indexOf(delimiter, start);
-  while (index !== -1) {
-    parts.push(buffer.slice(start, index));
-    start = index + delimiter.length;
-    index = buffer.indexOf(delimiter, start);
-  }
-  parts.push(buffer.slice(start));
-  return parts;
-}
-
-function parseMultipart(buffer: Buffer, contentType: string) {
-  const match = /boundary=(?:"([^"]+)"|([^;]+))/i.exec(contentType || "") ?? [];
-  const boundaryMatch = match[1] || match[2];
-  if (!boundaryMatch) {
-    throw new Error("Missing multipart boundary");
-  }
-  const boundary = boundaryMatch;
-  const delimiter = Buffer.from(`--${boundary}`);
-  const parts = splitBuffer(buffer, delimiter);
-  const fields: Record<string, string> = {};
-
-  for (const part of parts) {
-    if (part.length === 0) continue;
-    if (part.equals(Buffer.from("--\r\n")) || part.equals(Buffer.from("--"))) {
-      continue;
-    }
-
-    const trimmed = part.slice(part.indexOf("\r\n") + 2);
-    const headerEnd = trimmed.indexOf("\r\n\r\n");
-    if (headerEnd === -1) continue;
-
-    const headerText = trimmed.slice(0, headerEnd).toString("utf8");
-    const content = trimmed.slice(headerEnd + 4);
-    const contentTrimmed = content.slice(0, content.length - 2);
-
-    const nameMatch = /name="([^"]+)"/i.exec(headerText);
-    if (!nameMatch) continue;
-    const name = nameMatch[1];
-    fields[name] = contentTrimmed.toString("utf8");
-  }
-
-  return fields;
-}
-
-async function readRequestBody(req: IncomingMessage) {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) {
-    chunks.push(Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
-}
-
-async function startTunnel(port: number) {
-  const process = spawn(
-    "node",
-    [resolve("scripts/start-webhook-tunnel.ts"), "--json", "--port", `${port}`],
-    { stdio: ["ignore", "pipe", "pipe"] },
-  );
-
-  const info = await new Promise<TunnelInfo>((resolvePromise, reject) => {
-    let buffer = "";
-    const logs: string[] = [];
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-    const finish = (error?: Error) => {
-      if (timeoutId) clearTimeout(timeoutId);
-      if (error) {
-        const details = logs.length ? `\n${logs.join("\n")}` : "";
-        reject(new Error(`${error.message}${details}`));
-        return;
-      }
-      resolvePromise(JSON.parse(buffer.trim()) as TunnelInfo);
-    };
-
-    timeoutId = setTimeout(() => {
-      finish(new Error("Timed out waiting for webhook tunnel URL"));
-    }, 90_000);
-
-    const onData = (chunk: Buffer) => {
-      buffer += chunk.toString();
-      const newlineIndex = buffer.indexOf("\n");
-      if (newlineIndex === -1) return;
-      const line = buffer.slice(0, newlineIndex).trim();
-      buffer = buffer.slice(newlineIndex + 1);
-      if (!line) return;
-      try {
-        resolvePromise(JSON.parse(line) as TunnelInfo);
-      } catch {
-        logs.push(line);
-      }
-    };
-
-    process.stdout?.on("data", onData);
-    process.stderr?.on("data", onData);
-    process.on("error", (error) => finish(error));
-    process.on("exit", (code) => {
-      if (code && code !== 0) {
-        finish(new Error(`Webhook tunnel exited with code ${code}`));
-      }
-    });
-  });
-
-  return { process, info };
-}
 
 describeE2e("e2e upload flow", () => {
   let serverUrl = "";
