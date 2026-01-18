@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadEnv } from "./load-env.js";
+import { loadEnv } from "./load-env.ts";
 
 loadEnv();
 
