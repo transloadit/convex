@@ -9,9 +9,11 @@ import { assemblyStatusSchema } from "@transloadit/zod/v3/assemblyStatus";
 import { build } from "esbuild";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createConvexRunner } from "./support/convex.js";
-import { parseMultipart, readRequestBody } from "./support/http.js";
+import { readRequestBody } from "./support/http.js";
 import { runtime } from "./support/runtime.js";
+import { sleep } from "./support/sleep.js";
 import { startTunnel } from "./support/tunnel.js";
+import { parseWebhookPayload, type WebhookPayload } from "./support/webhook.js";
 
 const {
   authKey,
@@ -30,12 +32,6 @@ const fixturesDir = resolve("test/e2e/fixtures");
 const distDir = resolve("dist");
 
 const describeE2e = shouldRun ? describe : describe.skip;
-
-type WebhookPayload = {
-  ok?: string;
-  assembly_id?: string;
-  [key: string]: unknown;
-};
 
 describeE2e("e2e upload flow", () => {
   let serverUrl = "";
@@ -216,56 +212,17 @@ describeE2e("e2e upload flow", () => {
 
       if (method === "POST" && url.pathname === "/transloadit/webhook") {
         const body = await readRequestBody(req);
-        const contentType = req.headers["content-type"] || "";
 
+        let payload: WebhookPayload;
         let rawPayload = "";
         let signature = "";
-        let payload: WebhookPayload | undefined;
-
-        if (contentType.includes("multipart/form-data")) {
-          const fields = parseMultipart(body, contentType);
-          rawPayload = fields.transloadit ?? "";
-          signature = fields.signature ?? "";
-          if (!rawPayload) {
-            res.writeHead(400);
-            res.end("Missing transloadit payload");
-            return;
-          }
-          payload = JSON.parse(rawPayload) as WebhookPayload;
-        } else if (contentType.includes("application/x-www-form-urlencoded")) {
-          const params = new URLSearchParams(body.toString("utf8"));
-          rawPayload = params.get("transloadit") ?? "";
-          signature = params.get("signature") ?? "";
-          if (!rawPayload) {
-            res.writeHead(400);
-            res.end("Missing transloadit payload");
-            return;
-          }
-          payload = JSON.parse(rawPayload) as WebhookPayload;
-        } else {
-          rawPayload = body.toString("utf8");
-          payload = JSON.parse(rawPayload) as WebhookPayload;
-          signature = (
-            req.headers["x-transloadit-signature"] ||
-            req.headers["x-signature"] ||
-            req.headers["transloadit-signature"] ||
-            ""
-          ).toString();
-          const payloadRecord = payload as Record<string, unknown>;
-          const nestedPayload = payloadRecord.transloadit;
-          if (typeof nestedPayload === "string") {
-            rawPayload = nestedPayload;
-            payload = JSON.parse(rawPayload) as WebhookPayload;
-          }
-          const nestedSignature = payloadRecord.signature;
-          if (typeof nestedSignature === "string") {
-            signature = nestedSignature;
-          }
-        }
-
-        if (!payload) {
+        try {
+          ({ payload, rawPayload, signature } = parseWebhookPayload(req, body));
+        } catch (error) {
           res.writeHead(400);
-          res.end("Missing payload");
+          res.end(
+            error instanceof Error ? error.message : "Invalid webhook payload",
+          );
           return;
         }
 
@@ -494,9 +451,7 @@ describeE2e("e2e upload flow", () => {
           if (results.length > 0) {
             return results;
           }
-          await new Promise((resolvePromise) =>
-            setTimeout(resolvePromise, 1500),
-          );
+          await sleep(1500);
         }
         return [];
       };
@@ -528,9 +483,7 @@ describeE2e("e2e upload flow", () => {
               throw new Error(`Assembly failed with status ${ok}`);
             }
 
-            await new Promise((resolvePromise) =>
-              setTimeout(resolvePromise, 3000),
-            );
+            await sleep(3000);
           }
           return null;
         };
