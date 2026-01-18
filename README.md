@@ -259,13 +259,13 @@ Additional commands:
 - `yarn test` (Vitest unit tests)
 - `yarn verify:local` (browser + webhook QA flow against local Convex test harness)
 - `yarn verify:example` (runs the same flow against the example app)
-- `yarn verify:preview` (deploys a preview Convex app and runs the same browser flow against it)
+- `yarn verify:cloud` (deploys a preview Convex app and runs the same browser flow against it)
 - `yarn build` (tsc build + emit package json)
 
 Notes:
 - `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
-- `yarn verify:preview` needs `CONVEX_DEPLOY_KEY`, `TRANSLOADIT_KEY`, and `TRANSLOADIT_SECRET`.
+- `yarn verify:cloud` needs `CONVEX_DEPLOY_KEY`, `TRANSLOADIT_KEY`, and `TRANSLOADIT_SECRET`.
 
 ## Component test helpers
 
