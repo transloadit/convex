@@ -1,14 +1,14 @@
 import {
   useAssemblyStatus,
   useTransloaditFiles,
-  useTransloaditUpload,
+  useTransloaditTusUpload,
 } from "@transloadit/convex/react";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 
 const api = {
   transloadit: {
-    generateUploadParams: "generateUploadParams",
+    createAssembly: "createAssembly",
     getAssemblyStatus: "getAssemblyStatus",
     listResults: "listResults",
   },
@@ -49,8 +49,8 @@ globalThis.__convexQuery = async (name: string, args: unknown) => {
 function App() {
   const [assemblyId, setAssemblyId] = useState<string | null>(null);
   const [configError, setConfigError] = useState<string | null>(null);
-  const { upload, isUploading, progress, error } = useTransloaditUpload(
-    api.transloadit.generateUploadParams,
+  const { upload, isUploading, progress, error } = useTransloaditTusUpload(
+    api.transloadit.createAssembly,
   );
 
   const status = useAssemblyStatus(
@@ -74,12 +74,13 @@ function App() {
 
     const response = await upload(file, {
       notifyUrl,
+      storeFingerprintForResuming: false,
+      removeFingerprintOnSuccess: true,
+      onAssemblyCreated: (created) => {
+        setAssemblyId(created.assemblyId);
+      },
     });
-
-    const created = response.assembly_id ?? response.assemblyId;
-    if (typeof created === "string") {
-      setAssemblyId(created);
-    }
+    setAssemblyId((current) => current ?? response.assemblyId);
   };
 
   return (

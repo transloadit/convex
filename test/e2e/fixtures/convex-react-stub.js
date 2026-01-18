@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 export function useAction(ref) {
   return useCallback(
@@ -14,16 +14,23 @@ export function useAction(ref) {
 
 export function useQuery(ref, args) {
   const [data, setData] = useState(null);
-  const argsValue = args ?? {};
+  const argsKey = useMemo(() => {
+    try {
+      return JSON.stringify(args ?? null);
+    } catch {
+      return "null";
+    }
+  }, [args]);
 
   useEffect(() => {
     let active = true;
     let timerId;
+    const argsValue = argsKey === "null" ? null : JSON.parse(argsKey);
 
     const run = async () => {
       if (!globalThis.__convexQuery) return;
       try {
-        const result = await globalThis.__convexQuery(ref, argsValue);
+        const result = await globalThis.__convexQuery(ref, argsValue ?? {});
         if (active) {
           setData(result ?? null);
         }
@@ -46,7 +53,7 @@ export function useQuery(ref, args) {
         globalThis.clearTimeout(timerId);
       }
     };
-  }, [ref, argsValue]);
+  }, [ref, argsKey]);
 
   return data;
 }

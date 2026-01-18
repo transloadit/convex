@@ -4,7 +4,7 @@
 The issue plan is directionally correct (aligns with Convex component patterns and the Cloudinary reference), but it is too broad and lacks execution-level detail on:
 - What the minimal API surface is for the challenge deadline.
 - How assemblies/results are persisted and updated (webhook vs polling).
-- How to keep file uploads within Convex limits (form upload vs tus).
+- How to keep file uploads within Convex limits (tus-only approach).
 - The exact component/public API wrappers needed by Convex apps.
 - Testing strategy and CI gates.
 
@@ -21,14 +21,12 @@ The issue plan is directionally correct (aligns with Convex component patterns a
 
 3. **Core Convex API**
    - `createAssembly` (action): sign params, call Transloadit, store assembly.
-   - `generateUploadParams` (action): return `params` + `signature` for browser form upload.
    - `handleWebhook` (action): verify signature, upsert assembly, replace results.
    - `getAssemblyStatus`/`listAssemblies` (queries).
    - `listResults` (query).
    - `storeAssemblyMetadata` (mutation) for app-side enrichment.
 
 4. **React hooks**
-   - `useTransloaditUpload` (form upload with progress).
    - `useTransloaditTusUpload` (resumable upload using tus-js-client).
    - `useAssemblyStatus` + `useTransloaditFiles` for reactive status/results.
 

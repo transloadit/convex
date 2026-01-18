@@ -10,17 +10,9 @@ if (!existsSync(templateFile)) {
 }
 
 const env = { ...process.env };
-if (!env.TRANSLOADIT_KEY && env.TRANSLOADIT_AUTH_KEY) {
-  env.TRANSLOADIT_KEY = env.TRANSLOADIT_AUTH_KEY;
-}
-if (!env.TRANSLOADIT_SECRET && env.TRANSLOADIT_AUTH_SECRET) {
-  env.TRANSLOADIT_SECRET = env.TRANSLOADIT_AUTH_SECRET;
-}
 
 if (!env.TRANSLOADIT_KEY || !env.TRANSLOADIT_SECRET) {
-  throw new Error(
-    "Missing TRANSLOADIT_KEY/TRANSLOADIT_SECRET (or TRANSLOADIT_AUTH_KEY/TRANSLOADIT_AUTH_SECRET)",
-  );
+  throw new Error("Missing TRANSLOADIT_KEY/TRANSLOADIT_SECRET");
 }
 
 function run(args: string[]) {

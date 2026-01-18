@@ -26,13 +26,6 @@ yarn dev
 4. Set environment variables in Convex:
 
 ```bash
-npx convex env set TRANSLOADIT_AUTH_KEY <your_auth_key>
-npx convex env set TRANSLOADIT_AUTH_SECRET <your_auth_secret>
-```
-
-Aliases also supported:
-
-```bash
 npx convex env set TRANSLOADIT_KEY <your_auth_key>
 npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
 ```

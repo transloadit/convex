@@ -60,23 +60,6 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       { assemblyId: string; data: any },
       Name
     >;
-    generateUploadParams: FunctionReference<
-      "action",
-      "internal",
-      {
-        config: { authKey: string; authSecret: string };
-        templateId?: string;
-        steps?: any;
-        fields?: any;
-        notifyUrl?: string;
-        numExpectedUploadFiles?: number;
-        expires?: string;
-        additionalParams?: any;
-        userId?: string;
-      },
-      { params: string; signature: string; url: string },
-      Name
-    >;
     handleWebhook: FunctionReference<
       "action",
       "internal",
@@ -87,7 +70,55 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         verifySignature?: boolean;
         config?: { authSecret: string };
       },
-      { assemblyId: string; resultCount: number },
+      {
+        assemblyId: string;
+        resultCount: number;
+        ok?: string;
+        status?: string;
+      },
+      Name
+    >;
+    processWebhook: FunctionReference<
+      "action",
+      "internal",
+      {
+        payload: any;
+        rawBody?: string;
+        signature?: string;
+        verifySignature?: boolean;
+        authSecret?: string;
+      },
+      {
+        assemblyId: string;
+        resultCount: number;
+        ok?: string;
+        status?: string;
+      },
+      Name
+    >;
+    queueWebhook: FunctionReference<
+      "action",
+      "internal",
+      {
+        payload: any;
+        rawBody?: string;
+        signature?: string;
+        verifySignature?: boolean;
+        config?: { authSecret: string };
+      },
+      { assemblyId: string; queued: boolean },
+      Name
+    >;
+    refreshAssembly: FunctionReference<
+      "action",
+      "internal",
+      { assemblyId: string; config?: { authKey: string; authSecret: string } },
+      {
+        assemblyId: string;
+        resultCount: number;
+        ok?: string;
+        status?: string;
+      },
       Name
     >;
     getAssemblyStatus: FunctionReference<

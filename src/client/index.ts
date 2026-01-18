@@ -118,6 +118,28 @@ export class TransloaditClient {
     });
   }
 
+  async queueWebhook(
+    ctx: RunActionCtx,
+    args: {
+      payload: unknown;
+      rawBody?: string;
+      signature?: string;
+      verifySignature?: boolean;
+    },
+  ) {
+    return ctx.runAction(this.component.lib.queueWebhook, {
+      ...args,
+      config: { authSecret: this.config.authSecret },
+    });
+  }
+
+  async refreshAssembly(ctx: RunActionCtx, assemblyId: string) {
+    return ctx.runAction(this.component.lib.refreshAssembly, {
+      assemblyId,
+      config: this.config,
+    });
+  }
+
   async getAssemblyStatus(ctx: RunQueryCtx, assemblyId: string) {
     return ctx.runQuery(this.component.lib.getAssemblyStatus, { assemblyId });
   }
@@ -195,6 +217,39 @@ export function makeTransloaditAPI(
         return ctx.runAction(component.lib.handleWebhook, {
           ...args,
           config: { authSecret: resolvedConfig.authSecret },
+        });
+      },
+    }),
+    queueWebhook: actionGeneric({
+      args: {
+        payload: v.any(),
+        rawBody: v.optional(v.string()),
+        signature: v.optional(v.string()),
+        verifySignature: v.optional(v.boolean()),
+      },
+      returns: v.object({
+        assemblyId: v.string(),
+        queued: v.boolean(),
+      }),
+      handler: async (ctx, args) => {
+        return ctx.runAction(component.lib.queueWebhook, {
+          ...args,
+          config: { authSecret: resolvedConfig.authSecret },
+        });
+      },
+    }),
+    refreshAssembly: actionGeneric({
+      args: { assemblyId: v.string() },
+      returns: v.object({
+        assemblyId: v.string(),
+        resultCount: v.number(),
+        ok: v.optional(v.string()),
+        status: v.optional(v.string()),
+      }),
+      handler: async (ctx, args) => {
+        return ctx.runAction(component.lib.refreshAssembly, {
+          ...args,
+          config: resolvedConfig,
         });
       },
     }),

@@ -1,23 +1,7 @@
 import { useAction, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Upload } from "tus-js-client";
-
-export type GenerateUploadParamsFn = FunctionReference<
-  "action",
-  "public",
-  {
-    templateId?: string;
-    steps?: unknown;
-    fields?: unknown;
-    notifyUrl?: string;
-    numExpectedUploadFiles?: number;
-    expires?: string;
-    additionalParams?: unknown;
-    userId?: string;
-  },
-  { params: string; signature: string; url: string }
->;
 
 export type CreateAssemblyFn = FunctionReference<
   "action",
@@ -49,6 +33,13 @@ export type ListResultsFn = FunctionReference<
   Array<unknown>
 >;
 
+export type RefreshAssemblyFn = FunctionReference<
+  "action",
+  "public",
+  { assemblyId: string },
+  { assemblyId: string; ok?: string; status?: string; resultCount: number }
+>;
+
 export interface UploadOptions {
   templateId?: string;
   steps?: Record<string, unknown>;
@@ -66,124 +57,22 @@ export interface UploadState {
   error: Error | null;
 }
 
-export interface FormUploadOptions extends UploadOptions {
-  fileField?: string;
-  onProgress?: (progress: number) => void;
-}
-
 export interface TusUploadOptions extends UploadOptions {
   metadata?: Record<string, string>;
+  fieldName?: string;
   chunkSize?: number;
   retryDelays?: number[];
+  onShouldRetry?: (error: unknown, retryAttempt: number) => boolean;
+  rateLimitRetryDelays?: number[];
+  overridePatchMethod?: boolean;
+  uploadDataDuringCreation?: boolean;
+  storeFingerprintForResuming?: boolean;
+  removeFingerprintOnSuccess?: boolean;
   onProgress?: (progress: number) => void;
-}
-
-async function uploadViaForm(
-  file: File,
-  params: { params: string; signature: string; url: string },
-  options: FormUploadOptions,
-): Promise<Record<string, unknown>> {
-  const formData = new FormData();
-  formData.append("params", params.params);
-  formData.append("signature", params.signature);
-  formData.append(options.fileField ?? "file", file);
-
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", params.url, true);
-
-    xhr.upload.onprogress = (event) => {
-      if (!event.lengthComputable) return;
-      const progress = Math.round((event.loaded / event.total) * 100);
-      options.onProgress?.(progress);
-    };
-
-    xhr.onload = () => {
-      try {
-        const response = JSON.parse(xhr.responseText) as Record<
-          string,
-          unknown
-        >;
-        if (xhr.status >= 200 && xhr.status < 300) {
-          resolve(response);
-        } else {
-          reject(
-            new Error(
-              `Transloadit upload failed (${xhr.status}): ${JSON.stringify(response)}`,
-            ),
-          );
-        }
-      } catch (error) {
-        reject(error);
-      }
-    };
-
-    xhr.onerror = () => {
-      reject(new Error("Transloadit upload failed"));
-    };
-
-    xhr.send(formData);
-  });
-}
-
-export function useTransloaditUpload(
-  generateUploadParams: GenerateUploadParamsFn,
-) {
-  const generate = useAction(generateUploadParams);
-  const [state, setState] = useState<UploadState>({
-    isUploading: false,
-    progress: 0,
-    error: null,
-  });
-
-  const upload = useCallback(
-    async (file: File, options: FormUploadOptions) => {
-      setState({ isUploading: true, progress: 0, error: null });
-      try {
-        const params = await generate({
-          templateId: options.templateId,
-          steps: options.steps,
-          fields: options.fields,
-          notifyUrl: options.notifyUrl,
-          numExpectedUploadFiles: options.numExpectedUploadFiles,
-          expires: options.expires,
-          additionalParams: options.additionalParams,
-          userId: options.userId,
-        });
-
-        const response = await uploadViaForm(file, params, {
-          ...options,
-          onProgress: (progress) => {
-            setState((prev) => ({ ...prev, progress }));
-            options.onProgress?.(progress);
-          },
-        });
-
-        setState({ isUploading: false, progress: 100, error: null });
-        return response;
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error("Upload failed");
-        setState({ isUploading: false, progress: 0, error: err });
-        throw err;
-      }
-    },
-    [generate],
-  );
-
-  const reset = useCallback(() => {
-    setState({ isUploading: false, progress: 0, error: null });
-  }, []);
-
-  return useMemo(
-    () => ({
-      upload,
-      reset,
-      isUploading: state.isUploading,
-      progress: state.progress,
-      error: state.error,
-    }),
-    [state.error, state.isUploading, state.progress, upload, reset],
-  );
+  onAssemblyCreated?: (assembly: {
+    assemblyId: string;
+    data: Record<string, unknown>;
+  }) => void;
 }
 
 export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
@@ -211,6 +100,7 @@ export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
         });
 
         const data = assembly.data as Record<string, unknown>;
+        options.onAssemblyCreated?.(assembly);
         const tusUrl =
           (typeof data.tus_url === "string" && data.tus_url) ||
           (typeof data.tusUrl === "string" && data.tusUrl) ||
@@ -222,33 +112,132 @@ export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
           );
         }
 
+        const assemblyUrl =
+          (typeof data.assembly_ssl_url === "string" &&
+            data.assembly_ssl_url) ||
+          (typeof data.assembly_url === "string" && data.assembly_url) ||
+          (typeof data.assemblyUrl === "string" && data.assemblyUrl) ||
+          "";
+
+        if (!assemblyUrl) {
+          throw new Error(
+            "Transloadit response missing assembly_url for resumable upload",
+          );
+        }
+
         const metadata: Record<string, string> = {
           filename: file.name,
-          filetype: file.type,
           ...options.metadata,
         };
+        if (file.type) {
+          metadata.filetype = file.type;
+        }
+        if (!metadata.fieldname) {
+          metadata.fieldname = options.fieldName ?? "file";
+        }
+        if (!metadata.assembly_url) {
+          metadata.assembly_url = assemblyUrl;
+        }
 
-        await new Promise<void>((resolve, reject) => {
-          const uploader = new Upload(file, {
-            endpoint: tusUrl,
-            metadata,
-            chunkSize: options.chunkSize,
-            retryDelays: options.retryDelays ?? [0, 3000, 5000, 10000],
-            onProgress: (bytesUploaded, bytesTotal) => {
-              const progress = Math.round((bytesUploaded / bytesTotal) * 100);
-              setState((prev) => ({ ...prev, progress }));
-              options.onProgress?.(progress);
-            },
-            onError: (error) => {
-              reject(error);
-            },
-            onSuccess: () => {
-              resolve();
-            },
+        type RetryError = {
+          originalResponse?: {
+            getStatus?: () => number;
+            getHeader?: (header: string) => string | undefined;
+          } | null;
+        };
+
+        const getStatus = (error: RetryError) =>
+          error.originalResponse?.getStatus &&
+          typeof error.originalResponse.getStatus === "function"
+            ? error.originalResponse.getStatus()
+            : 0;
+
+        const retryDelays = options.retryDelays
+          ? [...options.retryDelays]
+          : [1000, 5000, 15000, 30000];
+        const rateLimitRetryDelays = options.rateLimitRetryDelays
+          ? [...options.rateLimitRetryDelays]
+          : [20_000, 40_000, 80_000];
+
+        const shouldRetry = (error: RetryError) => {
+          const status = getStatus(error);
+          if (!status) return true;
+          if (status === 409 || status === 423) return true;
+          return status < 400 || status >= 500;
+        };
+
+        let uploadUrl: string | null = null;
+        let rateLimitAttempt = 0;
+
+        const runUpload = () =>
+          new Promise<void>((resolve, reject) => {
+            let uploader: Upload;
+            const uploadOptions: ConstructorParameters<typeof Upload>[1] = {
+              endpoint: tusUrl,
+              metadata,
+              retryDelays,
+              uploadDataDuringCreation:
+                options.uploadDataDuringCreation ?? false,
+              onUploadUrlAvailable: () => {
+                uploadUrl = uploader.url;
+              },
+              onShouldRetry: (error, retryAttempt) =>
+                options.onShouldRetry?.(error, retryAttempt) ??
+                shouldRetry(error),
+              onProgress: (bytesUploaded, bytesTotal) => {
+                const progress = Math.round((bytesUploaded / bytesTotal) * 100);
+                setState((prev) => ({ ...prev, progress }));
+                options.onProgress?.(progress);
+              },
+              onError: (error) => {
+                reject(error);
+              },
+              onSuccess: () => {
+                resolve();
+              },
+            };
+
+            if (options.chunkSize !== undefined) {
+              uploadOptions.chunkSize = options.chunkSize;
+            }
+            if (uploadUrl) {
+              uploadOptions.uploadUrl = uploadUrl;
+            }
+            if (options.overridePatchMethod !== undefined) {
+              uploadOptions.overridePatchMethod = options.overridePatchMethod;
+            }
+            if (options.storeFingerprintForResuming !== undefined) {
+              uploadOptions.storeFingerprintForResuming =
+                options.storeFingerprintForResuming;
+            }
+            if (options.removeFingerprintOnSuccess !== undefined) {
+              uploadOptions.removeFingerprintOnSuccess =
+                options.removeFingerprintOnSuccess;
+            }
+
+            uploader = new Upload(file, uploadOptions);
+
+            uploader.start();
           });
 
-          uploader.start();
-        });
+        while (true) {
+          try {
+            await runUpload();
+            break;
+          } catch (error) {
+            const status = getStatus(error as RetryError);
+            if (
+              status === 429 &&
+              rateLimitAttempt < rateLimitRetryDelays.length
+            ) {
+              const delay = rateLimitRetryDelays[rateLimitAttempt] ?? 0;
+              rateLimitAttempt += 1;
+              await new Promise((resolve) => setTimeout(resolve, delay));
+              continue;
+            }
+            throw error;
+          }
+        }
 
         setState({ isUploading: false, progress: 100, error: null });
         return assembly;
@@ -282,6 +271,60 @@ export function useAssemblyStatus(
   assemblyId: string,
 ) {
   return useQuery(getStatus, { assemblyId });
+}
+
+export function useAssemblyStatusWithPolling(
+  getStatus: GetAssemblyStatusFn,
+  refreshAssembly: RefreshAssemblyFn,
+  assemblyId: string,
+  options?: { pollIntervalMs?: number; stopOnTerminal?: boolean },
+) {
+  const status = useQuery(getStatus, { assemblyId });
+  const refresh = useAction(refreshAssembly);
+
+  useEffect(() => {
+    if (!assemblyId) return;
+    const intervalMs = options?.pollIntervalMs ?? 5000;
+    if (intervalMs <= 0) return;
+
+    const isTerminal = () => {
+      if (!options?.stopOnTerminal) return false;
+      if (!status || typeof status !== "object") return false;
+      const ok =
+        "ok" in status && typeof status.ok === "string" ? status.ok : "";
+      return (
+        ok === "ASSEMBLY_COMPLETED" ||
+        ok === "ASSEMBLY_FAILED" ||
+        ok === "ASSEMBLY_CANCELED"
+      );
+    };
+
+    if (isTerminal()) return;
+
+    let cancelled = false;
+    const tick = async () => {
+      if (cancelled) return;
+      await refresh({ assemblyId });
+    };
+
+    void tick();
+    const id = setInterval(() => {
+      void tick();
+    }, intervalMs);
+
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [
+    assemblyId,
+    options?.pollIntervalMs,
+    options?.stopOnTerminal,
+    refresh,
+    status,
+  ]);
+
+  return status;
 }
 
 export function useTransloaditFiles(

@@ -1,7 +1,7 @@
 import {
   useAssemblyStatus,
   useTransloaditFiles,
-  useTransloaditUpload,
+  useTransloaditTusUpload,
 } from "@transloadit/convex/react";
 import { useState } from "react";
 import { api } from "../convex/_generated/api";
@@ -15,8 +15,8 @@ export default function App() {
   const notifyUrl = import.meta.env.VITE_TRANSLOADIT_NOTIFY_URL as
     | string
     | undefined;
-  const { upload, isUploading, progress, error } = useTransloaditUpload(
-    api.transloadit.generateUploadParams,
+  const { upload, isUploading, progress, error } = useTransloaditTusUpload(
+    api.transloadit.createAssembly,
   );
 
   const status = useAssemblyStatus(
@@ -36,11 +36,11 @@ export default function App() {
     const response = await upload(file, {
       templateId,
       notifyUrl,
+      onAssemblyCreated: (created) => {
+        setAssemblyId(created.assemblyId);
+      },
     });
-    const created = response.assembly_id ?? response.assemblyId;
-    if (typeof created === "string") {
-      setAssemblyId(created);
-    }
+    setAssemblyId(response.assemblyId);
   };
 
   return (

@@ -1,9 +1,10 @@
 import type { AssemblyStatus } from "@transloadit/types/assemblyStatus";
 import type { AssemblyInstructionsInput } from "@transloadit/types/template";
+import { anyApi, type FunctionReference } from "convex/server";
 import { type Infer, v } from "convex/values";
-import { internal } from "./_generated/api.js";
 import {
   action,
+  internalAction,
   internalMutation,
   mutation,
   query,
@@ -16,6 +17,101 @@ import {
 } from "./apiUtils.js";
 
 const TRANSLOADIT_ASSEMBLY_URL = "https://api2.transloadit.com/assemblies";
+
+type ProcessWebhookResult = {
+  assemblyId: string;
+  resultCount: number;
+  ok?: string;
+  status?: string;
+};
+
+type InternalApi = {
+  lib: {
+    upsertAssembly: FunctionReference<
+      "mutation",
+      "internal",
+      Record<string, unknown>,
+      unknown
+    >;
+    replaceResultsForAssembly: FunctionReference<
+      "mutation",
+      "internal",
+      Record<string, unknown>,
+      unknown
+    >;
+    processWebhook: FunctionReference<
+      "action",
+      "internal",
+      Record<string, unknown>,
+      ProcessWebhookResult
+    >;
+  };
+};
+
+const internal = anyApi as unknown as InternalApi;
+
+const resolveAssemblyId = (payload: AssemblyStatus): string => {
+  if (typeof payload.assembly_id === "string") return payload.assembly_id;
+  if (typeof payload.assemblyId === "string") return payload.assemblyId;
+  return "";
+};
+
+const buildSignedAssemblyUrl = async (
+  assemblyId: string,
+  authKey: string,
+  authSecret: string,
+): Promise<string> => {
+  const params = JSON.stringify({
+    auth: {
+      key: authKey,
+      expires: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    },
+  });
+  const signature = await signTransloaditParams(params, authSecret);
+  const url = new URL(`${TRANSLOADIT_ASSEMBLY_URL}/${assemblyId}`);
+  url.searchParams.set("signature", signature);
+  url.searchParams.set("params", params);
+  return url.toString();
+};
+
+const applyAssemblyStatus = async (
+  ctx: Pick<import("./_generated/server.js").FunctionCtx, "runMutation">,
+  payload: AssemblyStatus,
+) => {
+  const assemblyId = resolveAssemblyId(payload);
+  if (!assemblyId) {
+    throw new Error("Webhook payload missing assembly_id");
+  }
+
+  const results = flattenResults(payload.results ?? undefined);
+
+  await ctx.runMutation(internal.lib.upsertAssembly, {
+    assemblyId,
+    status: typeof payload.ok === "string" ? payload.ok : undefined,
+    ok: typeof payload.ok === "string" ? payload.ok : undefined,
+    message: typeof payload.message === "string" ? payload.message : undefined,
+    templateId:
+      typeof payload.template_id === "string" ? payload.template_id : undefined,
+    notifyUrl:
+      typeof payload.notify_url === "string" ? payload.notify_url : undefined,
+    uploads: payload.uploads,
+    results: payload.results,
+    error: payload.error,
+    raw: payload,
+  });
+
+  await ctx.runMutation(internal.lib.replaceResultsForAssembly, {
+    assemblyId,
+    results,
+  });
+
+  return {
+    assemblyId,
+    resultCount: results.length,
+    ok: typeof payload.ok === "string" ? payload.ok : undefined,
+    status: typeof payload.ok === "string" ? payload.ok : undefined,
+  };
+};
 
 export const vAssembly = v.object({
   _id: v.id("assemblies"),
@@ -258,27 +354,26 @@ export const createAssembly = action({
   },
 });
 
-export const handleWebhook = action({
-  args: {
-    payload: v.any(),
-    rawBody: v.optional(v.string()),
-    signature: v.optional(v.string()),
-    verifySignature: v.optional(v.boolean()),
-    config: v.optional(
-      v.object({
-        authSecret: v.string(),
-      }),
-    ),
-  },
+const vWebhookArgs = {
+  payload: v.any(),
+  rawBody: v.optional(v.string()),
+  signature: v.optional(v.string()),
+  verifySignature: v.optional(v.boolean()),
+  authSecret: v.optional(v.string()),
+};
+
+export const processWebhook = internalAction({
+  args: vWebhookArgs,
   returns: v.object({
     assemblyId: v.string(),
     resultCount: v.number(),
+    ok: v.optional(v.string()),
+    status: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
     const rawBody = args.rawBody ?? JSON.stringify(args.payload ?? {});
     const shouldVerify = args.verifySignature ?? true;
-    const authSecret =
-      args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
+    const authSecret = args.authSecret ?? process.env.TRANSLOADIT_SECRET;
 
     if (shouldVerify) {
       if (!authSecret) {
@@ -294,38 +389,103 @@ export const handleWebhook = action({
       }
     }
 
-    const payload = args.payload as AssemblyStatus;
-    const assemblyId =
-      typeof payload.assembly_id === "string"
-        ? payload.assembly_id
-        : typeof payload.assemblyId === "string"
-          ? payload.assemblyId
-          : "";
+    return applyAssemblyStatus(ctx, args.payload as AssemblyStatus);
+  },
+});
 
+export const handleWebhook = action({
+  args: {
+    ...vWebhookArgs,
+    config: v.optional(
+      v.object({
+        authSecret: v.string(),
+      }),
+    ),
+  },
+  returns: v.object({
+    assemblyId: v.string(),
+    resultCount: v.number(),
+    ok: v.optional(v.string()),
+    status: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    return ctx.runAction(internal.lib.processWebhook, {
+      payload: args.payload,
+      rawBody: args.rawBody,
+      signature: args.signature,
+      verifySignature: args.verifySignature,
+      authSecret: args.config?.authSecret,
+    });
+  },
+});
+
+export const queueWebhook = action({
+  args: {
+    ...vWebhookArgs,
+    config: v.optional(
+      v.object({
+        authSecret: v.string(),
+      }),
+    ),
+  },
+  returns: v.object({
+    assemblyId: v.string(),
+    queued: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const payload = args.payload as AssemblyStatus;
+    const assemblyId = resolveAssemblyId(payload);
     if (!assemblyId) {
       throw new Error("Webhook payload missing assembly_id");
     }
 
-    const results = flattenResults(payload.results ?? undefined);
-
-    await ctx.runMutation(internal.lib.upsertAssembly, {
-      assemblyId,
-      status: typeof payload.ok === "string" ? payload.ok : undefined,
-      ok: typeof payload.ok === "string" ? payload.ok : undefined,
-      message:
-        typeof payload.message === "string" ? payload.message : undefined,
-      uploads: payload.uploads,
-      results: payload.results,
-      error: payload.error,
-      raw: payload,
+    await ctx.scheduler.runAfter(0, internal.lib.processWebhook, {
+      payload: args.payload,
+      rawBody: args.rawBody,
+      signature: args.signature,
+      verifySignature: args.verifySignature,
+      authSecret: args.config?.authSecret,
     });
 
-    await ctx.runMutation(internal.lib.replaceResultsForAssembly, {
-      assemblyId,
-      results,
-    });
+    return { assemblyId, queued: true };
+  },
+});
 
-    return { assemblyId, resultCount: results.length };
+export const refreshAssembly = action({
+  args: {
+    assemblyId: v.string(),
+    config: v.optional(
+      v.object({
+        authKey: v.string(),
+        authSecret: v.string(),
+      }),
+    ),
+  },
+  returns: v.object({
+    assemblyId: v.string(),
+    resultCount: v.number(),
+    ok: v.optional(v.string()),
+    status: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    const { assemblyId } = args;
+    const authKey = args.config?.authKey ?? process.env.TRANSLOADIT_KEY;
+    const authSecret =
+      args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
+    const url =
+      authKey && authSecret
+        ? await buildSignedAssemblyUrl(assemblyId, authKey, authSecret)
+        : `${TRANSLOADIT_ASSEMBLY_URL}/${assemblyId}`;
+
+    const response = await fetch(url);
+    const payload = (await response.json()) as AssemblyStatus;
+    if (!response.ok) {
+      throw new Error(
+        `Transloadit status error ${response.status}: ${JSON.stringify(payload)}`,
+      );
+    }
+
+    return applyAssemblyStatus(ctx, payload);
   },
 });
 

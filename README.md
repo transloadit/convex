@@ -60,6 +60,8 @@ import { components } from "./_generated/api";
 export const {
   createAssembly,
   handleWebhook,
+  queueWebhook,
+  refreshAssembly,
   getAssemblyStatus,
   listAssemblies,
   listResults,
@@ -113,6 +115,19 @@ http.route({
 });
 
 export default http;
+```
+
+If you want to queue webhook processing (durable retry via Convex scheduling), use `queueWebhook`
+and return HTTP 202:
+
+```ts
+await ctx.runAction(api.transloadit.queueWebhook, {
+  payload,
+  rawBody,
+  signature,
+});
+
+return new Response(null, { status: 202 });
 ```
 
 ### Local testing and QA
@@ -171,6 +186,20 @@ function AssemblyStatus({ assemblyId }: { assemblyId: string }) {
     </div>
   );
 }
+```
+
+### Polling fallback (no webhooks)
+
+```tsx
+import { useAssemblyStatusWithPolling } from "@transloadit/convex/react";
+import { api } from "../convex/_generated/api";
+
+const status = useAssemblyStatusWithPolling(
+  api.transloadit.getAssemblyStatus,
+  api.transloadit.refreshAssembly,
+  assemblyId,
+  { pollIntervalMs: 5000, stopOnTerminal: true },
+);
 ```
 
 ## Example app

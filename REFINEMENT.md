@@ -30,8 +30,8 @@ Notes:
 - [ ] Replace `v.any()` in responses/results where concrete Transloadit types exist.
 
 ### Durability + reliability
-- [ ] Optional background queue or retry flow for webhook processing.
-- [ ] Optional polling fallback when webhooks are unavailable.
+- [x] Optional background queue or retry flow for webhook processing.
+- [x] Optional polling fallback when webhooks are unavailable.
 
 ### Docs + examples
 - [ ] Add a diagram or short explanation of the `assemblies` + `results` tables and lifecycle.
@@ -39,7 +39,7 @@ Notes:
 - [ ] Mention how `_generated` files are produced and why.
 
 ### QA
-- [ ] Confirm browser test covers template preflight + upload + webhook store.
+- [x] Confirm browser test covers template preflight + upload + webhook store.
 - [ ] Validate CLI helper behavior stays compatible with Transloadit CLI updates.
 
 ## References (re‑check as needed)

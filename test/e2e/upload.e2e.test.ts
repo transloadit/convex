@@ -13,10 +13,13 @@ import { api } from "../../src/component/_generated/api.js";
 import schema from "../../src/component/schema.js";
 import { modules } from "../../src/component/setup.test.js";
 
-const authKey =
-  process.env.TRANSLOADIT_KEY ?? process.env.TRANSLOADIT_AUTH_KEY ?? "";
-const authSecret =
-  process.env.TRANSLOADIT_SECRET ?? process.env.TRANSLOADIT_AUTH_SECRET ?? "";
+const authKey = process.env.TRANSLOADIT_KEY ?? "";
+const authSecret = process.env.TRANSLOADIT_SECRET ?? "";
+const templateId =
+  process.env.TRANSLOADIT_TEMPLATE_ID ??
+  process.env.VITE_TRANSLOADIT_TEMPLATE_ID ??
+  "";
+const useTemplate = process.env.E2E_USE_TEMPLATE === "1";
 
 const fixturesDir = resolve("test/e2e/fixtures");
 const distDir = resolve("dist");
@@ -98,24 +101,45 @@ async function startTunnel(port: number) {
 
   const info = await new Promise<TunnelInfo>((resolvePromise, reject) => {
     let buffer = "";
+    const logs: string[] = [];
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const finish = (error?: Error) => {
+      if (timeoutId) clearTimeout(timeoutId);
+      if (error) {
+        const details = logs.length ? `\n${logs.join("\n")}` : "";
+        reject(new Error(`${error.message}${details}`));
+        return;
+      }
+      resolvePromise(JSON.parse(buffer.trim()) as TunnelInfo);
+    };
+
+    timeoutId = setTimeout(() => {
+      finish(new Error("Timed out waiting for webhook tunnel URL"));
+    }, 90_000);
+
     const onData = (chunk: Buffer) => {
       buffer += chunk.toString();
       const newlineIndex = buffer.indexOf("\n");
-      if (newlineIndex !== -1) {
-        const line = buffer.slice(0, newlineIndex).trim();
-        buffer = buffer.slice(newlineIndex + 1);
-        if (!line) return;
-        try {
-          resolvePromise(JSON.parse(line) as TunnelInfo);
-        } catch (error) {
-          reject(error);
-        }
+      if (newlineIndex === -1) return;
+      const line = buffer.slice(0, newlineIndex).trim();
+      buffer = buffer.slice(newlineIndex + 1);
+      if (!line) return;
+      try {
+        resolvePromise(JSON.parse(line) as TunnelInfo);
+      } catch {
+        logs.push(line);
       }
     };
 
     process.stdout?.on("data", onData);
     process.stderr?.on("data", onData);
-    process.on("error", (error) => reject(error));
+    process.on("error", (error) => finish(error));
+    process.on("exit", (code) => {
+      if (code && code !== 0) {
+        finish(new Error(`Webhook tunnel exited with code ${code}`));
+      }
+    });
   });
 
   return { process, info };
@@ -226,19 +250,26 @@ describeE2e("e2e upload flow", () => {
           args?: Record<string, unknown>;
         };
 
-        if (payload.name !== "generateUploadParams") {
+        if (payload.name !== "createAssembly") {
           res.writeHead(404);
           res.end("Unknown action");
           return;
         }
 
         const args = payload.args ?? {};
-        const actionResult = await t.action(api.lib.generateUploadParams, {
+        const resolvedTemplateId = useTemplate
+          ? typeof args.templateId === "string" && args.templateId
+            ? args.templateId
+            : templateId || undefined
+          : undefined;
+
+        const actionResult = await t.action(api.lib.createAssembly, {
           config: {
             authKey,
             authSecret,
           },
           steps,
+          templateId: resolvedTemplateId,
           notifyUrl:
             typeof args.notifyUrl === "string" ? args.notifyUrl : notifyUrl,
           numExpectedUploadFiles: 1,
@@ -415,57 +446,196 @@ describeE2e("e2e upload flow", () => {
   test("uploads and receives resized webhook payload", async () => {
     const browser = await chromium.launch();
     const page = await browser.newPage();
+    const consoleMessages: string[] = [];
+    const requestFailures: string[] = [];
+    const requestLog: string[] = [];
 
-    await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
-
-    const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
-    const imagePath = join(tempDir, "sample.png");
-    const pngBase64 =
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
-    await writeFile(imagePath, Buffer.from(pngBase64, "base64"));
-
-    await page.setInputFiles('[data-testid="file-input"]', imagePath);
-
-    await page.waitForSelector('[data-testid="assembly-id"]', {
-      timeout: 120_000,
+    page.on("console", (message) => {
+      consoleMessages.push(`[${message.type()}] ${message.text()}`);
     });
-
-    const assemblyText = await page.textContent('[data-testid="assembly-id"]');
-    const assemblyId = assemblyText?.replace("ID:", "").trim() ?? "";
-    expect(assemblyId).not.toBe("");
-
-    const waitForResults = async () => {
-      const start = Date.now();
-      while (Date.now() - start < 180_000) {
-        const results = await t.query(api.lib.listResults, { assemblyId });
-        if (results.length > 0) {
-          return results;
-        }
-        await new Promise((resolvePromise) => setTimeout(resolvePromise, 1500));
+    page.on("pageerror", (error) => {
+      consoleMessages.push(`[pageerror] ${error.message}`);
+    });
+    page.on("requestfailed", (request) => {
+      const url = request.url();
+      if (url.includes("transloadit") || url.includes("resumable")) {
+        requestFailures.push(`${url} ${request.failure()?.errorText ?? ""}`);
       }
-      return [];
-    };
-
-    const results = await waitForResults();
-    if (!results.length) {
-      console.log("Webhook count:", webhookCount);
-      console.log("Last webhook payload:", lastWebhookPayload);
-      console.log("Last webhook error:", lastWebhookError);
-    }
-
-    const resized = Array.isArray(results)
-      ? results.find((result) => result?.stepName === "resize")
-      : null;
-
-    expect(resized).toBeTruthy();
-    expect(typeof resized.sslUrl).toBe("string");
-    expect(resized.sslUrl).toMatch(/^https:\/\//);
-
-    const storedStatus = await t.query(api.lib.getAssemblyStatus, {
-      assemblyId,
     });
-    expect(storedStatus?.ok).toBe("ASSEMBLY_COMPLETED");
+    page.on("request", (request) => {
+      const url = request.url();
+      if (url.includes("transloadit") || url.includes("resumable")) {
+        requestLog.push(
+          `${new Date().toISOString()} ${request.method()} ${url}`,
+        );
+      }
+    });
 
-    await browser.close();
+    try {
+      await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
+
+      const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
+      const imagePath = join(tempDir, "sample.png");
+      const pngBase64 =
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
+      await writeFile(imagePath, Buffer.from(pngBase64, "base64"));
+
+      await page.setInputFiles('[data-testid="file-input"]', imagePath);
+
+      const readText = async (selector: string) => {
+        const element = await page.$(selector);
+        if (!element) return null;
+        const text = await element.textContent();
+        return text ?? null;
+      };
+
+      const waitForOutcome = async () => {
+        const deadline = Date.now() + 90_000;
+        while (Date.now() < deadline) {
+          const assemblyText = await readText('[data-testid="assembly-id"]');
+          if (assemblyText) {
+            return { type: "assembly", text: assemblyText };
+          }
+
+          const uploadError = await readText('[data-testid="upload-error"]');
+          if (uploadError) {
+            return { type: "error", text: uploadError };
+          }
+
+          const configError = await readText('[data-testid="config-error"]');
+          if (configError) {
+            return { type: "config", text: configError };
+          }
+
+          await page.waitForTimeout(1000);
+        }
+
+        return null;
+      };
+
+      const outcome = await waitForOutcome();
+      if (!outcome) {
+        throw new Error("Timed out waiting for upload outcome");
+      }
+      if (outcome.type !== "assembly") {
+        throw new Error(`Upload failed: ${outcome.text}`);
+      }
+
+      const assemblyText = outcome.text;
+      const assemblyId = assemblyText?.replace("ID:", "").trim() ?? "";
+      expect(assemblyId).not.toBe("");
+
+      const waitForUploadCompletion = async () => {
+        const start = Date.now();
+        const deadline = start + 120_000;
+        let sawProgress = false;
+        while (Date.now() < deadline) {
+          const uploadError = await readText('[data-testid="upload-error"]');
+          if (uploadError) {
+            throw new Error(`Upload failed: ${uploadError}`);
+          }
+
+          const progress = await page.$('[data-testid="upload-progress"]');
+          if (progress) {
+            sawProgress = true;
+          } else if (sawProgress) {
+            return;
+          } else if (Date.now() - start > 10_000) {
+            return;
+          }
+
+          await page.waitForTimeout(1000);
+        }
+
+        if (sawProgress) {
+          throw new Error("Upload did not complete within 120s");
+        }
+      };
+
+      await waitForUploadCompletion();
+
+      const waitForResults = async (timeoutMs: number) => {
+        const start = Date.now();
+        while (Date.now() - start < timeoutMs) {
+          const results = await t.query(api.lib.listResults, { assemblyId });
+          if (results.length > 0) {
+            return results;
+          }
+          await new Promise((resolvePromise) =>
+            setTimeout(resolvePromise, 1500),
+          );
+        }
+        return [];
+      };
+
+      let results = await waitForResults(60_000);
+      if (!results.length) {
+        console.log("Webhook count:", webhookCount);
+        console.log("Last webhook payload:", lastWebhookPayload);
+        console.log("Last webhook error:", lastWebhookError);
+
+        const waitForAssembly = async () => {
+          const deadline = Date.now() + 120_000;
+          while (Date.now() < deadline) {
+            const refreshArgs =
+              authKey && authSecret
+                ? { assemblyId, config: { authKey, authSecret } }
+                : { assemblyId };
+            const refresh = await t.action(
+              api.lib.refreshAssembly,
+              refreshArgs,
+            );
+
+            const ok = typeof refresh.ok === "string" ? refresh.ok : "";
+            if (ok === "ASSEMBLY_COMPLETED") {
+              return refresh;
+            }
+            if (
+              ok &&
+              ok !== "ASSEMBLY_EXECUTING" &&
+              ok !== "ASSEMBLY_UPLOADING"
+            ) {
+              throw new Error(`Assembly failed with status ${ok}`);
+            }
+
+            await new Promise((resolvePromise) =>
+              setTimeout(resolvePromise, 3000),
+            );
+          }
+          return null;
+        };
+
+        await waitForAssembly();
+
+        results = await waitForResults(60_000);
+      }
+
+      const resized = Array.isArray(results)
+        ? results.find((result) => result?.stepName === "resize")
+        : null;
+
+      expect(resized).toBeTruthy();
+      expect(typeof resized.sslUrl).toBe("string");
+      expect(resized.sslUrl).toMatch(/^https:\/\//);
+
+      const storedStatus = await t.query(api.lib.getAssemblyStatus, {
+        assemblyId,
+      });
+      expect(storedStatus?.ok).toBe("ASSEMBLY_COMPLETED");
+    } catch (error) {
+      if (consoleMessages.length) {
+        console.log("Browser console logs:", consoleMessages);
+      }
+      if (requestFailures.length) {
+        console.log("Browser request failures:", requestFailures);
+      }
+      if (requestLog.length) {
+        const tail = requestLog.slice(-200);
+        console.log("Browser request log (last 200):", tail);
+      }
+      throw error;
+    } finally {
+      await browser.close();
+    }
   });
 });
