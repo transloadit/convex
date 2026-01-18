@@ -8,8 +8,8 @@
  * @module
  */
 
-import type * as apiUtils from "../apiUtils.js";
-import type * as lib from "../lib.js";
+import type * as apiUtils from "../apiUtils.ts";
+import type * as lib from "../lib.ts";
 
 import type { ApiFromModules, FilterApi, FunctionReference } from "convex/server";
 import { anyApi, componentsGeneric } from "convex/server";

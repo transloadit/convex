@@ -1,8 +1,8 @@
 import { ConvexHttpClient } from "convex/browser";
 import { convexTest } from "convex-test";
-import { api } from "../../dist/component/_generated/api.js";
-import schema from "../../dist/component/schema.js";
-import { modules } from "../../dist/test/nodeModules.js";
+import { api } from "../../src/component/_generated/api.ts";
+import schema from "../../src/component/schema.ts";
+import { modules } from "../../src/test/nodeModules.ts";
 
 type Mode = "local" | "cloud";
 

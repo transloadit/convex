@@ -3,9 +3,9 @@
 import { createHmac } from "node:crypto";
 import { convexTest } from "convex-test";
 import { describe, expect, test, vi } from "vitest";
-import { api } from "./_generated/api.js";
-import schema from "./schema.js";
-import { modules } from "./setup.test.js";
+import { api } from "./_generated/api.ts";
+import schema from "./schema.ts";
+import { modules } from "./setup.test.ts";
 
 process.env.TRANSLOADIT_KEY = "test-key";
 process.env.TRANSLOADIT_SECRET = "test-secret";

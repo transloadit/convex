@@ -15,7 +15,7 @@ import type {
   SystemTableNames,
 } from "convex/server";
 import type { GenericId } from "convex/values";
-import schema from "../schema.js";
+import schema from "../schema.ts";
 
 export type TableNames = TableNamesInDataModel<DataModel>;
 

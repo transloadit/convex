@@ -4,8 +4,8 @@
 import { renderHook } from "@testing-library/react";
 import { act } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import type { RefreshAssemblyFn } from "./index.js";
-import { useAssemblyStatusWithPolling } from "./index.js";
+import type { RefreshAssemblyFn } from "./index.tsx";
+import { useAssemblyStatusWithPolling } from "./index.tsx";
 
 let currentStatus: unknown = null;
 const refreshMock = vi.fn(() => Promise.resolve());

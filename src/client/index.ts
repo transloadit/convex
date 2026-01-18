@@ -2,10 +2,10 @@ import type { AssemblyStatus } from "@transloadit/types/assemblyStatus";
 import type { AssemblyInstructionsInput } from "@transloadit/types/template";
 import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
 import { type Infer, v } from "convex/values";
-import type { ComponentApi } from "../component/_generated/component.js";
-import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.js";
+import type { ComponentApi } from "../component/_generated/component.ts";
+import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.ts";
 
-export { parseTransloaditWebhook } from "../component/apiUtils.js";
+export { parseTransloaditWebhook } from "../component/apiUtils.ts";
 export type { AssemblyStatus, AssemblyInstructionsInput };
 
 export interface TransloaditConfig {

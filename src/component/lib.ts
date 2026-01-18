@@ -8,13 +8,13 @@ import {
   internalMutation,
   mutation,
   query,
-} from "./_generated/server.js";
+} from "./_generated/server.ts";
 import {
   buildTransloaditParams,
   flattenResults,
   signTransloaditParams,
   verifyWebhookSignature,
-} from "./apiUtils.js";
+} from "./apiUtils.ts";
 
 const TRANSLOADIT_ASSEMBLY_URL = "https://api2.transloadit.com/assemblies";
 
@@ -87,7 +87,7 @@ const buildSignedAssemblyUrl = async (
 };
 
 const applyAssemblyStatus = async (
-  ctx: Pick<import("./_generated/server.js").FunctionCtx, "runMutation">,
+  ctx: Pick<import("./_generated/server.ts").FunctionCtx, "runMutation">,
   payload: AssemblyStatus,
 ) => {
   const assemblyId = resolveAssemblyId(payload);

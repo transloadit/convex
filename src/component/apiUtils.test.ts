@@ -5,7 +5,7 @@ import {
   parseTransloaditWebhook,
   signTransloaditParams,
   verifyWebhookSignature,
-} from "./apiUtils.js";
+} from "./apiUtils.ts";
 
 describe("apiUtils", () => {
   test("buildTransloaditParams requires templateId or steps", () => {
