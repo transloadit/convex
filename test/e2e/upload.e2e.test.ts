@@ -15,11 +15,13 @@ import { modules } from "../../src/component/setup.test.js";
 
 const authKey = process.env.TRANSLOADIT_KEY ?? "";
 const authSecret = process.env.TRANSLOADIT_SECRET ?? "";
+const appVariant = process.env.E2E_APP === "example" ? "example" : "fixture";
 const templateId =
   process.env.TRANSLOADIT_TEMPLATE_ID ??
   process.env.VITE_TRANSLOADIT_TEMPLATE_ID ??
   "";
-const useTemplate = process.env.E2E_USE_TEMPLATE === "1";
+const useTemplate =
+  process.env.E2E_USE_TEMPLATE === "1" || appVariant === "example";
 
 const fixturesDir = resolve("test/e2e/fixtures");
 const distDir = resolve("dist");
@@ -170,8 +172,13 @@ describeE2e("e2e upload flow", () => {
       "utf8",
     );
     const convexStubPath = join(fixturesDir, "convex-react-stub.js");
+    const fixtureEntry = join(fixturesDir, "app.tsx");
+    const exampleEntry = join(fixturesDir, "example-entry.tsx");
+    const apiStubPath = join(fixturesDir, "api-stub.ts");
+    const exampleApiPath = resolve("example/convex/_generated/api");
     const bundleDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-bundle-"));
     bundlePath = join(bundleDir, "app.js");
+    const entryPoint = appVariant === "example" ? exampleEntry : fixtureEntry;
 
     const escapeRegex = (value: string) =>
       value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -184,23 +191,6 @@ describeE2e("e2e upload flow", () => {
           buildInstance.onResolve({ filter }, () => ({ path: to }));
         }
       },
-    });
-
-    await build({
-      entryPoints: [join(fixturesDir, "app.tsx")],
-      bundle: true,
-      format: "esm",
-      platform: "browser",
-      outfile: bundlePath,
-      logLevel: "silent",
-      define: {
-        "process.env.NODE_ENV": '"production"',
-      },
-      plugins: [
-        aliasPlugin({
-          "convex/react": convexStubPath,
-        }),
-      ],
     });
 
     const steps = {
@@ -418,6 +408,38 @@ describeE2e("e2e upload flow", () => {
     tunnelProcess = tunnel.process;
     notifyUrl =
       tunnel.info.notifyUrl ?? `${tunnel.info.url}/transloadit/webhook`;
+
+    if (appVariant === "example" && !templateId) {
+      throw new Error("Missing templateId for example e2e app");
+    }
+
+    const aliases: Record<string, string> = {
+      "convex/react": convexStubPath,
+    };
+    aliases[exampleApiPath] = apiStubPath;
+
+    const define: Record<string, string> = {
+      "process.env.NODE_ENV": '"production"',
+      "import.meta.env": "{}",
+    };
+
+    if (appVariant === "example") {
+      define["import.meta.env.VITE_TRANSLOADIT_TEMPLATE_ID"] =
+        JSON.stringify(templateId);
+      define["import.meta.env.VITE_TRANSLOADIT_NOTIFY_URL"] =
+        JSON.stringify(notifyUrl);
+    }
+
+    await build({
+      entryPoints: [entryPoint],
+      bundle: true,
+      format: "esm",
+      platform: "browser",
+      outfile: bundlePath,
+      logLevel: "silent",
+      define,
+      plugins: [aliasPlugin(aliases)],
+    });
   });
 
   afterAll(async () => {

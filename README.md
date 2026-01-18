@@ -245,13 +245,20 @@ Fast checks:
 yarn check
 ```
 
-This runs format, lint, typecheck, and unit tests. Additional commands:
+This runs format, lint, typecheck, and unit tests. For a full verification run:
+
+```bash
+yarn verify
+```
+
+Additional commands:
 
 - `yarn lint` (Biome)
 - `yarn format` (Biome write)
 - `yarn typecheck` (tsc)
 - `yarn test` (Vitest unit tests)
-- `yarn test:browser` (browser + webhook QA flow)
+- `yarn verify:browser` (browser + webhook QA flow)
+- `yarn verify:example` (runs the same flow against the example app)
 - `yarn build` (tsc build + emit package json)
 
 Notes:

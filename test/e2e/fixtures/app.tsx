@@ -5,14 +5,7 @@ import {
 } from "@transloadit/convex/react";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
-
-const api = {
-  transloadit: {
-    createAssembly: "createAssembly",
-    getAssemblyStatus: "getAssemblyStatus",
-    listResults: "listResults",
-  },
-};
+import { api } from "./api-stub";
 
 const baseUrl = globalThis.location.origin;
 
