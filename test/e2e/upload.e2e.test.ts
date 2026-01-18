@@ -679,7 +679,7 @@ describeE2e("e2e upload flow", () => {
           const deadline = Date.now() + 120_000;
           while (Date.now() < deadline) {
             const refreshArgs =
-              authKey && authSecret
+              !useRemote && authKey && authSecret
                 ? { assemblyId, config: { authKey, authSecret } }
                 : { assemblyId };
             const refresh = await runAction("refreshAssembly", refreshArgs);
