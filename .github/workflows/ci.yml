@@ -124,7 +124,7 @@ jobs:
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-      - run: yarn verify:real
+      - run: yarn verify:preview
         if: steps.secrets.outputs.hasSecrets == 'true'
         env:
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}

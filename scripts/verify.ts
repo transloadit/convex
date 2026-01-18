@@ -7,7 +7,7 @@ import { loadEnv } from "./load-env.js";
 
 loadEnv();
 
-type Mode = "local" | "real";
+type Mode = "local" | "preview";
 
 type RunOptions = {
   cwd?: string;
@@ -360,7 +360,9 @@ const setupRemoteDeployment = async () => {
 const args = parseArgs(process.argv.slice(2));
 const rawMode = args.mode ?? process.env.VERIFY_MODE ?? "local";
 const resolvedMode: Mode =
-  rawMode === "real" || rawMode === "convex" ? "real" : "local";
+  rawMode === "preview" || rawMode === "real" || rawMode === "convex"
+    ? "preview"
+    : "local";
 const appVariant =
   rawMode === "example" || args.app === "example" ? "example" : "fixture";
 const useTemplate =
@@ -369,12 +371,12 @@ const useTemplate =
   appVariant === "example";
 
 const runMain = async () => {
-  if (resolvedMode === "real") {
+  if (resolvedMode === "preview") {
     const remote = await setupRemoteDeployment();
     await runBrowser({
       appVariant,
       useTemplate,
-      mode: "real",
+      mode: "preview",
       remote,
     });
     return;

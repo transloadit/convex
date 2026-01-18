@@ -18,7 +18,7 @@ import { modules } from "../../src/component/setup.test.js";
 const authKey = process.env.TRANSLOADIT_KEY ?? "";
 const authSecret = process.env.TRANSLOADIT_SECRET ?? "";
 const mode = process.env.E2E_MODE ?? "local";
-const useRemote = mode === "real";
+const useRemote = mode === "preview";
 const remoteUrl = process.env.E2E_REMOTE_URL ?? "";
 const remoteAdminKey = process.env.E2E_REMOTE_ADMIN_KEY ?? "";
 const remoteNotifyUrl = process.env.E2E_REMOTE_NOTIFY_URL ?? "";
