@@ -1,9 +1,10 @@
 import { spawnSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
+import { writeAppFiles } from "./qa/app-template.js";
 
 config({ path: process.env.DOTENV_CONFIG_PATH });
 
@@ -161,220 +162,6 @@ const parseDeployOutput = (output: string) => {
   throw new Error(`Unable to find deployment URL in output:\n${output}`);
 };
 
-const writeAppFiles = async (projectDir: string, tgzPath: string) => {
-  const convexDir = join(projectDir, "convex");
-  await mkdir(convexDir, { recursive: true });
-
-  await writeFile(
-    join(projectDir, "package.json"),
-    JSON.stringify(
-      {
-        name: "transloadit-convex-qa",
-        private: true,
-        type: "module",
-        dependencies: {
-          "@transloadit/convex": `file:${tgzPath}`,
-          convex: "^1.31.5",
-        },
-      },
-      null,
-      2,
-    ),
-    "utf8",
-  );
-
-  await writeFile(
-    join(convexDir, "convex.config.ts"),
-    [
-      'import transloadit from "@transloadit/convex/convex.config";',
-      'import { defineApp } from "convex/server";',
-      "",
-      "const app = defineApp();",
-      "app.use(transloadit);",
-      "",
-      "export default app;",
-      "",
-    ].join("\n"),
-    "utf8",
-  );
-
-  await writeFile(
-    join(convexDir, "transloadit.ts"),
-    [
-      "import {",
-      "  vAssemblyResponse,",
-      "  vAssemblyResultResponse,",
-      "  vCreateAssemblyArgs,",
-      '} from "@transloadit/convex";',
-      'import { actionGeneric, componentsGeneric, mutationGeneric, queryGeneric } from "convex/server";',
-      'import { v } from "convex/values";',
-      "",
-      "const components = componentsGeneric();",
-      "",
-      "const readConfig = () => {",
-      "  const authKey = process.env.TRANSLOADIT_KEY;",
-      "  if (!authKey) {",
-      '    throw new Error("Missing TRANSLOADIT_KEY environment variable");',
-      "  }",
-      "  const authSecret = process.env.TRANSLOADIT_SECRET;",
-      "  if (!authSecret) {",
-      '    throw new Error("Missing TRANSLOADIT_SECRET environment variable");',
-      "  }",
-      "  return { authKey, authSecret };",
-      "};",
-      "",
-      "export const createAssembly = actionGeneric({",
-      "  args: vCreateAssemblyArgs,",
-      "  returns: v.object({",
-      "    assemblyId: v.string(),",
-      "    data: v.any(),",
-      "  }),",
-      "  handler: async (ctx, args) => {",
-      "    return ctx.runAction(components.transloadit.lib.createAssembly, {",
-      "      ...args,",
-      "      config: readConfig(),",
-      "    });",
-      "  },",
-      "});",
-      "",
-      "export const handleWebhook = actionGeneric({",
-      "  args: {",
-      "    payload: v.any(),",
-      "    rawBody: v.optional(v.string()),",
-      "    signature: v.optional(v.string()),",
-      "    verifySignature: v.optional(v.boolean()),",
-      "  },",
-      "  returns: v.object({",
-      "    assemblyId: v.string(),",
-      "    resultCount: v.number(),",
-      "  }),",
-      "  handler: async (ctx, args) => {",
-      "    const { authSecret } = readConfig();",
-      "    return ctx.runAction(components.transloadit.lib.handleWebhook, {",
-      "      ...args,",
-      "      config: { authSecret },",
-      "    });",
-      "  },",
-      "});",
-      "",
-      "export const queueWebhook = actionGeneric({",
-      "  args: {",
-      "    payload: v.any(),",
-      "    rawBody: v.optional(v.string()),",
-      "    signature: v.optional(v.string()),",
-      "    verifySignature: v.optional(v.boolean()),",
-      "  },",
-      "  returns: v.object({",
-      "    assemblyId: v.string(),",
-      "    queued: v.boolean(),",
-      "  }),",
-      "  handler: async (ctx, args) => {",
-      "    const { authSecret } = readConfig();",
-      "    return ctx.runAction(components.transloadit.lib.queueWebhook, {",
-      "      ...args,",
-      "      config: { authSecret },",
-      "    });",
-      "  },",
-      "});",
-      "",
-      "export const refreshAssembly = actionGeneric({",
-      "  args: { assemblyId: v.string() },",
-      "  returns: v.object({",
-      "    assemblyId: v.string(),",
-      "    resultCount: v.number(),",
-      "    ok: v.optional(v.string()),",
-      "    status: v.optional(v.string()),",
-      "  }),",
-      "  handler: async (ctx, args) => {",
-      "    return ctx.runAction(components.transloadit.lib.refreshAssembly, {",
-      "      ...args,",
-      "      config: readConfig(),",
-      "    });",
-      "  },",
-      "});",
-      "",
-      "export const getAssemblyStatus = queryGeneric({",
-      "  args: { assemblyId: v.string() },",
-      "  returns: v.union(vAssemblyResponse, v.null()),",
-      "  handler: async (ctx, args) => {",
-      "    return ctx.runQuery(components.transloadit.lib.getAssemblyStatus, args);",
-      "  },",
-      "});",
-      "",
-      "export const listAssemblies = queryGeneric({",
-      "  args: {",
-      "    status: v.optional(v.string()),",
-      "    userId: v.optional(v.string()),",
-      "    limit: v.optional(v.number()),",
-      "  },",
-      "  returns: v.array(vAssemblyResponse),",
-      "  handler: async (ctx, args) => {",
-      "    return ctx.runQuery(components.transloadit.lib.listAssemblies, args);",
-      "  },",
-      "});",
-      "",
-      "export const listResults = queryGeneric({",
-      "  args: {",
-      "    assemblyId: v.string(),",
-      "    stepName: v.optional(v.string()),",
-      "    limit: v.optional(v.number()),",
-      "  },",
-      "  returns: v.array(vAssemblyResultResponse),",
-      "  handler: async (ctx, args) => {",
-      "    return ctx.runQuery(components.transloadit.lib.listResults, args);",
-      "  },",
-      "});",
-      "",
-      "export const storeAssemblyMetadata = mutationGeneric({",
-      "  args: {",
-      "    assemblyId: v.string(),",
-      "    userId: v.optional(v.string()),",
-      "    fields: v.optional(v.record(v.string(), v.any())),",
-      "  },",
-      "  returns: v.union(vAssemblyResponse, v.null()),",
-      "  handler: async (ctx, args) => {",
-      "    return ctx.runMutation(components.transloadit.lib.storeAssemblyMetadata, args);",
-      "  },",
-      "});",
-      "",
-    ].join("\n"),
-    "utf8",
-  );
-
-  await writeFile(
-    join(convexDir, "http.ts"),
-    [
-      'import { parseTransloaditWebhook } from "@transloadit/convex";',
-      'import { httpRouter, httpActionGeneric } from "convex/server";',
-      'import { queueWebhook } from "./transloadit";',
-      "",
-      "const http = httpRouter();",
-      "const httpAction = httpActionGeneric;",
-      "",
-      "http.route({",
-      '  path: "/transloadit/webhook",',
-      '  method: "POST",',
-      "  handler: httpAction(async (ctx, request) => {",
-      "    const { payload, rawBody, signature } =",
-      "      await parseTransloaditWebhook(request);",
-      "",
-      "    await ctx.runAction(queueWebhook, {",
-      "      payload,",
-      "      rawBody,",
-      "      signature,",
-      "    });",
-      "",
-      "    return new Response(null, { status: 202 });",
-      "  }),",
-      "});",
-      "",
-      "export default http;",
-      "",
-    ].join("\n"),
-    "utf8",
-  );
-};
-
 const setupRemoteDeployment = async () => {
   requireEnv("TRANSLOADIT_KEY");
   requireEnv("TRANSLOADIT_SECRET");
@@ -393,7 +180,7 @@ const setupRemoteDeployment = async () => {
     console.log(`Packing @transloadit/convex into ${tgzPath}...`);
     run("yarn", ["pack", "-o", tgzPath], { cwd: rootDir });
 
-    await writeAppFiles(projectDir, tgzPath);
+    await writeAppFiles({ projectDir, tgzPath });
 
     console.log("Installing dependencies...");
     run("npm", ["install", "--no-fund", "--no-audit"], { cwd: projectDir });
