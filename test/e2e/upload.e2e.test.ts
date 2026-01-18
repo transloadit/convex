@@ -1,19 +1,14 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "@playwright/test";
-import { assemblyStatusSchema } from "@transloadit/zod/v3/assemblyStatus";
-import { build } from "esbuild";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { createConvexRunner } from "./support/convex.js";
-import { readRequestBody } from "./support/http.js";
+import { setupHarness } from "./support/harness.js";
 import { runtime } from "./support/runtime.js";
 import { sleep } from "./support/sleep.js";
-import { startTunnel } from "./support/tunnel.js";
-import { parseWebhookPayload, type WebhookPayload } from "./support/webhook.js";
+import type { WebhookPayload } from "./support/webhook.js";
 
 const {
   authKey,
@@ -28,17 +23,13 @@ const {
   shouldRun,
 } = runtime;
 
-const fixturesDir = resolve("test/e2e/fixtures");
 const distDir = resolve("dist");
 
 const describeE2e = shouldRun ? describe : describe.skip;
 
 describeE2e("e2e upload flow", () => {
   let serverUrl = "";
-  let notifyUrl = "";
-  let tunnelProcess: ReturnType<typeof spawn> | null = null;
-  let server: ReturnType<typeof createServer> | null = null;
-  let bundlePath = "";
+  let harness: Awaited<ReturnType<typeof setupHarness>> | null = null;
   let webhookCount = 0;
   let lastWebhookPayload: WebhookPayload | null = null;
   let lastWebhookError: unknown = null;
@@ -63,274 +54,29 @@ describeE2e("e2e upload flow", () => {
       connect();
     }
 
-    const indexTemplate = await readFile(
-      join(fixturesDir, "index.html"),
-      "utf8",
-    );
-    const convexStubPath = join(fixturesDir, "convex-react-stub.js");
-    const fixtureEntry = join(fixturesDir, "app.tsx");
-    const exampleEntry = join(fixturesDir, "example-entry.tsx");
-    const apiStubPath = join(fixturesDir, "api-stub.ts");
-    const exampleApiPath = resolve("example/convex/_generated/api");
-    const bundleDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-bundle-"));
-    bundlePath = join(bundleDir, "app.js");
-    const entryPoint = appVariant === "example" ? exampleEntry : fixtureEntry;
-
-    const escapeRegex = (value: string) =>
-      value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-    const aliasPlugin = (aliases: Record<string, string>) => ({
-      name: "alias",
-      setup(buildInstance: Parameters<typeof build>[0]) {
-        for (const [from, to] of Object.entries(aliases)) {
-          const filter = new RegExp(`^${escapeRegex(from)}$`);
-          buildInstance.onResolve({ filter }, () => ({ path: to }));
-        }
+    harness = await setupHarness({
+      appVariant,
+      useTemplate,
+      templateId,
+      useRemote,
+      remoteUrl,
+      remoteNotifyUrl,
+      runAction,
+      runQuery,
+      onWebhook: (payload) => {
+        webhookCount += 1;
+        lastWebhookPayload = payload;
+      },
+      onWebhookError: (error) => {
+        lastWebhookError = error;
       },
     });
-
-    const steps = {
-      ":original": {
-        robot: "/upload/handle",
-      },
-      resize: {
-        use: ":original",
-        robot: "/image/resize",
-        width: 320,
-        height: 320,
-        resize_strategy: "fit",
-        result: true,
-      },
-    };
-
-    server = createServer(async (req, res) => {
-      const method = req.method ?? "GET";
-      const url = new URL(req.url ?? "/", "http://localhost");
-
-      if (method === "GET" && url.pathname === "/") {
-        const html = indexTemplate.replace(
-          "__NOTIFY_URL__",
-          JSON.stringify(notifyUrl),
-        );
-        res.writeHead(200, { "content-type": "text/html" });
-        res.end(html);
-        return;
-      }
-
-      if (method === "GET" && url.pathname === "/fixtures/app.js") {
-        try {
-          const file = await readFile(bundlePath);
-          res.writeHead(200, { "content-type": "text/javascript" });
-          res.end(file);
-        } catch {
-          res.writeHead(500);
-          res.end("Missing bundle");
-        }
-        return;
-      }
-
-      if (method === "POST" && url.pathname === "/api/action") {
-        const body = await readRequestBody(req);
-        const payload = JSON.parse(body.toString("utf8")) as {
-          name?: string;
-          args?: Record<string, unknown>;
-        };
-
-        if (payload.name !== "createAssembly") {
-          res.writeHead(404);
-          res.end("Unknown action");
-          return;
-        }
-
-        const args = payload.args ?? {};
-        const resolvedTemplateId = useTemplate
-          ? typeof args.templateId === "string" && args.templateId
-            ? args.templateId
-            : templateId || undefined
-          : undefined;
-
-        const actionResult = await runAction("createAssembly", {
-          steps,
-          templateId: resolvedTemplateId,
-          notifyUrl:
-            typeof args.notifyUrl === "string" ? args.notifyUrl : notifyUrl,
-          numExpectedUploadFiles: 1,
-          fields: args.fields,
-          expires: args.expires,
-          additionalParams: args.additionalParams,
-          userId: args.userId,
-        });
-
-        const assemblyData = (actionResult as { data?: unknown })?.data;
-        if (!assemblyData || typeof assemblyData !== "object") {
-          throw new Error("Missing Transloadit assembly data");
-        }
-        assemblyStatusSchema.parse(assemblyData);
-
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify(actionResult));
-        return;
-      }
-
-      if (method === "POST" && url.pathname === "/api/query") {
-        const body = await readRequestBody(req);
-        const payload = JSON.parse(body.toString("utf8")) as {
-          name?: string;
-          args?: Record<string, unknown>;
-        };
-
-        if (payload.name === "getAssemblyStatus") {
-          const assemblyId = payload.args?.assemblyId;
-          if (typeof assemblyId !== "string" || !assemblyId) {
-            res.writeHead(200, { "content-type": "application/json" });
-            res.end("null");
-            return;
-          }
-          const result = await runQuery("getAssemblyStatus", { assemblyId });
-          res.writeHead(200, { "content-type": "application/json" });
-          res.end(JSON.stringify(result));
-          return;
-        }
-
-        if (payload.name === "listResults") {
-          const assemblyId = payload.args?.assemblyId;
-          if (typeof assemblyId !== "string" || !assemblyId) {
-            res.writeHead(200, { "content-type": "application/json" });
-            res.end("[]");
-            return;
-          }
-          const result = await runQuery("listResults", { assemblyId });
-          res.writeHead(200, { "content-type": "application/json" });
-          res.end(JSON.stringify(result));
-          return;
-        }
-
-        res.writeHead(404);
-        res.end("Unknown query");
-        return;
-      }
-
-      if (method === "POST" && url.pathname === "/transloadit/webhook") {
-        const body = await readRequestBody(req);
-
-        let payload: WebhookPayload;
-        let rawPayload = "";
-        let signature = "";
-        try {
-          ({ payload, rawPayload, signature } = parseWebhookPayload(req, body));
-        } catch (error) {
-          res.writeHead(400);
-          res.end(
-            error instanceof Error ? error.message : "Invalid webhook payload",
-          );
-          return;
-        }
-
-        try {
-          assemblyStatusSchema.parse(payload);
-          await runAction("handleWebhook", {
-            payload,
-            rawBody: rawPayload,
-            signature,
-            verifySignature: true,
-          });
-          webhookCount += 1;
-          lastWebhookPayload = payload;
-        } catch (error) {
-          lastWebhookError = error;
-          console.error("Webhook handler failed", error);
-          res.writeHead(500);
-          res.end("Webhook handler failed");
-          return;
-        }
-
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-
-      res.writeHead(404);
-      res.end();
-    });
-
-    await new Promise<void>((resolvePromise) => {
-      server?.listen(0, () => resolvePromise());
-    });
-
-    const address = server?.address() as AddressInfo;
-    serverUrl = `http://localhost:${address.port}`;
-
-    if (useRemote) {
-      if (remoteNotifyUrl) {
-        notifyUrl = remoteNotifyUrl;
-      } else {
-        const match = /https:\/\/([a-z0-9-]+)\.convex\.cloud/i.exec(remoteUrl);
-        if (!match?.[1]) {
-          throw new Error("Unable to derive notifyUrl from E2E_REMOTE_URL");
-        }
-        notifyUrl = `https://${match[1]}.convex.site/transloadit/webhook`;
-      }
-    } else {
-      const tunnel = await startTunnel(address.port);
-      tunnelProcess = tunnel.process;
-      notifyUrl =
-        tunnel.info.notifyUrl ?? `${tunnel.info.url}/transloadit/webhook`;
-    }
-
-    if (appVariant === "example" && !templateId) {
-      throw new Error("Missing templateId for example e2e app");
-    }
-
-    const aliases: Record<string, string> = {
-      "convex/react": convexStubPath,
-    };
-    aliases[exampleApiPath] = apiStubPath;
-
-    const define: Record<string, string> = {
-      "process.env.NODE_ENV": '"production"',
-      "import.meta.env": "{}",
-    };
-
-    if (appVariant === "example") {
-      define["import.meta.env.VITE_TRANSLOADIT_TEMPLATE_ID"] =
-        JSON.stringify(templateId);
-      define["import.meta.env.VITE_TRANSLOADIT_NOTIFY_URL"] =
-        JSON.stringify(notifyUrl);
-    }
-
-    await build({
-      entryPoints: [entryPoint],
-      bundle: true,
-      format: "esm",
-      platform: "browser",
-      outfile: bundlePath,
-      logLevel: "silent",
-      define,
-      plugins: [aliasPlugin(aliases)],
-    });
+    serverUrl = harness.serverUrl;
   });
 
   afterAll(async () => {
-    if (server) {
-      await new Promise((resolvePromise) =>
-        server?.close(() => resolvePromise(null)),
-      );
-      server = null;
-    }
-
-    if (tunnelProcess && tunnelProcess.exitCode === null) {
-      tunnelProcess.kill();
-      await new Promise((resolvePromise) => {
-        const fallback = setTimeout(() => {
-          tunnelProcess?.kill("SIGKILL");
-          resolvePromise(null);
-        }, 3000);
-        tunnelProcess.once("exit", () => {
-          clearTimeout(fallback);
-          resolvePromise(null);
-        });
-      });
-    }
+    await harness?.close();
+    harness = null;
   });
 
   test("uploads and receives resized webhook payload", async () => {
