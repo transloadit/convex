@@ -1,4 +1,7 @@
 import { spawnSync } from "node:child_process";
+import { loadEnv } from "./load-env.js";
+
+loadEnv();
 
 const skipInstall = process.env.PLAYWRIGHT_SKIP_INSTALL === "1";
 

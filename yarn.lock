@@ -736,7 +736,7 @@ __metadata:
     "@types/react-dom": "npm:^19"
     convex: "npm:^1.31.4"
     convex-test: "npm:^0.0.41"
-    dotenv-cli: "npm:^11.0.0"
+    dotenv: "npm:^17.2.3"
     esbuild: "npm:^0.27.2"
     react: "npm:^19.2.3"
     react-dom: "npm:^19.2.3"
@@ -993,17 +993,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cross-spawn@npm:^7.0.6":
-  version: 7.0.6
-  resolution: "cross-spawn@npm:7.0.6"
-  dependencies:
-    path-key: "npm:^3.1.0"
-    shebang-command: "npm:^2.0.0"
-    which: "npm:^2.0.1"
-  checksum: 10c0/053ea8b2135caff68a9e81470e845613e374e7309a47731e81639de3eaeb90c3d01af0e0b44d2ab9d50b43467223b88567dfeb3262db942dc063b9976718ffc1
-  languageName: node
-  linkType: hard
-
 "csstype@npm:^3.2.2":
   version: 3.2.3
   resolution: "csstype@npm:3.2.3"
@@ -1030,37 +1019,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"dotenv-cli@npm:^11.0.0":
-  version: 11.0.0
-  resolution: "dotenv-cli@npm:11.0.0"
-  dependencies:
-    cross-spawn: "npm:^7.0.6"
-    dotenv: "npm:^17.1.0"
-    dotenv-expand: "npm:^12.0.0"
-    minimist: "npm:^1.2.6"
-  bin:
-    dotenv: cli.js
-  checksum: 10c0/c3e6e58a484b3204eeb167a8f78c9cb04c4bae951069e7860eccbbbf96964e3bd808b3632dfe841e5d882b2c5d77c447f20abd06edd4db623ce719d94a7fb44e
-  languageName: node
-  linkType: hard
-
-"dotenv-expand@npm:^12.0.0":
-  version: 12.0.3
-  resolution: "dotenv-expand@npm:12.0.3"
-  dependencies:
-    dotenv: "npm:^16.4.5"
-  checksum: 10c0/0824bdc74fc816a28b0744b7853a23e046602e9616c82121dfdae21ebc13c6e89afeb773e794e97c35d48be2be0a990fbca721ee3869a49c04210a58a3cf296f
-  languageName: node
-  linkType: hard
-
-"dotenv@npm:^16.4.5":
-  version: 16.6.1
-  resolution: "dotenv@npm:16.6.1"
-  checksum: 10c0/15ce56608326ea0d1d9414a5c8ee6dcf0fffc79d2c16422b4ac2268e7e2d76ff5a572d37ffe747c377de12005f14b3cc22361e79fc7f1061cce81f77d2c973dc
-  languageName: node
-  linkType: hard
-
-"dotenv@npm:^17.1.0":
+"dotenv@npm:^17.2.3":
   version: 17.2.3
   resolution: "dotenv@npm:17.2.3"
   checksum: 10c0/c884403209f713214a1b64d4d1defa4934c2aa5b0002f5a670ae298a51e3c3ad3ba79dfee2f8df49f01ae74290fcd9acdb1ab1d09c7bfb42b539036108bb2ba0
@@ -1432,13 +1391,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"isexe@npm:^2.0.0":
-  version: 2.0.0
-  resolution: "isexe@npm:2.0.0"
-  checksum: 10c0/228cfa503fadc2c31596ab06ed6aa82c9976eec2bfd83397e7eaf06d0ccf42cd1dfd6743bf9aeb01aebd4156d009994c5f76ea898d2832c1fe342da923ca457d
-  languageName: node
-  linkType: hard
-
 "isexe@npm:^3.1.1":
   version: 3.1.1
   resolution: "isexe@npm:3.1.1"
@@ -1560,13 +1512,6 @@ __metadata:
   dependencies:
     "@isaacs/brace-expansion": "npm:^5.0.0"
   checksum: 10c0/c85d44821c71973d636091fddbfbffe62370f5ee3caf0241c5b60c18cd289e916200acb2361b7e987558cd06896d153e25d505db9fc1e43e6b4b6752e2702902
-  languageName: node
-  linkType: hard
-
-"minimist@npm:^1.2.6":
-  version: 1.2.8
-  resolution: "minimist@npm:1.2.8"
-  checksum: 10c0/19d3fcdca050087b84c2029841a093691a91259a47def2f18222f41e7645a0b7c44ef4b40e88a1e58a40c84d2ef0ee6047c55594d298146d0eb3f6b737c20ce6
   languageName: node
   linkType: hard
 
@@ -1711,13 +1656,6 @@ __metadata:
   version: 7.0.4
   resolution: "p-map@npm:7.0.4"
   checksum: 10c0/a5030935d3cb2919d7e89454d1ce82141e6f9955413658b8c9403cfe379283770ed3048146b44cde168aa9e8c716505f196d5689db0ae3ce9a71521a2fef3abd
-  languageName: node
-  linkType: hard
-
-"path-key@npm:^3.1.0":
-  version: 3.1.1
-  resolution: "path-key@npm:3.1.1"
-  checksum: 10c0/748c43efd5a569c039d7a00a03b58eecd1d75f3999f5a28303d75f521288df4823bc057d8784eb72358b2895a05f29a070bc9f1f17d28226cc4e62494cc58c4c
   languageName: node
   linkType: hard
 
@@ -1973,22 +1911,6 @@ __metadata:
   bin:
     semver: bin/semver.js
   checksum: 10c0/4afe5c986567db82f44c8c6faef8fe9df2a9b1d98098fc1721f57c696c4c21cebd572f297fc21002f81889492345b8470473bc6f4aff5fb032a6ea59ea2bc45e
-  languageName: node
-  linkType: hard
-
-"shebang-command@npm:^2.0.0":
-  version: 2.0.0
-  resolution: "shebang-command@npm:2.0.0"
-  dependencies:
-    shebang-regex: "npm:^3.0.0"
-  checksum: 10c0/a41692e7d89a553ef21d324a5cceb5f686d1f3c040759c50aab69688634688c5c327f26f3ecf7001ebfd78c01f3c7c0a11a7c8bfd0a8bc9f6240d4f40b224e4e
-  languageName: node
-  linkType: hard
-
-"shebang-regex@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "shebang-regex@npm:3.0.0"
-  checksum: 10c0/1dbed0726dd0e1152a92696c76c7f06084eb32a90f0528d11acd764043aacf76994b2fb30aa1291a21bd019d6699164d048286309a278855ee7bec06cf6fb690
   languageName: node
   linkType: hard
 
@@ -2289,17 +2211,6 @@ __metadata:
   bin:
     vitest: vitest.mjs
   checksum: 10c0/e1648bbfe2d01e23ceb6856863344035d2a1c139f39e8b15859e6ea8dc510ac3ba425df7c45486492d85ca516472aa892540dfd11ab6ad0613be98fd56d40716
-  languageName: node
-  linkType: hard
-
-"which@npm:^2.0.1":
-  version: 2.0.2
-  resolution: "which@npm:2.0.2"
-  dependencies:
-    isexe: "npm:^2.0.0"
-  bin:
-    node-which: ./bin/node-which
-  checksum: 10c0/66522872a768b60c2a65a57e8ad184e5372f5b6a9ca6d5f033d4b0dc98aff63995655a7503b9c0a2598936f532120e81dd8cc155e2e92ed662a2b9377cc4374f
   languageName: node
   linkType: hard
 

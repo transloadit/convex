@@ -4,7 +4,9 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { AssemblyInstructionsInput } from "@transloadit/types/template";
 import { Upload } from "tus-js-client";
+import { loadEnv } from "./load-env.js";
 
 type RunOptions = {
   cwd?: string;
@@ -14,10 +16,16 @@ type RunOptions = {
 
 type AssemblyResponse = {
   assemblyId: string;
-  data?: Record<string, unknown>;
+  data?: {
+    tus_url?: string;
+    assembly_ssl_url?: string;
+    assembly_url?: string;
+  };
 };
 
 const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
+
+loadEnv();
 
 const requireEnv = (name: string) => {
   const value = process.env[name];
@@ -308,7 +316,7 @@ const runQa = async () => {
       },
     );
 
-    const steps = {
+    const steps: AssemblyInstructionsInput["steps"] = {
       ":original": { robot: "/upload/handle" },
       resize: {
         use: ":original",
@@ -334,20 +342,8 @@ const runQa = async () => {
 
     const assemblyId = createResult?.assemblyId ?? "";
     const data = createResult?.data ?? {};
-    const tusUrl =
-      typeof data.tus_url === "string"
-        ? data.tus_url
-        : typeof data.tusUrl === "string"
-          ? data.tusUrl
-          : "";
-    const assemblyUrl =
-      typeof data.assembly_ssl_url === "string"
-        ? data.assembly_ssl_url
-        : typeof data.assembly_url === "string"
-          ? data.assembly_url
-          : typeof data.assemblyUrl === "string"
-            ? data.assemblyUrl
-            : "";
+    const tusUrl = data.tus_url ?? "";
+    const assemblyUrl = data.assembly_ssl_url ?? data.assembly_url ?? "";
 
     if (!assemblyId || !tusUrl || !assemblyUrl) {
       throw new Error("Missing assembly data from createAssembly");
@@ -400,12 +396,10 @@ const runQa = async () => {
       throw new Error("Missing resize result");
     }
 
-    const resizedUrl =
-      typeof (resized as { sslUrl?: string }).sslUrl === "string"
-        ? (resized as { sslUrl: string }).sslUrl
-        : typeof (resized as { url?: string }).url === "string"
-          ? (resized as { url: string }).url
-          : null;
+    const resizedUrl = (resized as { sslUrl?: string }).sslUrl ?? null;
+    if (!resizedUrl) {
+      throw new Error("Missing sslUrl on resize result");
+    }
 
     console.log(
       JSON.stringify(
