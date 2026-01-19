@@ -552,6 +552,16 @@ export default function WeddingUploadsClient({
 }: {
   convexUrl?: string | null;
 }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    return null;
+  }
+
   const resolvedConvexUrl = useMemo(() => {
     if (convexUrl) return convexUrl;
     if (typeof window === "undefined") return null;
