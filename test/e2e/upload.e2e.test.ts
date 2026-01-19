@@ -225,12 +225,25 @@ describeE2e("e2e upload flow", () => {
 
       const waitForStatus = async () => {
         const deadline = Date.now() + timeouts.refresh;
+        let lastStatus: string | null = null;
         while (Date.now() < deadline) {
           const text = await readText('[data-testid="assembly-status"]');
-          if (text?.includes("ASSEMBLY_COMPLETED")) return;
+          if (text) {
+            lastStatus = text;
+            if (text.includes("ASSEMBLY_COMPLETED")) return;
+            if (
+              text.includes("ASSEMBLY_FAILED") ||
+              text.includes("ASSEMBLY_CANCELED") ||
+              text.includes("ASSEMBLY_ABORTED")
+            ) {
+              throw new Error(`Assembly ended unsuccessfully: ${text}`);
+            }
+          }
           await sleep(2000);
         }
-        throw new Error("Timed out waiting for assembly completion");
+        throw new Error(
+          `Timed out waiting for assembly completion. Last status: ${lastStatus ?? "unknown"}`,
+        );
       };
 
       await waitForStatus();
