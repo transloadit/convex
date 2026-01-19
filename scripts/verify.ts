@@ -111,6 +111,8 @@ const setupRemoteDeployment = async () => {
 
     const { deploymentName, deploymentUrl } = parseDeployOutput(deployOutput);
     const notifyUrl = `https://${deploymentName}.convex.site/transloadit/webhook`;
+    console.log(`Preview URL: ${deploymentUrl}`);
+    console.log(`Webhook URL: ${notifyUrl}`);
 
     console.log("Setting env vars on preview deployment...");
     run(
