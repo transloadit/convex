@@ -1,5 +1,7 @@
 import WeddingUploadsClient from "./WeddingUploadsClient";
 
+export const dynamic = "force-dynamic";
+
 export default function WeddingUploadsPage({
   searchParams,
 }: {
