@@ -85,7 +85,7 @@ const useWeddingUppy = () => {
 
   useEffect(() => {
     return () => {
-      uppy.close();
+      uppy.destroy();
     };
   }, [uppy]);
 
