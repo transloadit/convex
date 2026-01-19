@@ -136,6 +136,22 @@ jobs:
           node-version: 24
       - run: corepack enable
       - run: yarn install --immutable
+      - name: Deploy Convex preview (PR)
+        if: github.event_name == 'pull_request'
+        run: |
+          node scripts/deploy-cloud.ts >> "$GITHUB_ENV"
+        env:
+          CI_OUTPUT: "1"
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
+          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
+          TRANSLOADIT_R2_CREDENTIALS: ${{ secrets.TRANSLOADIT_R2_CREDENTIALS }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_HOST: ${{ secrets.R2_HOST }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
       - name: Resolve Vercel preview URL
         run: |
           echo "E2E_REMOTE_APP_URL=$(node scripts/resolve-vercel-preview.ts)" >> "$GITHUB_ENV"
@@ -148,11 +164,18 @@ jobs:
           if [ -z "${E2E_REMOTE_APP_URL}" ]; then
             missing+=("E2E_REMOTE_APP_URL")
           fi
-          if [ -z "${E2E_REMOTE_CONVEX_URL}" ]; then
-            missing+=("E2E_REMOTE_CONVEX_URL")
+          if [ -z "${E2E_REMOTE_CONVEX_URL}" ] && [ -n "${E2E_REMOTE_CONVEX_URL_STABLE}" ]; then
+            echo "E2E_REMOTE_CONVEX_URL=${E2E_REMOTE_CONVEX_URL_STABLE}" >> "$GITHUB_ENV"
+            E2E_REMOTE_CONVEX_URL="${E2E_REMOTE_CONVEX_URL_STABLE}"
           fi
           if [ -z "${VERCEL_PROTECTION_BYPASS}" ]; then
             missing+=("VERCEL_PROTECTION_BYPASS")
+          fi
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ -z "${CONVEX_DEPLOY_KEY}" ]; then
+            missing+=("CONVEX_DEPLOY_KEY")
+          fi
+          if [ -z "${E2E_REMOTE_CONVEX_URL}" ]; then
+            missing+=("E2E_REMOTE_CONVEX_URL")
           fi
           if [ ${#missing[@]} -ne 0 ]; then
             echo "Missing secrets: ${missing[*]}" >&2
@@ -160,12 +183,14 @@ jobs:
           fi
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
-          E2E_REMOTE_CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
+          E2E_REMOTE_CONVEX_URL: ${{ env.E2E_REMOTE_CONVEX_URL }}
+          E2E_REMOTE_CONVEX_URL_STABLE: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
       - run: yarn verify:cloud
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
-          E2E_REMOTE_CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
+          E2E_REMOTE_CONVEX_URL: ${{ env.E2E_REMOTE_CONVEX_URL }}
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
 
   release:

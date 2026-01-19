@@ -8,6 +8,15 @@ import { parseDeployOutput, requireEnv, run } from "./qa/run.ts";
 
 loadEnv();
 
+const ciOutput = process.env.CI_OUTPUT === "1";
+const log = (...args: Parameters<typeof console.log>) => {
+  if (ciOutput) {
+    console.error(...args);
+  } else {
+    console.log(...args);
+  }
+};
+
 const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 const deployCloud = async () => {
@@ -24,15 +33,15 @@ const deployCloud = async () => {
 
     await mkdir(projectDir, { recursive: true });
 
-    console.log(`Packing @transloadit/convex into ${tgzPath}...`);
+    log(`Packing @transloadit/convex into ${tgzPath}...`);
     run("yarn", ["pack", "-o", tgzPath], { cwd: rootDir });
 
     await writeAppFiles({ projectDir, tgzPath });
 
-    console.log("Installing dependencies...");
+    log("Installing dependencies...");
     run("npm", ["install", "--no-fund", "--no-audit"], { cwd: projectDir });
 
-    console.log("Deploying Convex app...");
+    log("Deploying Convex app...");
     const deployOutput = run(
       "npx",
       [
@@ -56,10 +65,10 @@ const deployCloud = async () => {
 
     const { deploymentName, deploymentUrl } = parseDeployOutput(deployOutput);
     const notifyUrl = `https://${deploymentName}.convex.site/transloadit/webhook`;
-    console.log(`Deployment URL: ${deploymentUrl}`);
-    console.log(`Webhook URL: ${notifyUrl}`);
+    log(`Deployment URL: ${deploymentUrl}`);
+    log(`Webhook URL: ${notifyUrl}`);
 
-    console.log("Setting env vars on deployment...");
+    log("Setting env vars on deployment...");
     const deployEnv = {
       ...process.env,
       CONVEX_DEPLOY_KEY: requireEnv("CONVEX_DEPLOY_KEY"),
@@ -90,6 +99,11 @@ const deployCloud = async () => {
       if (value) {
         setEnv(name, value);
       }
+    }
+
+    if (ciOutput) {
+      process.stdout.write(`E2E_REMOTE_CONVEX_URL=${deploymentUrl}\n`);
+      process.stdout.write(`TRANSLOADIT_NOTIFY_URL=${notifyUrl}\n`);
     }
   } finally {
     if (qaDir) {
