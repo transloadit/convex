@@ -81,15 +81,21 @@ describeE2e("e2e upload flow", () => {
     page.on("pageerror", (error) => {
       consoleMessages.push(`[pageerror] ${error.message}`);
     });
+    const shouldTrackRequest = (url: string) =>
+      url.includes("transloadit") ||
+      url.includes("resumable") ||
+      url.includes("convex.cloud") ||
+      url.includes("convex.site");
+
     page.on("requestfailed", (request) => {
       const url = request.url();
-      if (url.includes("transloadit") || url.includes("resumable")) {
+      if (shouldTrackRequest(url)) {
         requestFailures.push(`${url} ${request.failure()?.errorText ?? ""}`);
       }
     });
     page.on("request", (request) => {
       const url = request.url();
-      if (url.includes("transloadit") || url.includes("resumable")) {
+      if (shouldTrackRequest(url)) {
         requestLog.push(
           `${new Date().toISOString()} ${request.method()} ${url}`,
         );
