@@ -237,7 +237,8 @@ export default function WeddingUploads() {
         )}
         <p className="status">
           Files are stored in Transloadit temporary storage and expire after ~24
-          hours. Add a storage robot (S3, GCS, etc.) to persist uploads.
+          hours. Preview deployments reset this gallery on each deploy. Add a
+          storage robot (S3, GCS, etc.) to persist uploads.
         </p>
       </section>
     </main>
