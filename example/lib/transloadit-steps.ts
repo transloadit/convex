@@ -45,11 +45,23 @@ type R2Config = {
 
 const readR2Config = (): R2Config => {
   const env = r2EnvSchema.parse(process.env);
-  const host =
+  const normalizeHost = (value?: string) => {
+    if (!value) return undefined;
+    if (value.startsWith("http://") || value.startsWith("https://")) {
+      return value;
+    }
+    return `https://${value}`;
+  };
+  const normalizeUrlPrefix = (value?: string) => {
+    if (!value) return undefined;
+    return value.endsWith("/") ? value : `${value}/`;
+  };
+  const host = normalizeHost(
     env.R2_HOST ??
-    (env.R2_ACCOUNT_ID
-      ? `${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-      : undefined);
+      (env.R2_ACCOUNT_ID
+        ? `${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
+        : undefined),
+  );
 
   if (env.TRANSLOADIT_R2_CREDENTIALS) {
     return {
@@ -58,7 +70,7 @@ const readR2Config = (): R2Config => {
       accessKeyId: env.R2_ACCESS_KEY_ID,
       secretAccessKey: env.R2_SECRET_ACCESS_KEY,
       host,
-      urlPrefix: env.R2_PUBLIC_URL,
+      urlPrefix: normalizeUrlPrefix(env.R2_PUBLIC_URL),
     };
   }
 
@@ -76,15 +88,15 @@ const readR2Config = (): R2Config => {
     accessKeyId: env.R2_ACCESS_KEY_ID,
     secretAccessKey: env.R2_SECRET_ACCESS_KEY,
     host,
-    urlPrefix: env.R2_PUBLIC_URL,
+    urlPrefix: normalizeUrlPrefix(env.R2_PUBLIC_URL),
   };
 };
 
 const buildStoreStep = (
   use: string,
   r2: R2Config,
-): RobotCloudflareStoreInstructions =>
-  robotCloudflareStoreInstructionsSchema.parse({
+): RobotCloudflareStoreInstructions => {
+  const step: RobotCloudflareStoreInstructions = {
     robot: "/cloudflare/store",
     use,
     result: true,
@@ -97,39 +109,54 @@ const buildStoreStep = (
     path: `wedding/${tpl("fields.album")}/${tpl("unique_prefix")}/${tpl(
       "file.url_name",
     )}`,
-  });
+  };
+  robotCloudflareStoreInstructionsSchema.parse(step);
+  return step;
+};
 
-const buildUploadStep = (): RobotUploadHandleInstructions =>
-  robotUploadHandleInstructionsSchema.parse({
+const buildUploadStep = (): RobotUploadHandleInstructions => {
+  const step: RobotUploadHandleInstructions = {
     robot: "/upload/handle",
-  });
+  };
+  robotUploadHandleInstructionsSchema.parse(step);
+  return step;
+};
 
 const buildFilterStep = (
   use: string,
   pattern: string,
-): RobotFileFilterInstructions =>
-  robotFileFilterInstructionsSchema.parse({
+): RobotFileFilterInstructions => {
+  const step: RobotFileFilterInstructions = {
     robot: "/file/filter",
     use,
     accepts: [[tpl("file.mime"), "regex", pattern]],
     error_on_decline: false,
-  });
+  };
+  robotFileFilterInstructionsSchema.parse(step);
+  return step;
+};
 
-const buildResizeStep = (use: string): RobotImageResizeInstructions =>
-  robotImageResizeInstructionsSchema.parse({
+const buildResizeStep = (use: string): RobotImageResizeInstructions => {
+  const step: RobotImageResizeInstructions = {
     robot: "/image/resize",
     use,
     width: 1600,
     height: 1600,
     resize_strategy: "fit",
-  });
+  };
+  robotImageResizeInstructionsSchema.parse(step);
+  return step;
+};
 
-const buildVideoStep = (use: string): RobotVideoEncodeInstructions =>
-  robotVideoEncodeInstructionsSchema.parse({
+const buildVideoStep = (use: string): RobotVideoEncodeInstructions => {
+  const step: RobotVideoEncodeInstructions = {
     robot: "/video/encode",
     use,
     preset: "ipad-high",
-  });
+  };
+  robotVideoEncodeInstructionsSchema.parse(step);
+  return step;
+};
 
 export const buildWeddingSteps = (): TransloaditSteps => {
   const r2 = readR2Config();

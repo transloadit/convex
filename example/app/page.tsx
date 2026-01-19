@@ -271,7 +271,7 @@ const LocalWeddingUploads = () => {
       }
 
       await uppy.upload();
-      await refreshResults(assembly.assemblyId);
+      await refreshResults(assembly.assemblyId, true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed";
       setError(message);
@@ -286,7 +286,7 @@ const LocalWeddingUploads = () => {
     const poll = async () => {
       try {
         if (!cancelled) {
-          await refreshResults(assemblyId);
+          await refreshResults(assemblyId, true);
         }
       } catch (err) {
         if (!cancelled) {
