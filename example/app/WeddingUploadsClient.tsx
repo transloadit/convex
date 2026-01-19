@@ -2,13 +2,17 @@
 
 import { useAuthActions } from "@convex-dev/auth/react";
 import Uppy from "@uppy/core";
-import Dashboard from "@uppy/react/dashboard";
 import Tus from "@uppy/tus";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { weddingStepNames } from "../lib/transloadit";
 import { Providers } from "./providers";
+
+const Dashboard = dynamic(() => import("@uppy/react/dashboard"), {
+  ssr: false,
+});
 
 type AssemblyResponse = {
   assemblyId: string;
