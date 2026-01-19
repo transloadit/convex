@@ -101,6 +101,14 @@ describeE2e("e2e upload flow", () => {
         );
       }
     });
+    page.on("response", (response) => {
+      const url = response.url();
+      if (shouldTrackRequest(url)) {
+        requestLog.push(
+          `${new Date().toISOString()} ${response.status()} ${url}`,
+        );
+      }
+    });
 
     try {
       if (useRemote && vercelBypassToken) {
@@ -110,7 +118,9 @@ describeE2e("e2e upload flow", () => {
         });
       }
 
-      await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
+      const navigation = await page.goto(serverUrl, {
+        waitUntil: "domcontentloaded",
+      });
 
       if (useRemote) {
         try {
@@ -118,21 +128,38 @@ describeE2e("e2e upload flow", () => {
             timeout: 60_000,
           });
         } catch (error) {
+          const title = await page.title().catch(() => null);
+          const status = navigation?.status() ?? null;
           const authState = await page
             .getAttribute("main.page", "data-auth-state")
+            .catch(() => null);
+          const headingText = await page
+            .locator("h1, h2")
+            .first()
+            .textContent()
             .catch(() => null);
           const headline = await page
             .locator(".headline")
             .first()
             .textContent()
             .catch(() => null);
-          const bodySnippet = await page
+          const bodyHtml = await page
+            .evaluate(() => document.body?.outerHTML ?? "")
+            .catch(() => "");
+          const bodyHtmlSnippet = bodyHtml.slice(0, 1000);
+          const bodyTextSnippet = await page
             .evaluate(() => document.body?.innerText?.slice(0, 500) ?? "")
             .catch(() => "");
+          const hasVercelProtection = bodyHtml.includes("Vercel");
           console.log("Cloud auth wait failed.", {
+            title,
+            status,
             authState,
+            headingText,
             headline,
-            bodySnippet,
+            bodyHtmlSnippet,
+            bodyTextSnippet,
+            hasVercelProtection,
             url: page.url(),
           });
           throw error;
