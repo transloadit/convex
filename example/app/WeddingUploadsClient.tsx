@@ -6,7 +6,7 @@ import Tus from "@uppy/tus";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { weddingStepNames } from "../lib/transloadit";
 import { Providers } from "./providers";
 
@@ -552,21 +552,20 @@ export default function WeddingUploadsClient({
 }: {
   convexUrl?: string | null;
 }) {
-  const [mounted, setMounted] = useState(false);
+  const [resolvedConvexUrl, setResolvedConvexUrl] = useState<string | null>(
+    convexUrl ?? null,
+  );
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  if (!mounted) {
-    return null;
-  }
-
-  const resolvedConvexUrl = useMemo(() => {
-    if (convexUrl) return convexUrl;
-    if (typeof window === "undefined") return null;
+    if (convexUrl) {
+      setResolvedConvexUrl(convexUrl);
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
-    return params.get("convexUrl");
+    const fromQuery = params.get("convexUrl");
+    if (fromQuery) {
+      setResolvedConvexUrl(fromQuery);
+    }
   }, [convexUrl]);
   const hasConvex = Boolean(resolvedConvexUrl);
   if (!hasConvex) {
