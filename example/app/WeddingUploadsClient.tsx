@@ -552,9 +552,14 @@ export default function WeddingUploadsClient({
 }: {
   convexUrl?: string | null;
 }) {
+  const [isHydrated, setIsHydrated] = useState(false);
   const [resolvedConvexUrl, setResolvedConvexUrl] = useState<string | null>(
     null,
   );
+
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useEffect(() => {
     if (convexUrl) {
@@ -567,6 +572,9 @@ export default function WeddingUploadsClient({
       setResolvedConvexUrl(fromQuery);
     }
   }, [convexUrl]);
+  if (!isHydrated) {
+    return null;
+  }
   const hasConvex = Boolean(resolvedConvexUrl);
   if (!hasConvex) {
     return <LocalWeddingUploads />;
