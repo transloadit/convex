@@ -553,7 +553,7 @@ export default function WeddingUploadsClient({
   convexUrl?: string | null;
 }) {
   const [resolvedConvexUrl, setResolvedConvexUrl] = useState<string | null>(
-    convexUrl ?? null,
+    null,
   );
 
   useEffect(() => {
