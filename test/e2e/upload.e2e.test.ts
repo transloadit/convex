@@ -101,32 +101,6 @@ describeE2e("e2e upload flow", () => {
         state: "attached",
       });
 
-      const collectGalleryUrls = async () =>
-        page.evaluate(() => {
-          const gallery = document.querySelector('[data-testid="gallery"]');
-          const images = Array.from(
-            document.querySelectorAll<HTMLImageElement>(
-              '[data-testid="gallery"] img',
-            ),
-          )
-            .map((img) => img.currentSrc || img.src)
-            .filter(Boolean);
-          const videos = Array.from(
-            document.querySelectorAll<HTMLVideoElement>(
-              '[data-testid="gallery"] video',
-            ),
-          )
-            .map((video) => video.currentSrc || video.src)
-            .filter(Boolean);
-          return {
-            hasGallery: Boolean(gallery),
-            images,
-            videos,
-          };
-        });
-
-      const initialGallery = await collectGalleryUrls();
-
       const fileInput = page.locator('input[type="file"]').first();
       await fileInput.waitFor({ state: "attached" });
       await fileInput.setInputFiles([imagePath, videoPath]);
@@ -182,53 +156,44 @@ describeE2e("e2e upload flow", () => {
 
       await waitForStatus();
 
-      const waitForNewMedia = async () => {
+      const waitForAssemblyMedia = async (targetAssemblyId: string) => {
         const deadline = Date.now() + timeouts.results;
         while (Date.now() < deadline) {
-          const current = await collectGalleryUrls();
-          if (!current.hasGallery) {
+          const ready = await page.evaluate((assemblyId) => {
+            const cards = Array.from(
+              document.querySelectorAll<HTMLElement>("[data-assembly-id]"),
+            ).filter((card) => card.dataset.assemblyId === assemblyId);
+            const imgs = cards.flatMap((card) =>
+              Array.from(card.querySelectorAll<HTMLImageElement>("img")),
+            );
+            const vids = cards.flatMap((card) =>
+              Array.from(card.querySelectorAll<HTMLVideoElement>("video")),
+            );
+            const imagesReady =
+              imgs.length > 0 && imgs.every((img) => img.complete);
+            const videosReady =
+              vids.length > 0 &&
+              vids.every(
+                (video) => video.readyState >= 2 || video.currentTime > 0,
+              );
+            return {
+              hasCards: cards.length > 0,
+              imagesReady,
+              videosReady,
+            };
+          }, targetAssemblyId);
+
+          if (!ready.hasCards) {
             await sleep(1000);
             continue;
           }
-
-          const newImages = current.images.filter(
-            (url) => !initialGallery.images.includes(url),
-          );
-          const newVideos = current.videos.filter(
-            (url) => !initialGallery.videos.includes(url),
-          );
-
-          if (newImages.length > 0 && newVideos.length > 0) {
-            const ready = await page.evaluate(() => {
-              const imgs = Array.from(
-                document.querySelectorAll<HTMLImageElement>(
-                  '[data-testid="gallery"] img',
-                ),
-              );
-              const vids = Array.from(
-                document.querySelectorAll<HTMLVideoElement>(
-                  '[data-testid="gallery"] video',
-                ),
-              );
-              const imagesReady =
-                imgs.length > 0 && imgs.every((img) => img.complete);
-              const videosReady =
-                vids.length > 0 &&
-                vids.every(
-                  (video) => video.readyState >= 2 || video.currentTime > 0,
-                );
-              return { imagesReady, videosReady };
-            });
-
-            if (ready.imagesReady && ready.videosReady) return;
-          }
-
+          if (ready.imagesReady && ready.videosReady) return;
           await sleep(1000);
         }
-        throw new Error("Timed out waiting for new gallery media to load");
+        throw new Error("Timed out waiting for gallery media to load");
       };
 
-      await waitForNewMedia();
+      await waitForAssemblyMedia(assemblyId);
     } catch (error) {
       if (consoleMessages.length) {
         console.log("Browser console logs:", consoleMessages);

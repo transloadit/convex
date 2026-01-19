@@ -19,6 +19,7 @@ type AssemblyStatus = {
 };
 
 type AssemblyResult = {
+  assemblyId?: string;
   _id?: string;
   sslUrl?: string;
   name?: string;
@@ -182,7 +183,7 @@ const Gallery = ({ results }: { results: AssemblyResult[] }) => {
         const mime = item.mime ?? "";
         const isVideo = mime.startsWith("video");
         return (
-          <div className="card" key={key}>
+          <div className="card" data-assembly-id={item.assemblyId} key={key}>
             {item.sslUrl ? (
               isVideo ? (
                 // biome-ignore lint/a11y/useMediaCaption: demo clips have no caption tracks
