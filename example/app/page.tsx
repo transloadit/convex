@@ -1,4 +1,11 @@
-import WeddingUploadsClient from "./WeddingUploadsClient";
+import dynamicImport from "next/dynamic";
+
+const WeddingUploadsClient = dynamicImport(
+  () => import("./WeddingUploadsClient"),
+  {
+    ssr: false,
+  },
+);
 
 export const dynamic = "force-dynamic";
 
