@@ -178,7 +178,10 @@ const Gallery = ({ results }: { results: AssemblyResult[] }) => {
     <div className="gallery" data-testid="gallery">
       {visibleResults.map((item) => {
         const key =
-          item._id || item.sslUrl || item.name || Math.random().toString();
+          item._id ||
+          item.sslUrl ||
+          item.name ||
+          `${item.assemblyId ?? "assembly"}-${item.stepName ?? "step"}-${item.createdAt ?? 0}`;
         const mime = item.mime ?? "";
         const isVideo = mime.startsWith("video");
         return (
@@ -449,7 +452,7 @@ const WeddingLayout = ({
   children: React.ReactNode;
 }) => {
   return (
-    <main className="page">
+    <main className="page" data-auth-state={authState ?? "local"}>
       <section className="panel">
         <h1 className="headline">Eden & Nico Wedding Gallery</h1>
         <p className="subhead">
@@ -494,7 +497,9 @@ const WeddingLayout = ({
             className="button"
             type="button"
             onClick={onUpload}
-            disabled={isUploading}
+            disabled={
+              isUploading || (authState && authState !== "authenticated")
+            }
             data-testid="start-upload"
           >
             {isUploading ? "Uploading…" : "Upload to the gallery"}

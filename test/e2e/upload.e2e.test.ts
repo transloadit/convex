@@ -107,11 +107,9 @@ describeE2e("e2e upload flow", () => {
       await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
 
       if (useRemote) {
-        await page.waitForFunction(
-          () => !document.querySelector('[data-testid="auth-status"]'),
-          null,
-          { timeout: 30_000 },
-        );
+        await page.waitForSelector('[data-auth-state="authenticated"]', {
+          timeout: 60_000,
+        });
       }
 
       const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
