@@ -9,8 +9,15 @@ import { startExampleApp } from "./support/example-app.js";
 import { runtime } from "./support/runtime.js";
 import { sleep } from "./support/sleep.js";
 
-const { authKey, authSecret, useRemote, remoteUrl, remoteAdminKey, shouldRun } =
-  runtime;
+const {
+  authKey,
+  authSecret,
+  useRemote,
+  remoteUrl,
+  remoteAdminKey,
+  remoteAppUrl,
+  shouldRun,
+} = runtime;
 
 const fixturesDir = resolve("test/e2e/fixtures");
 
@@ -26,9 +33,17 @@ describeE2e("e2e upload flow", () => {
   let app: Awaited<ReturnType<typeof startExampleApp>> | null = null;
 
   beforeAll(async () => {
+    if (useRemote) {
+      if (!remoteAppUrl) {
+        throw new Error("Missing E2E_REMOTE_APP_URL for cloud e2e run");
+      }
+      serverUrl = remoteAppUrl.replace(/\/$/, "");
+      return;
+    }
+
     app = await startExampleApp({
       env: {
-        E2E_MODE: useRemote ? "cloud" : "local",
+        E2E_MODE: "local",
         E2E_REMOTE_URL: remoteUrl,
         E2E_REMOTE_ADMIN_KEY: remoteAdminKey,
         TRANSLOADIT_KEY: authKey,
@@ -39,8 +54,10 @@ describeE2e("e2e upload flow", () => {
   });
 
   afterAll(async () => {
-    await app?.close();
-    app = null;
+    if (app) {
+      await app.close();
+      app = null;
+    }
   });
 
   test("uploads wedding photos and videos", async () => {

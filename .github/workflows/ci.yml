@@ -115,21 +115,21 @@ jobs:
       - run: yarn install --immutable
       - id: secrets
         run: |
-          if [ -z "${TRANSLOADIT_KEY}" ] || [ -z "${TRANSLOADIT_SECRET}" ] || [ -z "${CONVEX_DEPLOY_KEY}" ]; then
+          if [ -z "${E2E_REMOTE_APP_URL}" ] || [ -z "${CONVEX_URL}" ] || [ -z "${CONVEX_ADMIN_KEY}" ]; then
             echo "hasSecrets=false" >> "$GITHUB_OUTPUT"
           else
             echo "hasSecrets=true" >> "$GITHUB_OUTPUT"
           fi
         env:
-          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
-          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
+          CONVEX_URL: ${{ secrets.CONVEX_URL }}
+          CONVEX_ADMIN_KEY: ${{ secrets.CONVEX_ADMIN_KEY }}
       - run: yarn verify:cloud
         if: steps.secrets.outputs.hasSecrets == 'true'
         env:
-          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
-          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
+          CONVEX_URL: ${{ secrets.CONVEX_URL }}
+          CONVEX_ADMIN_KEY: ${{ secrets.CONVEX_ADMIN_KEY }}
 
   release:
     name: Publish to npm

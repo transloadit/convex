@@ -252,6 +252,19 @@ export CONVEX_ADMIN_KEY=...
 
 The example exposes `POST /transloadit/webhook` and forwards webhooks into Convex via `queueWebhook`.
 
+### Deploy the example (Vercel + stable Convex)
+
+For a public demo, deploy the `example/` app and point it at a stable Convex deployment.
+
+1. Deploy a Convex app that includes this component (stable/prod deployment).
+2. Set Vercel environment variables for the project:
+   - `CONVEX_URL` and `CONVEX_ADMIN_KEY` (point to the stable Convex deployment)
+   - `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`
+   - `TRANSLOADIT_NOTIFY_URL` (set to `https://<deployment>.convex.site/transloadit/webhook`)
+3. Trigger the Vercel deploy hook (or deploy manually).
+
+Once deployed, use the Vercel URL as `E2E_REMOTE_APP_URL` for `yarn verify:cloud`.
+
 ## Verification and QA
 
 Fast checks:
@@ -273,14 +286,14 @@ Additional commands:
 - `yarn typecheck` (tsc)
 - `yarn test` (Vitest unit tests)
 - `yarn verify:local` (runs the Next.js wedding example + uploads an image + video)
-- `yarn verify:cloud` (deploys a preview Convex app and runs the same browser flow against it)
+- `yarn verify:cloud` (runs the browser flow against a deployed Next.js app + Convex cloud backend)
 - `yarn build` (tsc build + emit package json)
 
 Notes:
 - `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
-- `yarn verify:local` and `yarn verify:cloud` need `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`.
-- `yarn verify:cloud` also needs `CONVEX_DEPLOY_KEY`.
+- `yarn verify:local` needs `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`.
+- `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`, `CONVEX_URL`, and `CONVEX_ADMIN_KEY`.
 
 ## Component test helpers
 
