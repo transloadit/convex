@@ -4,5 +4,5 @@
     "jsx": "preserve",
     "noEmit": true
   },
-  "include": ["app", "lib"]
+  "include": ["next-env.d.ts", "app", "lib"]
 }
