@@ -97,14 +97,16 @@ describeE2e("e2e upload flow", () => {
         throw new Error("Missing sample.mp4 fixture for e2e run");
       }
 
-      await page.waitForSelector(
-        '[data-testid="uppy-dashboard"] input[type="file"]',
-        { state: "attached" },
-      );
-      await page.setInputFiles(
-        '[data-testid="uppy-dashboard"] input[type="file"]',
-        [imagePath, videoPath],
-      );
+      await page.waitForSelector('[data-testid="gallery-empty"]', {
+        state: "attached",
+      });
+      await page.waitForSelector('[data-testid="uppy-dashboard"]', {
+        state: "attached",
+      });
+
+      const fileInput = page.locator('input[type="file"]').first();
+      await fileInput.waitFor({ state: "attached" });
+      await fileInput.setInputFiles([imagePath, videoPath]);
       await page.click('[data-testid="start-upload"]');
 
       const readText = async (selector: string) => {
@@ -166,6 +168,38 @@ describeE2e("e2e upload flow", () => {
 
       expect(images.length).toBeGreaterThan(0);
       expect(videos.length).toBeGreaterThan(0);
+
+      const waitForMedia = async () => {
+        const deadline = Date.now() + timeouts.results;
+        while (Date.now() < deadline) {
+          const ready = await page.evaluate(() => {
+            const imgs = Array.from(
+              document.querySelectorAll<HTMLImageElement>(
+                '[data-testid="gallery"] img',
+              ),
+            );
+            const vids = Array.from(
+              document.querySelectorAll<HTMLVideoElement>(
+                '[data-testid="gallery"] video',
+              ),
+            );
+            const imagesReady =
+              imgs.length > 0 && imgs.every((img) => img.complete);
+            const videosReady =
+              vids.length > 0 &&
+              vids.every(
+                (video) => video.readyState >= 2 || video.currentTime > 0,
+              );
+            return { imagesReady, videosReady };
+          });
+
+          if (ready.imagesReady && ready.videosReady) return;
+          await sleep(1000);
+        }
+        throw new Error("Timed out waiting for gallery media to load");
+      };
+
+      await waitForMedia();
     } catch (error) {
       if (consoleMessages.length) {
         console.log("Browser console logs:", consoleMessages);
