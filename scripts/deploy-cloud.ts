@@ -68,6 +68,9 @@ const deployCloud = async () => {
     log(`Deployment URL: ${deploymentUrl}`);
     log(`Webhook URL: ${notifyUrl}`);
 
+    log("Waiting for deployment to accept env updates...");
+    await sleep(5000);
+
     log("Setting env vars on deployment...");
     const deployEnv = {
       ...process.env,
@@ -90,7 +93,7 @@ const deployCloud = async () => {
           log(
             `Failed to set ${name} (attempt ${attempt}/${attempts}). Retrying...`,
           );
-          await sleep(1000 * attempt);
+          await sleep(5000 * attempt);
         }
       }
     };
