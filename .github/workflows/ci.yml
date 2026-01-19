@@ -135,11 +135,16 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - name: Resolve Vercel preview URL
+        if: ${{ secrets.VERCEL_TOKEN != '' }}
         run: |
           echo "E2E_REMOTE_APP_URL=$(node scripts/resolve-vercel-preview.ts)" >> "$GITHUB_ENV"
         env:
           VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      - name: Use fallback preview URL
+        if: ${{ env.E2E_REMOTE_APP_URL == '' }}
+        run: |
+          echo "E2E_REMOTE_APP_URL=${{ secrets.E2E_REMOTE_APP_URL }}" >> "$GITHUB_ENV"
       - name: Ensure cloud QA secrets
         run: |
           if [ -z "${E2E_REMOTE_APP_URL}" ]; then
