@@ -1,32 +1,18 @@
 import { NextResponse } from "next/server";
 import { runAction, runQuery } from "../../../lib/convex";
-import { buildWeddingSteps } from "../../../lib/transloadit-steps";
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as {
     fileCount?: number;
     guestName?: string;
   };
-  const notifyUrl = process.env.TRANSLOADIT_NOTIFY_URL;
-  if (!notifyUrl) {
-    return NextResponse.json(
-      { error: "Missing TRANSLOADIT_NOTIFY_URL" },
-      { status: 500 },
-    );
-  }
-
   const fileCount = Number.isFinite(payload.fileCount)
     ? Math.max(1, payload.fileCount ?? 1)
     : 1;
 
-  const response = await runAction("createAssembly", {
-    steps: buildWeddingSteps(),
-    notifyUrl,
-    numExpectedUploadFiles: fileCount,
-    fields: {
-      guestName: payload.guestName ?? "Guest",
-      album: "wedding-gallery",
-    },
+  const response = await runAction("createWeddingAssembly", {
+    fileCount,
+    guestName: payload.guestName ?? "Guest",
   });
 
   return NextResponse.json(response);

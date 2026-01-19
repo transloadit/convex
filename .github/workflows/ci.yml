@@ -90,6 +90,11 @@ jobs:
           if [ -z "${TRANSLOADIT_SECRET}" ]; then
             missing+=("TRANSLOADIT_SECRET")
           fi
+          if [ -z "${TRANSLOADIT_R2_CREDENTIALS}" ]; then
+            if [ -z "${R2_BUCKET}" ] || [ -z "${R2_ACCESS_KEY_ID}" ] || [ -z "${R2_SECRET_ACCESS_KEY}" ] || ([ -z "${R2_HOST}" ] && [ -z "${R2_ACCOUNT_ID}" ]); then
+              missing+=("TRANSLOADIT_R2_CREDENTIALS (or R2_* variables)")
+            fi
+          fi
           if [ ${#missing[@]} -ne 0 ]; then
             echo "Missing secrets: ${missing[*]}" >&2
             exit 1
@@ -97,12 +102,24 @@ jobs:
         env:
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
+          TRANSLOADIT_R2_CREDENTIALS: ${{ secrets.TRANSLOADIT_R2_CREDENTIALS }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_HOST: ${{ secrets.R2_HOST }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
       - run: yarn exec playwright install --with-deps chromium
       - run: yarn verify:local
         env:
           PLAYWRIGHT_SKIP_INSTALL: "1"
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
+          TRANSLOADIT_R2_CREDENTIALS: ${{ secrets.TRANSLOADIT_R2_CREDENTIALS }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_HOST: ${{ secrets.R2_HOST }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
 
   convex-qa:
     name: Convex deployment QA
@@ -119,29 +136,15 @@ jobs:
       - run: yarn install --immutable
       - name: Ensure cloud QA secrets
         run: |
-          missing=()
           if [ -z "${E2E_REMOTE_APP_URL}" ]; then
-            missing+=("E2E_REMOTE_APP_URL")
-          fi
-          if [ -z "${CONVEX_URL}" ]; then
-            missing+=("CONVEX_URL")
-          fi
-          if [ -z "${CONVEX_ADMIN_KEY}" ]; then
-            missing+=("CONVEX_ADMIN_KEY")
-          fi
-          if [ ${#missing[@]} -ne 0 ]; then
-            echo "Missing secrets: ${missing[*]}" >&2
+            echo "Missing secrets: E2E_REMOTE_APP_URL" >&2
             exit 1
           fi
         env:
           E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
-          CONVEX_URL: ${{ secrets.CONVEX_URL }}
-          CONVEX_ADMIN_KEY: ${{ secrets.CONVEX_ADMIN_KEY }}
       - run: yarn verify:cloud
         env:
           E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
-          CONVEX_URL: ${{ secrets.CONVEX_URL }}
-          CONVEX_ADMIN_KEY: ${{ secrets.CONVEX_ADMIN_KEY }}
 
   release:
     name: Publish to npm

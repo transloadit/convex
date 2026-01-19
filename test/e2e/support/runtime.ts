@@ -5,8 +5,6 @@ export type RuntimeConfig = {
   authSecret: string;
   mode: Mode;
   useRemote: boolean;
-  remoteUrl: string;
-  remoteAdminKey: string;
   remoteAppUrl: string;
   shouldRun: boolean;
 };
@@ -19,16 +17,12 @@ export const getRuntimeConfig = (): RuntimeConfig => {
   const useRemote = mode === "cloud";
   const remoteAppUrl =
     process.env.E2E_REMOTE_APP_URL ?? process.env.E2E_APP_URL ?? "";
-  const remoteUrl = process.env.E2E_REMOTE_URL ?? "";
-  const remoteAdminKey = process.env.E2E_REMOTE_ADMIN_KEY ?? "";
   const shouldRun = useRemote || Boolean(authKey && authSecret);
   return {
     authKey,
     authSecret,
     mode,
     useRemote,
-    remoteUrl,
-    remoteAdminKey,
     remoteAppUrl,
     shouldRun,
   };

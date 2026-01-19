@@ -1,9 +1,12 @@
 "use client";
 
+import { useAuthActions } from "@convex-dev/auth/react";
 import Uppy from "@uppy/core";
 import Dashboard from "@uppy/react/dashboard";
 import Tus from "@uppy/tus";
-import { useEffect, useMemo, useState } from "react";
+import { useAction, useConvexAuth, useQuery } from "convex/react";
+import { makeFunctionReference } from "convex/server";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { weddingStepNames } from "../lib/transloadit";
 
 type AssemblyResponse = {
@@ -24,6 +27,36 @@ type AssemblyResult = {
   createdAt?: number;
 };
 
+type AssemblySummary = {
+  _id?: string;
+  assemblyId?: string;
+  createdAt?: number;
+  fields?: Record<string, unknown>;
+};
+
+type Toast = {
+  id: string;
+  message: string;
+};
+
+const retentionHours = Number.parseFloat(
+  process.env.NEXT_PUBLIC_GALLERY_RETENTION_HOURS ?? "24",
+);
+const retentionMs =
+  Number.isFinite(retentionHours) && retentionHours > 0
+    ? retentionHours * 60 * 60 * 1000
+    : Number.POSITIVE_INFINITY;
+const retentionLabel =
+  retentionMs === Number.POSITIVE_INFINITY ? "all time" : `${retentionHours}h`;
+
+const filterResults = (results: AssemblyResult[]) => {
+  if (retentionMs === Number.POSITIVE_INFINITY) return results;
+  return results.filter((item) => {
+    if (typeof item.createdAt !== "number") return true;
+    return Date.now() - item.createdAt < retentionMs;
+  });
+};
+
 const getAssemblyUrls = (data: Record<string, unknown>) => {
   const tusUrl =
     (typeof data.tus_url === "string" && data.tus_url) ||
@@ -37,32 +70,7 @@ const getAssemblyUrls = (data: Record<string, unknown>) => {
   return { tusUrl, assemblyUrl };
 };
 
-export default function WeddingUploads() {
-  const [assemblyId, setAssemblyId] = useState<string | null>(null);
-  const [status, setStatus] = useState<string>("pending");
-  const [results, setResults] = useState<AssemblyResult[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-
-  const retentionHours = Number.parseFloat(
-    process.env.NEXT_PUBLIC_GALLERY_RETENTION_HOURS ?? "24",
-  );
-  const retentionMs =
-    Number.isFinite(retentionHours) && retentionHours > 0
-      ? retentionHours * 60 * 60 * 1000
-      : Number.POSITIVE_INFINITY;
-  const retentionLabel =
-    retentionMs === Number.POSITIVE_INFINITY
-      ? "all time"
-      : `${retentionHours}h`;
-  const visibleResults =
-    retentionMs === Number.POSITIVE_INFINITY
-      ? results
-      : results.filter((item) => {
-          if (typeof item.createdAt !== "number") return true;
-          return Date.now() - item.createdAt < retentionMs;
-        });
-
+const useWeddingUppy = () => {
   const uppy = useMemo(
     () =>
       new Uppy({
@@ -80,6 +88,130 @@ export default function WeddingUploads() {
       uppy.close();
     };
   }, [uppy]);
+
+  return uppy;
+};
+
+const useUploadToasts = (assemblies: AssemblySummary[] | undefined) => {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const seen = useRef<Set<string>>(new Set());
+  const initialized = useRef(false);
+  const timers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    return () => {
+      for (const timer of timers.current.values()) {
+        clearTimeout(timer);
+      }
+      timers.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!assemblies) return;
+    if (!initialized.current) {
+      assemblies.forEach((assembly) => {
+        const id =
+          assembly._id ?? assembly.assemblyId ?? `${assembly.createdAt ?? 0}`;
+        seen.current.add(id);
+      });
+      initialized.current = true;
+      return;
+    }
+    const next = [...assemblies].reverse();
+    next.forEach((assembly) => {
+      const id =
+        assembly._id ?? assembly.assemblyId ?? `${assembly.createdAt ?? 0}`;
+      if (seen.current.has(id)) return;
+      seen.current.add(id);
+
+      const fields = assembly.fields ?? {};
+      const guestName =
+        typeof fields.guestName === "string" ? fields.guestName : "Guest";
+      const fileCount =
+        typeof fields.fileCount === "number" ? fields.fileCount : undefined;
+      const message = fileCount
+        ? `${guestName} uploaded ${fileCount} file${fileCount === 1 ? "" : "s"}`
+        : `${guestName} uploaded new files`;
+
+      setToasts((prev) => [...prev, { id, message }]);
+      const timer = setTimeout(() => {
+        setToasts((prev) => prev.filter((toast) => toast.id !== id));
+        timers.current.delete(id);
+      }, 6000);
+      timers.current.set(id, timer);
+    });
+  }, [assemblies]);
+
+  return toasts;
+};
+
+const createWeddingAssemblyRef = makeFunctionReference<
+  "action",
+  { fileCount: number; guestName?: string },
+  AssemblyResponse
+>("wedding:createWeddingAssembly");
+const listAssembliesRef = makeFunctionReference<
+  "query",
+  { status?: string; userId?: string; limit?: number },
+  AssemblySummary[]
+>("transloadit:listAssemblies");
+const listResultsRef = makeFunctionReference<
+  "query",
+  { assemblyId: string; stepName?: string; limit?: number },
+  AssemblyResult[]
+>("transloadit:listResults");
+const getAssemblyStatusRef = makeFunctionReference<
+  "query",
+  { assemblyId: string },
+  AssemblyStatus | null
+>("transloadit:getAssemblyStatus");
+
+const Gallery = ({ results }: { results: AssemblyResult[] }) => {
+  const visibleResults = filterResults(results);
+
+  return visibleResults.length === 0 ? (
+    <p className="status" data-testid="gallery-empty">
+      Uploads will appear here once processing completes.
+    </p>
+  ) : (
+    <div className="gallery" data-testid="gallery">
+      {visibleResults.map((item) => {
+        const key =
+          item._id || item.sslUrl || item.name || Math.random().toString();
+        const mime = item.mime ?? "";
+        const isVideo = mime.startsWith("video");
+        return (
+          <div className="card" key={key}>
+            {item.sslUrl ? (
+              isVideo ? (
+                // biome-ignore lint/a11y/useMediaCaption: demo clips have no caption tracks
+                <video src={item.sslUrl} controls />
+              ) : (
+                <img src={item.sslUrl} alt={item.name ?? "Uploaded"} />
+              )
+            ) : (
+              <div className="status">Result pending</div>
+            )}
+            <div className="meta">
+              <div>{item.name ?? "Untitled"}</div>
+              <div>{item.stepName ?? "processed"}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const LocalWeddingUploads = () => {
+  const [assemblyId, setAssemblyId] = useState<string | null>(null);
+  const [status, setStatus] = useState<string>("pending");
+  const [results, setResults] = useState<AssemblyResult[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [guestName, setGuestName] = useState("Guest");
+  const uppy = useWeddingUppy();
 
   const refreshResults = async (id: string, refresh = false) => {
     const params = new URLSearchParams({ assemblyId: id });
@@ -109,7 +241,7 @@ export default function WeddingUploads() {
       const response = await fetch("/api/assemblies", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileCount: files.length, guestName: "Guest" }),
+        body: JSON.stringify({ fileCount: files.length, guestName }),
       });
       if (!response.ok) {
         throw new Error("Failed to create assembly");
@@ -167,6 +299,141 @@ export default function WeddingUploads() {
   }, [assemblyId]);
 
   return (
+    <WeddingLayout
+      uppy={uppy}
+      guestName={guestName}
+      onGuestNameChange={setGuestName}
+      isUploading={isUploading}
+      onUpload={() => void startUpload()}
+      error={error}
+      assemblyId={assemblyId}
+      status={status}
+    >
+      <Gallery results={results} />
+    </WeddingLayout>
+  );
+};
+
+const CloudWeddingUploads = () => {
+  const [assemblyId, setAssemblyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [guestName, setGuestName] = useState("Guest");
+  const uppy = useWeddingUppy();
+  const { signIn } = useAuthActions();
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const createWeddingAssembly = useAction(createWeddingAssemblyRef);
+  const status = useQuery(
+    getAssemblyStatusRef,
+    assemblyId ? { assemblyId } : "skip",
+  );
+  const results = useQuery(
+    listResultsRef,
+    assemblyId ? { assemblyId } : "skip",
+  );
+  const assemblies = useQuery(listAssembliesRef, {
+    status: "ASSEMBLY_COMPLETED",
+    limit: 12,
+  });
+  const toasts = useUploadToasts(assemblies ?? undefined);
+
+  useEffect(() => {
+    if (isLoading || isAuthenticated) return;
+    void signIn("anonymous").catch(() => {});
+  }, [isLoading, isAuthenticated, signIn]);
+
+  const startUpload = async () => {
+    setError(null);
+    const files = uppy.getFiles();
+    if (!files.length) {
+      setError("Select at least one image or video.");
+      return;
+    }
+    if (!isAuthenticated) {
+      setError("Signing you in...");
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const assembly = await createWeddingAssembly({
+        fileCount: files.length,
+        guestName,
+      });
+      setAssemblyId(assembly.assemblyId);
+
+      const { tusUrl, assemblyUrl } = getAssemblyUrls(assembly.data);
+      if (!tusUrl || !assemblyUrl) {
+        throw new Error("Missing tus_url or assembly_url in response");
+      }
+
+      const tus = uppy.getPlugin("Tus");
+      if (tus) {
+        tus.setOptions({ endpoint: tusUrl });
+      }
+
+      for (const file of files) {
+        uppy.setFileMeta(file.id, {
+          assembly_url: assemblyUrl,
+          fieldname: "file",
+        });
+      }
+
+      await uppy.upload();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setError(message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <WeddingLayout
+      uppy={uppy}
+      guestName={guestName}
+      onGuestNameChange={setGuestName}
+      isUploading={isUploading}
+      onUpload={() => void startUpload()}
+      error={error}
+      assemblyId={assemblyId}
+      status={status?.ok ?? "pending"}
+      toasts={toasts}
+      authState={
+        isLoading ? "loading" : isAuthenticated ? "authenticated" : "guest"
+      }
+    >
+      <Gallery results={results ?? []} />
+    </WeddingLayout>
+  );
+};
+
+const WeddingLayout = ({
+  uppy,
+  guestName,
+  onGuestNameChange,
+  isUploading,
+  onUpload,
+  error,
+  assemblyId,
+  status,
+  toasts,
+  authState,
+  children,
+}: {
+  uppy: Uppy;
+  guestName: string;
+  onGuestNameChange: (value: string) => void;
+  isUploading: boolean;
+  onUpload: () => void;
+  error: string | null;
+  assemblyId: string | null;
+  status: string;
+  toasts?: Toast[];
+  authState?: "loading" | "authenticated" | "guest";
+  children: React.ReactNode;
+}) => {
+  return (
     <main className="page">
       <section className="panel">
         <h1 className="headline">Eden & Nico Wedding Gallery</h1>
@@ -174,6 +441,21 @@ export default function WeddingUploads() {
           Share your favorite moments — drop photos and short clips below and
           we’ll add them to the live gallery.
         </p>
+        {authState && authState !== "authenticated" && (
+          <p className="status">
+            {authState === "loading"
+              ? "Signing you in..."
+              : "Signing you in as a guest."}
+          </p>
+        )}
+        <label className="input">
+          <span>Your name</span>
+          <input
+            value={guestName}
+            onChange={(event) => onGuestNameChange(event.target.value)}
+            placeholder="Guest"
+          />
+        </label>
         <div data-testid="uppy-dashboard">
           <Dashboard
             uppy={uppy}
@@ -187,7 +469,7 @@ export default function WeddingUploads() {
           <button
             className="button"
             type="button"
-            onClick={() => void startUpload()}
+            onClick={onUpload}
             disabled={isUploading}
             data-testid="start-upload"
           >
@@ -212,47 +494,27 @@ export default function WeddingUploads() {
           Curated highlights from {weddingStepNames.image} and{" "}
           {weddingStepNames.video}.
         </p>
-        {visibleResults.length === 0 ? (
-          <p className="status" data-testid="gallery-empty">
-            Uploads will appear here once processing completes.
-          </p>
-        ) : (
-          <div className="gallery" data-testid="gallery">
-            {visibleResults.map((item) => {
-              const key =
-                item._id ||
-                item.sslUrl ||
-                item.name ||
-                Math.random().toString();
-              const mime = item.mime ?? "";
-              const isVideo = mime.startsWith("video");
-              return (
-                <div className="card" key={key}>
-                  {item.sslUrl ? (
-                    isVideo ? (
-                      // biome-ignore lint/a11y/useMediaCaption: demo clips have no caption tracks
-                      <video src={item.sslUrl} controls />
-                    ) : (
-                      <img src={item.sslUrl} alt={item.name ?? "Uploaded"} />
-                    )
-                  ) : (
-                    <div className="status">Result pending</div>
-                  )}
-                  <div className="meta">
-                    <div>{item.name ?? "Untitled"}</div>
-                    <div>{item.stepName ?? "processed"}</div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+        {children}
         <p className="status">
           Gallery shows the most recent uploads (set
-          NEXT_PUBLIC_GALLERY_RETENTION_HOURS). Configure R2 storage to persist
-          files; otherwise Transloadit temporary storage applies.
+          NEXT_PUBLIC_GALLERY_RETENTION_HOURS). Files are persisted in R2 via
+          Transloadit’s Cloudflare store robot.
         </p>
       </section>
+      {toasts && toasts.length > 0 && (
+        <div className="toast-stack" aria-live="polite">
+          {toasts.map((toast) => (
+            <div className="toast" key={toast.id}>
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
     </main>
   );
+};
+
+export default function WeddingUploads() {
+  const hasConvex = Boolean(process.env.NEXT_PUBLIC_CONVEX_URL);
+  return hasConvex ? <CloudWeddingUploads /> : <LocalWeddingUploads />;
 }

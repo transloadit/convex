@@ -53,6 +53,21 @@ body {
   color: #6b5b4f;
 }
 
+.input {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 0.95rem;
+  color: #5f4f43;
+}
+
+.input input {
+  border: 1px solid #e4d6c5;
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: 1rem;
+}
+
 .status {
   margin-top: 16px;
   padding: 12px 16px;
@@ -119,4 +134,22 @@ body {
   border-radius: 18px;
   border: 1px dashed #e4d6c5;
   background: #fffaf4;
+}
+
+.toast-stack {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: grid;
+  gap: 10px;
+  z-index: 40;
+}
+
+.toast {
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(28, 23, 18, 0.92);
+  color: #fff;
+  font-size: 0.9rem;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
 }

@@ -4,20 +4,11 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
-import { weddingStepNames } from "../../example/lib/transloadit";
 import { startExampleApp } from "./support/example-app.js";
 import { runtime } from "./support/runtime.js";
 import { sleep } from "./support/sleep.js";
 
-const {
-  authKey,
-  authSecret,
-  useRemote,
-  remoteUrl,
-  remoteAdminKey,
-  remoteAppUrl,
-  shouldRun,
-} = runtime;
+const { authKey, authSecret, useRemote, remoteAppUrl, shouldRun } = runtime;
 
 const fixturesDir = resolve("test/e2e/fixtures");
 
@@ -44,10 +35,15 @@ describeE2e("e2e upload flow", () => {
     app = await startExampleApp({
       env: {
         E2E_MODE: "local",
-        E2E_REMOTE_URL: remoteUrl,
-        E2E_REMOTE_ADMIN_KEY: remoteAdminKey,
         TRANSLOADIT_KEY: authKey,
         TRANSLOADIT_SECRET: authSecret,
+        TRANSLOADIT_R2_CREDENTIALS: process.env.TRANSLOADIT_R2_CREDENTIALS,
+        R2_BUCKET: process.env.R2_BUCKET,
+        R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
+        R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+        R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
+        R2_HOST: process.env.R2_HOST,
+        R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
       },
     });
     serverUrl = app.url;
@@ -149,68 +145,27 @@ describeE2e("e2e upload flow", () => {
       const assemblyId = assemblyText?.replace("ID:", "").trim() ?? "";
       expect(assemblyId).not.toBe("");
 
-      const fetchAssembly = async (refresh = false) => {
-        const params = new URLSearchParams({ assemblyId });
-        if (refresh) params.set("refresh", "1");
-        const response = await fetch(
-          `${serverUrl}/api/assemblies?${params.toString()}`,
-        );
-        if (!response.ok) {
-          throw new Error("Failed to fetch assembly results");
-        }
-        return (await response.json()) as {
-          status: { ok?: string } | null;
-          results: Array<{ stepName?: string; sslUrl?: string }>;
-        };
-      };
-
-      const waitForResults = async (timeoutMs: number) => {
-        const start = Date.now();
-        while (Date.now() - start < timeoutMs) {
-          const data = await fetchAssembly();
-          if (data.results.length > 0) {
-            return data;
-          }
+      const waitForStatus = async () => {
+        const deadline = Date.now() + timeouts.refresh;
+        while (Date.now() < deadline) {
+          const text = await readText('[data-testid="assembly-status"]');
+          if (text?.includes("ASSEMBLY_COMPLETED")) return;
           await sleep(2000);
         }
-        return null;
+        throw new Error("Timed out waiting for assembly completion");
       };
 
-      let data = await waitForResults(timeouts.results);
-      if (!data) {
-        data = await fetchAssembly(true);
-        const refreshDeadline = Date.now() + timeouts.refresh;
-        while (
-          Date.now() < refreshDeadline &&
-          (!data.results || data.results.length === 0)
-        ) {
-          await sleep(3000);
-          data = await fetchAssembly(true);
-        }
-      }
-
-      if (!data || data.results.length === 0) {
-        throw new Error("No processed results returned");
-      }
-
-      const image = data.results.find((result) =>
-        [weddingStepNames.image, "images_resized"].includes(
-          result.stepName ?? "",
-        ),
-      );
-      const video = data.results.find((result) =>
-        [weddingStepNames.video, "videos_encoded"].includes(
-          result.stepName ?? "",
-        ),
-      );
-
-      expect(image?.sslUrl).toMatch(/^https:\/\//);
-      expect(video?.sslUrl).toMatch(/^https:\/\//);
-      expect(data.status?.ok).toBe("ASSEMBLY_COMPLETED");
+      await waitForStatus();
 
       await page.waitForSelector('[data-testid="gallery"]', {
-        timeout: 30_000,
+        timeout: timeouts.results,
       });
+
+      const images = await page.$$('[data-testid="gallery"] img');
+      const videos = await page.$$('[data-testid="gallery"] video');
+
+      expect(images.length).toBeGreaterThan(0);
+      expect(videos.length).toBeGreaterThan(0);
     } catch (error) {
       if (consoleMessages.length) {
         console.log("Browser console logs:", consoleMessages);

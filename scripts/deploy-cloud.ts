@@ -60,40 +60,37 @@ const deployCloud = async () => {
     console.log(`Webhook URL: ${notifyUrl}`);
 
     console.log("Setting env vars on deployment...");
-    run(
-      "npx",
-      [
-        "convex",
-        "env",
-        "set",
-        "TRANSLOADIT_KEY",
-        requireEnv("TRANSLOADIT_KEY"),
-      ],
-      {
+    const deployEnv = {
+      ...process.env,
+      CONVEX_DEPLOY_KEY: requireEnv("CONVEX_DEPLOY_KEY"),
+    };
+    const setEnv = (name: string, value: string) => {
+      run("npx", ["convex", "env", "set", name, value], {
         cwd: projectDir,
-        env: {
-          ...process.env,
-          CONVEX_DEPLOY_KEY: requireEnv("CONVEX_DEPLOY_KEY"),
-        },
-      },
-    );
-    run(
-      "npx",
-      [
-        "convex",
-        "env",
-        "set",
-        "TRANSLOADIT_SECRET",
-        requireEnv("TRANSLOADIT_SECRET"),
-      ],
-      {
-        cwd: projectDir,
-        env: {
-          ...process.env,
-          CONVEX_DEPLOY_KEY: requireEnv("CONVEX_DEPLOY_KEY"),
-        },
-      },
-    );
+        env: deployEnv,
+      });
+    };
+
+    setEnv("TRANSLOADIT_KEY", requireEnv("TRANSLOADIT_KEY"));
+    setEnv("TRANSLOADIT_SECRET", requireEnv("TRANSLOADIT_SECRET"));
+    setEnv("TRANSLOADIT_NOTIFY_URL", notifyUrl);
+
+    const optionalEnv = [
+      "TRANSLOADIT_R2_CREDENTIALS",
+      "R2_BUCKET",
+      "R2_ACCESS_KEY_ID",
+      "R2_SECRET_ACCESS_KEY",
+      "R2_ACCOUNT_ID",
+      "R2_HOST",
+      "R2_PUBLIC_URL",
+    ];
+
+    for (const name of optionalEnv) {
+      const value = process.env[name];
+      if (value) {
+        setEnv(name, value);
+      }
+    }
   } finally {
     if (qaDir) {
       await rm(qaDir, { recursive: true, force: true });

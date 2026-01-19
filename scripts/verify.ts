@@ -23,8 +23,6 @@ const runBrowser = async (options: {
   mode: Mode;
   remote?: {
     appUrl: string;
-    convexUrl: string;
-    convexAdminKey: string;
   };
 }) => {
   const skipInstall = process.env.PLAYWRIGHT_SKIP_INSTALL === "1";
@@ -42,8 +40,6 @@ const runBrowser = async (options: {
 
   if (options.remote) {
     testEnv.E2E_REMOTE_APP_URL = options.remote.appUrl;
-    testEnv.E2E_REMOTE_URL = options.remote.convexUrl;
-    testEnv.E2E_REMOTE_ADMIN_KEY = options.remote.convexAdminKey;
   }
 
   run("yarn", ["exec", "vitest", "run", "--config", "vitest.e2e.config.ts"], {
@@ -57,20 +53,8 @@ const resolveCloudConfig = () => {
   if (!appUrl) {
     throw new Error("Missing E2E_REMOTE_APP_URL");
   }
-  const convexUrl = process.env.E2E_REMOTE_URL ?? process.env.CONVEX_URL ?? "";
-  if (!convexUrl) {
-    throw new Error("Missing E2E_REMOTE_URL or CONVEX_URL");
-  }
-  const convexAdminKey =
-    process.env.E2E_REMOTE_ADMIN_KEY ?? process.env.CONVEX_ADMIN_KEY ?? "";
-  if (!convexAdminKey) {
-    throw new Error("Missing E2E_REMOTE_ADMIN_KEY or CONVEX_ADMIN_KEY");
-  }
-
   return {
     appUrl,
-    convexUrl,
-    convexAdminKey,
   };
 };
 

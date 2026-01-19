@@ -3,6 +3,7 @@ import { convexTest } from "convex-test";
 import { api } from "../../src/component/_generated/api.ts";
 import schema from "../../src/component/schema.ts";
 import { modules } from "../../src/test/nodeModules.ts";
+import { buildWeddingSteps } from "./transloadit-steps";
 
 type Mode = "local" | "cloud";
 
@@ -37,7 +38,11 @@ export const runAction = async (
   args: Record<string, unknown>,
 ) => {
   if (remoteClient) {
-    return remoteClient.action(`transloadit:${name}`, args);
+    const remoteName =
+      name === "createWeddingAssembly"
+        ? "wedding:createWeddingAssembly"
+        : `transloadit:${name}`;
+    return remoteClient.action(remoteName, args);
   }
 
   if (mode === "cloud") {
@@ -49,6 +54,29 @@ export const runAction = async (
   }
 
   const config = authKey && authSecret ? { authKey, authSecret } : undefined;
+
+  if (name === "createWeddingAssembly") {
+    const notifyUrl = process.env.TRANSLOADIT_NOTIFY_URL;
+    if (!notifyUrl) {
+      throw new Error("Missing TRANSLOADIT_NOTIFY_URL");
+    }
+    const fileCount =
+      typeof args.fileCount === "number" ? Math.max(1, args.fileCount) : 1;
+    const guestName =
+      typeof args.guestName === "string" ? args.guestName : "Guest";
+
+    return testClient.action(api.lib.createAssembly, {
+      steps: buildWeddingSteps(),
+      notifyUrl,
+      numExpectedUploadFiles: fileCount,
+      fields: {
+        guestName,
+        album: "wedding-gallery",
+        fileCount,
+      },
+      config,
+    });
+  }
 
   if (name === "createAssembly") {
     return testClient.action(api.lib.createAssembly, { ...args, config });

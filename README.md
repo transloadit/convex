@@ -225,8 +225,8 @@ const status = useAssemblyStatusWithPolling(
 
 ## Example app (Next.js + Uppy wedding gallery)
 
-The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on the client and a Next API route that talks to Convex. If you do not set `CONVEX_URL`/`CONVEX_ADMIN_KEY`, the example uses the in-process Convex test harness.
-Uploads are stored via Transloadit and can optionally be persisted to Cloudflare R2.
+The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on the client and Convex Auth (anonymous sign-in) to create assemblies securely. If you do not set `NEXT_PUBLIC_CONVEX_URL`, the example falls back to the in-process Convex test harness.
+Uploads are stored via Transloadit directly into Cloudflare R2.
 
 Quick start (local):
 
@@ -234,6 +234,7 @@ Quick start (local):
 # In repo root
 export TRANSLOADIT_KEY=...
 export TRANSLOADIT_SECRET=...
+export TRANSLOADIT_R2_CREDENTIALS=...
 
 # Get a public webhook URL (cloudflared is auto-downloaded if needed)
 yarn tunnel --once
@@ -243,7 +244,7 @@ export TRANSLOADIT_NOTIFY_URL=...
 yarn example:dev
 ```
 
-If you want the API routes to talk to an existing Convex deployment, set:
+If you want the API routes to talk to an existing Convex deployment (bypassing Convex Auth), set:
 
 ```bash
 export CONVEX_URL=...
@@ -251,16 +252,18 @@ export CONVEX_ADMIN_KEY=...
 ```
 
 The example exposes `POST /transloadit/webhook` and forwards webhooks into Convex via `queueWebhook`.
+Realtime “new upload” toasts use a Convex subscription on recent assemblies.
+The demo also applies a simple per-user upload limit in the Convex backend (see `wedding.ts` in the QA template).
 
-### Storage (optional R2 persistence)
+### Storage (required R2 persistence)
 
-By default, the example uses Transloadit hosted storage. To persist uploads, configure Cloudflare R2 and the `/cloudflare/store` robot:
+The example uses the `/cloudflare/store` robot to write processed files into Cloudflare R2. Configure one of these:
 
 ```bash
-# Either use Transloadit credentials (recommended)
+# Option A: Transloadit template credentials (recommended)
 export TRANSLOADIT_R2_CREDENTIALS=...
 
-# Or supply R2 details directly
+# Option B: supply R2 details directly
 export R2_BUCKET=...
 export R2_ACCESS_KEY_ID=...
 export R2_SECRET_ACCESS_KEY=...
@@ -276,10 +279,13 @@ For a public demo, deploy the `example/` app and point it at a stable Convex dep
 
 1. Deploy a Convex app that includes this component (stable/prod deployment).
 2. Set Vercel environment variables for the project:
-   - `CONVEX_URL` and `CONVEX_ADMIN_KEY` (point to the stable Convex deployment)
+   - `NEXT_PUBLIC_CONVEX_URL` (point to the stable Convex deployment)
+   - `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (optional)
+3. Set Convex environment variables on the deployment:
+   - `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`
    - `TRANSLOADIT_NOTIFY_URL` (set to `https://<deployment>.convex.site/transloadit/webhook`)
-   - Optional R2 variables (see above) and `NEXT_PUBLIC_GALLERY_RETENTION_HOURS`
-3. Trigger the Vercel deploy hook (or deploy manually).
+   - R2 credentials (see above)
+4. Trigger the Vercel deploy hook (or deploy manually).
 
 To deploy a stable Convex backend for the demo (once per environment), run:
 
@@ -314,15 +320,15 @@ Additional commands:
 - `yarn typecheck` (tsc)
 - `yarn test` (Vitest unit tests)
 - `yarn verify:local` (runs the Next.js wedding example + uploads an image + video)
-- `yarn verify:cloud` (runs the browser flow against a deployed Next.js app + Convex cloud backend)
+- `yarn verify:cloud` (runs the browser flow against a deployed Next.js app)
 - `yarn deploy:cloud` (deploys a stable Convex backend for the demo app)
 - `yarn build` (tsc build + emit package json)
 
 Notes:
 - `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
-- `yarn verify:local` needs `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`.
-- `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`, `CONVEX_URL`, and `CONVEX_ADMIN_KEY`.
+- `yarn verify:local` needs `TRANSLOADIT_KEY`, `TRANSLOADIT_SECRET`, and R2 credentials.
+- `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`.
 
 ## Component test helpers
 
