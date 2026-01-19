@@ -10,6 +10,15 @@ import { sleep } from "./support/sleep.js";
 
 const { authKey, authSecret, useRemote, remoteAppUrl, shouldRun } = runtime;
 
+type DebugUppy = {
+  getFiles?: () => unknown[];
+  getPlugin?: (name: string) => { opts?: { endpoint?: string | null } } | null;
+  getState?: () => {
+    currentUploads?: Record<string, unknown>;
+    uploads?: unknown;
+  };
+};
+
 const fixturesDir = resolve("test/e2e/fixtures");
 
 const describeE2e = shouldRun ? describe : describe.skip;
@@ -183,6 +192,14 @@ describeE2e("e2e upload flow", () => {
       const fileInput = page.locator('input[type="file"]').first();
       await fileInput.waitFor({ state: "attached" });
       await fileInput.setInputFiles([imagePath, videoPath]);
+      await page.waitForFunction(
+        () =>
+          (
+            window as { __uppy?: { getFiles: () => unknown[] } }
+          ).__uppy?.getFiles?.().length === 2,
+        undefined,
+        { timeout: 10_000 },
+      );
       await page.click('[data-testid="start-upload"]');
 
       const readText = async (selector: string) => {
@@ -289,6 +306,29 @@ describeE2e("e2e upload flow", () => {
     } catch (error) {
       if (consoleMessages.length) {
         console.log("Browser console logs:", consoleMessages);
+      }
+      const uppyState = await page
+        .evaluate(() => {
+          const uppy = (window as { __uppy?: DebugUppy }).__uppy;
+          if (!uppy) return null;
+          const state = uppy.getState?.() ?? {};
+          return {
+            fileCount: uppy.getFiles?.().length ?? 0,
+            hasTusPlugin: Boolean(uppy.getPlugin?.("Tus")),
+            tusEndpoint: uppy.getPlugin?.("Tus")?.opts?.endpoint ?? null,
+            uploadState: state.uploads ?? null,
+            currentUploads: state.currentUploads ?? null,
+            files: uppy.getFiles?.().map((file) => ({
+              id: (file as { id?: string }).id ?? "",
+              tusEndpoint:
+                (file as { tus?: { endpoint?: string | null } }).tus
+                  ?.endpoint ?? null,
+            })),
+          };
+        })
+        .catch(() => null);
+      if (uppyState) {
+        console.log("Uppy state:", uppyState);
       }
       if (requestFailures.length) {
         console.log("Browser request failures:", requestFailures);

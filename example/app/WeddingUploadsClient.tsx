@@ -45,6 +45,15 @@ type Toast = {
   message: string;
 };
 
+type UploadResult = {
+  successful?: Array<{ id: string; name?: string }>;
+  failed?: Array<{
+    id: string;
+    name?: string;
+    error?: { message?: string };
+  }>;
+};
+
 const retentionHours = Number.parseFloat(
   process.env.NEXT_PUBLIC_GALLERY_RETENTION_HOURS ?? "24",
 );
@@ -64,14 +73,10 @@ const filterResults = (results: AssemblyResult[]) => {
 };
 
 const getAssemblyUrls = (data: Record<string, unknown>) => {
-  const tusUrl =
-    (typeof data.tus_url === "string" && data.tus_url) ||
-    (typeof data.tusUrl === "string" && data.tusUrl) ||
-    "";
+  const tusUrl = typeof data.tus_url === "string" ? data.tus_url : "";
   const assemblyUrl =
     (typeof data.assembly_ssl_url === "string" && data.assembly_ssl_url) ||
     (typeof data.assembly_url === "string" && data.assembly_url) ||
-    (typeof data.assemblyUrl === "string" && data.assemblyUrl) ||
     "";
   return { tusUrl, assemblyUrl };
 };
@@ -88,8 +93,14 @@ const useWeddingUppy = () => {
   );
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as { __uppy?: Uppy }).__uppy = uppy;
+    }
     return () => {
-      uppy.destroy();
+      // Avoid StrictMode dev cleanup nuking plugins on the shared instance.
+      if (process.env.NODE_ENV === "production") {
+        uppy.destroy();
+      }
     };
   }, [uppy]);
 
@@ -148,6 +159,19 @@ const useUploadToasts = (assemblies: AssemblySummary[] | undefined) => {
   }, [assemblies]);
 
   return toasts;
+};
+
+const formatUploadFailure = (result: UploadResult) => {
+  const failed = result.failed ?? [];
+  if (failed.length === 0) return null;
+  const summary = failed
+    .map((file) => {
+      const name = file.name ?? file.id;
+      const message = file.error?.message ?? "Unknown error";
+      return `${name}: ${message}`;
+    })
+    .join("; ");
+  return `Upload failed (${failed.length} file${failed.length === 1 ? "" : "s"}). ${summary}`;
 };
 
 const createWeddingAssemblyRef = makeFunctionReference<
@@ -267,18 +291,30 @@ const LocalWeddingUploads = () => {
       }
 
       const tus = uppy.getPlugin("Tus");
-      if (tus) {
-        tus.setOptions({ endpoint: tusUrl });
+      if (tus && "setOptions" in tus) {
+        tus.setOptions({ endpoint: tusUrl, addRequestId: true });
       }
 
       for (const file of files) {
         uppy.setFileMeta(file.id, {
           assembly_url: assemblyUrl,
           fieldname: "file",
+          filename: file.name,
+        });
+        uppy.setFileState(file.id, {
+          tus: {
+            ...(file.tus ?? {}),
+            endpoint: tusUrl,
+            addRequestId: true,
+          },
         });
       }
 
-      await uppy.upload();
+      const result = (await uppy.upload()) as UploadResult;
+      const failure = formatUploadFailure(result);
+      if (failure) {
+        throw new Error(failure);
+      }
       await refreshResults(assembly.assemblyId, true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -384,18 +420,30 @@ const CloudWeddingUploads = () => {
       }
 
       const tus = uppy.getPlugin("Tus");
-      if (tus) {
-        tus.setOptions({ endpoint: tusUrl });
+      if (tus && "setOptions" in tus) {
+        tus.setOptions({ endpoint: tusUrl, addRequestId: true });
       }
 
       for (const file of files) {
         uppy.setFileMeta(file.id, {
           assembly_url: assemblyUrl,
           fieldname: "file",
+          filename: file.name,
+        });
+        uppy.setFileState(file.id, {
+          tus: {
+            ...(file.tus ?? {}),
+            endpoint: tusUrl,
+            addRequestId: true,
+          },
         });
       }
 
-      await uppy.upload();
+      const result = (await uppy.upload()) as UploadResult;
+      const failure = formatUploadFailure(result);
+      if (failure) {
+        throw new Error(failure);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed";
       setError(message);

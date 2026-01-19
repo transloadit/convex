@@ -55,7 +55,14 @@ const resolveCloudConfig = () => {
   const appUrl =
     process.env.E2E_REMOTE_APP_URL ?? process.env.E2E_APP_URL ?? "";
   if (!appUrl) {
-    throw new Error("Missing E2E_REMOTE_APP_URL");
+    if (!process.env.CI) {
+      throw new Error(
+        "E2E_REMOTE_APP_URL is required for local verify:cloud (CI resolves it automatically).",
+      );
+    }
+    throw new Error(
+      "Missing E2E_REMOTE_APP_URL (CI should resolve it via resolve-vercel-preview).",
+    );
   }
   const convexUrl = process.env.E2E_REMOTE_CONVEX_URL ?? "";
   return {

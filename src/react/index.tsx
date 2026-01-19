@@ -101,10 +101,7 @@ export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
 
         const data = assembly.data as Record<string, unknown>;
         options.onAssemblyCreated?.(assembly);
-        const tusUrl =
-          (typeof data.tus_url === "string" && data.tus_url) ||
-          (typeof data.tusUrl === "string" && data.tusUrl) ||
-          "";
+        const tusUrl = typeof data.tus_url === "string" ? data.tus_url : "";
 
         if (!tusUrl) {
           throw new Error(
@@ -116,7 +113,6 @@ export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
           (typeof data.assembly_ssl_url === "string" &&
             data.assembly_ssl_url) ||
           (typeof data.assembly_url === "string" && data.assembly_url) ||
-          (typeof data.assemblyUrl === "string" && data.assemblyUrl) ||
           "";
 
         if (!assemblyUrl) {
