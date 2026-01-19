@@ -113,6 +113,9 @@
     "typescript": "^5.9.3",
     "vitest": "^4.0.17"
   },
+  "resolutions": {
+    "preact": "10.28.2"
+  },
   "types": "./dist/client/index.d.ts",
   "module": "./dist/client/index.js"
 }
