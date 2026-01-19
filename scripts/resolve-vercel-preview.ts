@@ -7,6 +7,7 @@ const deployHook = process.env.VERCEL_PREVIEW_DEPLOY_HOOK ?? "";
 const githubToken = process.env.GITHUB_TOKEN ?? "";
 const githubRepo = process.env.GITHUB_REPOSITORY ?? "";
 const githubSha = process.env.GITHUB_SHA ?? "";
+const githubEventPath = process.env.GITHUB_EVENT_PATH ?? "";
 
 if (!githubToken) {
   throw new Error("Missing GITHUB_TOKEN");
@@ -93,6 +94,47 @@ const fetchCheckRunUrl = async (): Promise<string | null> => {
   return vercelCheck?.details_url ?? null;
 };
 
+const fetchPreviewUrlFromComments = async (): Promise<string | null> => {
+  if (!githubEventPath) return null;
+  try {
+    const eventRaw = await import("node:fs").then((fs) =>
+      fs.readFileSync(githubEventPath, "utf8"),
+    );
+    const event = JSON.parse(eventRaw) as {
+      pull_request?: { number?: number };
+    };
+    const prNumber = event.pull_request?.number;
+    if (!prNumber) return null;
+
+    const response = await fetch(
+      `${apiBase}/repos/${githubRepo}/issues/${prNumber}/comments`,
+      { headers },
+    );
+    if (!response.ok) return null;
+    const comments = (await response.json()) as Array<{
+      user?: { login?: string };
+      body?: string;
+    }>;
+    const vercelComment = comments.find(
+      (comment) => comment.user?.login === "vercel[bot]",
+    );
+    if (!vercelComment?.body) return null;
+    const match = vercelComment.body.match(/\[vc\]: #[^:]+:([A-Za-z0-9+/=]+)/);
+    if (!match?.[1]) return null;
+    const payload = JSON.parse(
+      Buffer.from(match[1], "base64").toString("utf8"),
+    ) as {
+      projects?: Array<{ previewUrl?: string }>;
+    };
+    const previewUrl = payload.projects?.find(
+      (project) => project.previewUrl,
+    )?.previewUrl;
+    return previewUrl ?? null;
+  } catch {
+    return null;
+  }
+};
+
 await triggerPreviewDeploy();
 
 const deadline = Date.now() + 6 * 60 * 1000;
@@ -106,6 +148,12 @@ while (Date.now() < deadline) {
   const checkUrl = await fetchCheckRunUrl();
   if (checkUrl) {
     process.stdout.write(checkUrl);
+    process.exit(0);
+  }
+
+  const commentUrl = await fetchPreviewUrlFromComments();
+  if (commentUrl) {
+    process.stdout.write(commentUrl);
     process.exit(0);
   }
 
