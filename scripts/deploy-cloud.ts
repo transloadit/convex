@@ -80,11 +80,23 @@ const deployCloud = async () => {
       const attempts = 3;
       for (let attempt = 1; attempt <= attempts; attempt += 1) {
         try {
-          run("npx", ["convex", "env", "set", name, value], {
-            cwd: projectDir,
-            env: deployEnv,
-            stdio: runStdio,
-          });
+          run(
+            "npx",
+            [
+              "convex",
+              "env",
+              "set",
+              "--deployment-name",
+              deploymentName,
+              name,
+              value,
+            ],
+            {
+              cwd: projectDir,
+              env: deployEnv,
+              stdio: runStdio,
+            },
+          );
           return;
         } catch (error) {
           if (attempt === attempts) {
