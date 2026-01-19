@@ -21,6 +21,7 @@ type AssemblyResult = {
   name?: string;
   mime?: string;
   stepName?: string;
+  createdAt?: number;
 };
 
 const getAssemblyUrls = (data: Record<string, unknown>) => {
@@ -42,6 +43,13 @@ export default function WeddingUploads() {
   const [results, setResults] = useState<AssemblyResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  const retentionMs = 23 * 60 * 60 * 1000;
+  // Transloadit hosted storage is temporary; hide older entries to avoid 404s.
+  const visibleResults = results.filter((item) => {
+    if (typeof item.createdAt !== "number") return true;
+    return Date.now() - item.createdAt < retentionMs;
+  });
 
   const uppy = useMemo(
     () =>
@@ -192,13 +200,13 @@ export default function WeddingUploads() {
           Curated highlights from {weddingStepNames.image} and{" "}
           {weddingStepNames.video}.
         </p>
-        {results.length === 0 ? (
+        {visibleResults.length === 0 ? (
           <p className="status" data-testid="gallery-empty">
             Uploads will appear here once processing completes.
           </p>
         ) : (
           <div className="gallery" data-testid="gallery">
-            {results.map((item) => {
+            {visibleResults.map((item) => {
               const key =
                 item._id ||
                 item.sslUrl ||
@@ -227,6 +235,10 @@ export default function WeddingUploads() {
             })}
           </div>
         )}
+        <p className="status">
+          Files are stored in Transloadit temporary storage and expire after ~24
+          hours. Add a storage robot (S3, GCS, etc.) to persist uploads.
+        </p>
       </section>
     </main>
   );

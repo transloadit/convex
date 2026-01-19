@@ -1,4 +1,6 @@
 export const weddingSteps = {
+  // These steps use Transloadit's hosted storage (temporary). Add a storage
+  // robot (e.g. /s3/store) to persist uploads beyond ~24 hours.
   ":original": {
     robot: "/upload/handle",
   },
