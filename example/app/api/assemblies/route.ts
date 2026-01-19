@@ -5,6 +5,7 @@ export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as {
     fileCount?: number;
     guestName?: string;
+    uploadCode?: string;
   };
   const fileCount = Number.isFinite(payload.fileCount)
     ? Math.max(1, payload.fileCount ?? 1)
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
   const response = await runAction("createWeddingAssembly", {
     fileCount,
     guestName: payload.guestName ?? "Guest",
+    uploadCode: payload.uploadCode,
   });
 
   return NextResponse.json(response);

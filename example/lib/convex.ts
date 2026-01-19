@@ -64,6 +64,14 @@ export const runAction = async (
       typeof args.fileCount === "number" ? Math.max(1, args.fileCount) : 1;
     const guestName =
       typeof args.guestName === "string" ? args.guestName : "Guest";
+    const requiredCode = process.env.WEDDING_UPLOAD_CODE;
+    if (requiredCode) {
+      const provided =
+        typeof args.uploadCode === "string" ? args.uploadCode.trim() : "";
+      if (!provided || provided !== requiredCode) {
+        throw new Error("Upload code required.");
+      }
+    }
 
     return testClient.action(api.lib.createAssembly, {
       steps: buildWeddingSteps(),

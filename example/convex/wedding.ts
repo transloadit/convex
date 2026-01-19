@@ -55,6 +55,7 @@ export const createWeddingAssembly = action({
   args: {
     fileCount: v.number(),
     guestName: v.optional(v.string()),
+    uploadCode: v.optional(v.string()),
   },
   returns: v.object({
     assemblyId: v.string(),
@@ -67,6 +68,14 @@ export const createWeddingAssembly = action({
     }
 
     await ctx.runMutation(checkUploadLimit, { userId: identity.subject });
+
+    const requiredCode = process.env.WEDDING_UPLOAD_CODE;
+    if (requiredCode) {
+      const provided = args.uploadCode?.trim();
+      if (!provided || provided !== requiredCode) {
+        throw new Error("Upload code required.");
+      }
+    }
 
     const steps = buildWeddingSteps();
     const notifyUrl = requireEnv("TRANSLOADIT_NOTIFY_URL");

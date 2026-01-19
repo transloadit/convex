@@ -211,6 +211,7 @@ const LocalWeddingUploads = () => {
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [guestName, setGuestName] = useState("Guest");
+  const [uploadCode, setUploadCode] = useState("");
   const uppy = useWeddingUppy();
 
   const refreshResults = async (id: string, refresh = false) => {
@@ -241,7 +242,11 @@ const LocalWeddingUploads = () => {
       const response = await fetch("/api/assemblies", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ fileCount: files.length, guestName }),
+        body: JSON.stringify({
+          fileCount: files.length,
+          guestName,
+          uploadCode,
+        }),
       });
       if (!response.ok) {
         throw new Error("Failed to create assembly");
@@ -303,6 +308,8 @@ const LocalWeddingUploads = () => {
       uppy={uppy}
       guestName={guestName}
       onGuestNameChange={setGuestName}
+      uploadCode={uploadCode}
+      onUploadCodeChange={setUploadCode}
       isUploading={isUploading}
       onUpload={() => void startUpload()}
       error={error}
@@ -319,6 +326,7 @@ const CloudWeddingUploads = () => {
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [guestName, setGuestName] = useState("Guest");
+  const [uploadCode, setUploadCode] = useState("");
   const uppy = useWeddingUppy();
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();
@@ -359,6 +367,7 @@ const CloudWeddingUploads = () => {
       const assembly = await createWeddingAssembly({
         fileCount: files.length,
         guestName,
+        uploadCode,
       });
       setAssemblyId(assembly.assemblyId);
 
@@ -393,6 +402,8 @@ const CloudWeddingUploads = () => {
       uppy={uppy}
       guestName={guestName}
       onGuestNameChange={setGuestName}
+      uploadCode={uploadCode}
+      onUploadCodeChange={setUploadCode}
       isUploading={isUploading}
       onUpload={() => void startUpload()}
       error={error}
@@ -412,6 +423,8 @@ const WeddingLayout = ({
   uppy,
   guestName,
   onGuestNameChange,
+  uploadCode,
+  onUploadCodeChange,
   isUploading,
   onUpload,
   error,
@@ -424,6 +437,8 @@ const WeddingLayout = ({
   uppy: Uppy;
   guestName: string;
   onGuestNameChange: (value: string) => void;
+  uploadCode: string;
+  onUploadCodeChange: (value: string) => void;
   isUploading: boolean;
   onUpload: () => void;
   error: string | null;
@@ -454,6 +469,15 @@ const WeddingLayout = ({
             value={guestName}
             onChange={(event) => onGuestNameChange(event.target.value)}
             placeholder="Guest"
+          />
+        </label>
+        <label className="input">
+          <span>Upload code (optional)</span>
+          <input
+            value={uploadCode}
+            onChange={(event) => onUploadCodeChange(event.target.value)}
+            placeholder="Ask the couple for the code"
+            type="password"
           />
         </label>
         <div data-testid="uppy-dashboard">

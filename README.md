@@ -272,6 +272,7 @@ export R2_PUBLIC_URL=...   # optional public URL prefix
 ```
 
 The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default: 24) to discourage spam/abuse.
+If you set `WEDDING_UPLOAD_CODE` on the Convex deployment, guests must enter the passcode before uploads can start.
 
 ### Deploy the example (Vercel + stable Convex)
 
@@ -285,6 +286,7 @@ For a public demo, deploy the `example/` app and point it at a stable Convex dep
    - `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`
    - `TRANSLOADIT_NOTIFY_URL` (set to `https://<deployment>.convex.site/transloadit/webhook`)
    - R2 credentials (see above)
+   - `WEDDING_UPLOAD_CODE` (optional passcode for uploads)
 4. Trigger the Vercel deploy hook (or deploy manually).
 
 To deploy a stable Convex backend for the demo (once per environment), run:
