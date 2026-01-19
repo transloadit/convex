@@ -169,3 +169,25 @@ jobs:
       - run: npm install -g npm@^11.5.1
       - run: npm publish *.tgz --provenance
         if: steps.npm_check.outputs.already_published != 'true'
+
+  deploy-example:
+    name: Deploy example (Vercel)
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs:
+      - pack
+      - biome
+      - typescript
+      - unit
+      - browser
+      - convex-qa
+    steps:
+      - name: Trigger Vercel deploy hook
+        run: |
+          if [ -z "${VERCEL_DEPLOY_HOOK}" ]; then
+            echo "VERCEL_DEPLOY_HOOK missing" >&2
+            exit 1
+          fi
+          curl -fsSL -X POST "${VERCEL_DEPLOY_HOOK}"
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
