@@ -1,7 +1,7 @@
-import { action, internalMutation } from "convex/server";
 import { v } from "convex/values";
 import { buildWeddingSteps } from "../lib/transloadit-steps";
 import { components } from "./_generated/api";
+import { action, internalMutation } from "./_generated/server";
 
 const MAX_UPLOADS_PER_HOUR = 6;
 const WINDOW_MS = 60 * 60 * 1000;

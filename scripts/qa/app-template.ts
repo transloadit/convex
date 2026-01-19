@@ -228,7 +228,7 @@ export const writeAppFiles = async ({
   await writeFile(
     join(convexDir, "wedding.ts"),
     [
-      'import { action, internalMutation } from "convex/server";',
+      'import { action, internalMutation } from "./_generated/server";',
       'import { v } from "convex/values";',
       'import { components } from "./_generated/api";',
       "",
