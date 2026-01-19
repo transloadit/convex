@@ -1,4 +1,4 @@
-import WeddingUploadsClient from "./WeddingUploadsClient";
+import WeddingUploadsApp from "./WeddingUploadsApp";
 
 export const dynamic = "force-dynamic";
 
@@ -13,5 +13,5 @@ export default async function WeddingUploadsPage({
     process.env.NEXT_PUBLIC_CONVEX_URL ??
     process.env.CONVEX_URL ??
     null;
-  return <WeddingUploadsClient convexUrl={convexUrl} />;
+  return <WeddingUploadsApp convexUrl={convexUrl} />;
 }
