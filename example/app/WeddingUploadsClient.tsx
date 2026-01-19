@@ -543,13 +543,19 @@ export default function WeddingUploadsClient({
 }: {
   convexUrl?: string | null;
 }) {
-  const hasConvex = Boolean(convexUrl);
+  const resolvedConvexUrl = useMemo(() => {
+    if (convexUrl) return convexUrl;
+    if (typeof window === "undefined") return null;
+    const params = new URLSearchParams(window.location.search);
+    return params.get("convexUrl");
+  }, [convexUrl]);
+  const hasConvex = Boolean(resolvedConvexUrl);
   if (!hasConvex) {
     return <LocalWeddingUploads />;
   }
 
   return (
-    <Providers convexUrl={convexUrl ?? ""}>
+    <Providers convexUrl={resolvedConvexUrl ?? ""}>
       <CloudWeddingUploads />
     </Providers>
   );
