@@ -226,6 +226,7 @@ const status = useAssemblyStatusWithPolling(
 ## Example app (Next.js + Uppy wedding gallery)
 
 The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on the client and a Next API route that talks to Convex. If you do not set `CONVEX_URL`/`CONVEX_ADMIN_KEY`, the example uses the in-process Convex test harness.
+Uploads in this demo use Transloadit hosted storage (temporary, ~24 hours). Preview deployments reset the gallery on each deploy; add a storage robot (S3/GCS/etc.) to persist files.
 
 Quick start (local):
 
