@@ -456,7 +456,11 @@ const WeddingLayout = ({
   children: React.ReactNode;
 }) => {
   return (
-    <main className="page" data-auth-state={authState ?? "local"}>
+    <main
+      className="page"
+      data-auth-state={authState ?? "local"}
+      suppressHydrationWarning
+    >
       <section className="panel">
         <h1 className="headline">Eden & Nico Wedding Gallery</h1>
         <p className="subhead">
