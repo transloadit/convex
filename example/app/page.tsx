@@ -472,11 +472,11 @@ const WeddingLayout = ({
           />
         </label>
         <label className="input">
-          <span>Upload code (optional)</span>
+          <span>Invite code</span>
           <input
             value={uploadCode}
             onChange={(event) => onUploadCodeChange(event.target.value)}
-            placeholder="Ask the couple for the code"
+            placeholder="Optional if the couple shared one"
             type="password"
           />
         </label>
