@@ -144,15 +144,24 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
       - name: Ensure cloud QA secrets
         run: |
+          missing=()
           if [ -z "${E2E_REMOTE_APP_URL}" ]; then
-            echo "Missing secrets: E2E_REMOTE_APP_URL" >&2
+            missing+=("E2E_REMOTE_APP_URL")
+          fi
+          if [ -z "${VERCEL_PROTECTION_BYPASS}" ]; then
+            missing+=("VERCEL_PROTECTION_BYPASS")
+          fi
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "Missing secrets: ${missing[*]}" >&2
             exit 1
           fi
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
+          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
       - run: yarn verify:cloud
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
+          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
 
   release:
     name: Publish to npm

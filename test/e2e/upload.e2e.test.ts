@@ -20,6 +20,7 @@ describeE2e("e2e upload flow", () => {
     results: 180_000,
     refresh: 240_000,
   };
+  const vercelBypassToken = process.env.VERCEL_PROTECTION_BYPASS ?? "";
   let serverUrl = "";
   let app: Awaited<ReturnType<typeof startExampleApp>> | null = null;
 
@@ -28,7 +29,20 @@ describeE2e("e2e upload flow", () => {
       if (!remoteAppUrl) {
         throw new Error("Missing E2E_REMOTE_APP_URL for cloud e2e run");
       }
+      if (!vercelBypassToken) {
+        throw new Error(
+          "Missing VERCEL_PROTECTION_BYPASS for cloud preview access",
+        );
+      }
       serverUrl = remoteAppUrl.replace(/\/$/, "");
+      if (vercelBypassToken) {
+        const parsed = new URL(serverUrl);
+        parsed.searchParams.set(
+          "__vercel_protection_bypass",
+          vercelBypassToken,
+        );
+        serverUrl = parsed.toString();
+      }
       return;
     }
 
@@ -85,6 +99,13 @@ describeE2e("e2e upload flow", () => {
     });
 
     try {
+      if (useRemote && vercelBypassToken) {
+        await page.setExtraHTTPHeaders({
+          "x-vercel-protection-bypass": vercelBypassToken,
+          "x-vercel-set-bypass-cookie": "true",
+        });
+      }
+
       await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
 
       const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
