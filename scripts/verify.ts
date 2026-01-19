@@ -23,6 +23,7 @@ const runBrowser = async (options: {
   mode: Mode;
   remote?: {
     appUrl: string;
+    convexUrl?: string;
   };
 }) => {
   const skipInstall = process.env.PLAYWRIGHT_SKIP_INSTALL === "1";
@@ -40,6 +41,9 @@ const runBrowser = async (options: {
 
   if (options.remote) {
     testEnv.E2E_REMOTE_APP_URL = options.remote.appUrl;
+    if (options.remote.convexUrl) {
+      testEnv.E2E_REMOTE_CONVEX_URL = options.remote.convexUrl;
+    }
   }
 
   run("yarn", ["exec", "vitest", "run", "--config", "vitest.e2e.config.ts"], {
@@ -53,8 +57,10 @@ const resolveCloudConfig = () => {
   if (!appUrl) {
     throw new Error("Missing E2E_REMOTE_APP_URL");
   }
+  const convexUrl = process.env.E2E_REMOTE_CONVEX_URL ?? "";
   return {
     appUrl,
+    convexUrl,
   };
 };
 

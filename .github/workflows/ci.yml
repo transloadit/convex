@@ -148,6 +148,9 @@ jobs:
           if [ -z "${E2E_REMOTE_APP_URL}" ]; then
             missing+=("E2E_REMOTE_APP_URL")
           fi
+          if [ -z "${E2E_REMOTE_CONVEX_URL}" ]; then
+            missing+=("E2E_REMOTE_CONVEX_URL")
+          fi
           if [ -z "${VERCEL_PROTECTION_BYPASS}" ]; then
             missing+=("VERCEL_PROTECTION_BYPASS")
           fi
@@ -157,10 +160,12 @@ jobs:
           fi
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
+          E2E_REMOTE_CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
       - run: yarn verify:cloud
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
+          E2E_REMOTE_CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
 
   release:

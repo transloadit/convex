@@ -21,6 +21,7 @@ describeE2e("e2e upload flow", () => {
     refresh: 240_000,
   };
   const vercelBypassToken = process.env.VERCEL_PROTECTION_BYPASS ?? "";
+  const remoteConvexUrl = process.env.E2E_REMOTE_CONVEX_URL ?? "";
   let serverUrl = "";
   let app: Awaited<ReturnType<typeof startExampleApp>> | null = null;
 
@@ -34,15 +35,12 @@ describeE2e("e2e upload flow", () => {
           "Missing VERCEL_PROTECTION_BYPASS for cloud preview access",
         );
       }
-      serverUrl = remoteAppUrl.replace(/\/$/, "");
-      if (vercelBypassToken) {
-        const parsed = new URL(serverUrl);
-        parsed.searchParams.set(
-          "__vercel_protection_bypass",
-          vercelBypassToken,
-        );
-        serverUrl = parsed.toString();
+      const parsed = new URL(remoteAppUrl.replace(/\/$/, ""));
+      parsed.searchParams.set("__vercel_protection_bypass", vercelBypassToken);
+      if (remoteConvexUrl) {
+        parsed.searchParams.set("convexUrl", remoteConvexUrl);
       }
+      serverUrl = parsed.toString();
       return;
     }
 
