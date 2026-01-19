@@ -168,7 +168,7 @@ export default function WeddingUploads() {
             height={360}
             width="100%"
             proudlyDisplayPoweredByUppy={false}
-            note="Add a mix of photos and short videos."
+            note="Add photos/videos. Files expire in ~24h; preview deploys reset the gallery."
           />
         </div>
         <div className="cta">
