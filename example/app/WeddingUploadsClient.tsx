@@ -6,7 +6,7 @@ import Dashboard from "@uppy/react/dashboard";
 import Tus from "@uppy/tus";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { weddingStepNames } from "../lib/transloadit";
 import { Providers } from "./providers";
 
