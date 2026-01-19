@@ -4,6 +4,7 @@ export type RunOptions = {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   stdio?: "inherit" | "pipe";
+  input?: string;
 };
 
 export const requireEnv = (name: string) => {
@@ -19,10 +20,13 @@ export const run = (
   args: string[],
   options: RunOptions = {},
 ) => {
+  const stdio =
+    options.input !== undefined ? "pipe" : (options.stdio ?? "inherit");
   const result = spawnSync(command, args, {
     cwd: options.cwd,
     env: options.env,
-    stdio: options.stdio ?? "inherit",
+    stdio,
+    input: options.input,
     encoding: "utf8",
   });
 

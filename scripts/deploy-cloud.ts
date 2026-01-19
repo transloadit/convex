@@ -83,19 +83,12 @@ const deployCloud = async () => {
         try {
           run(
             "npx",
-            [
-              "convex",
-              "env",
-              "set",
-              "--deployment-name",
-              deploymentName,
-              name,
-              value,
-            ],
+            ["convex", "env", "set", "--deployment-name", deploymentName, name],
             {
               cwd: projectDir,
               env: deployEnv,
-              stdio: runStdio,
+              stdio: runStdio === "inherit" ? "pipe" : runStdio,
+              input: value,
             },
           );
           return;
