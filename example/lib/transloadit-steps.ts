@@ -1,28 +1,24 @@
-import {
-  type RobotCloudflareStoreInstructions,
-  robotCloudflareStoreInstructionsSchema,
-} from "@transloadit/zod/v3/robots/cloudflare-store";
-import {
-  type RobotFileFilterInstructions,
-  robotFileFilterInstructionsSchema,
-} from "@transloadit/zod/v3/robots/file-filter";
-import {
-  type RobotImageResizeInstructions,
-  robotImageResizeInstructionsSchema,
-} from "@transloadit/zod/v3/robots/image-resize";
-import {
-  type RobotUploadHandleInstructions,
-  robotUploadHandleInstructionsSchema,
-} from "@transloadit/zod/v3/robots/upload-handle";
-import {
-  type RobotVideoEncodeInstructions,
-  robotVideoEncodeInstructionsSchema,
-} from "@transloadit/zod/v3/robots/video-encode";
+import { robotCloudflareStoreInstructionsSchema } from "@transloadit/zod/v3/robots/cloudflare-store";
+import { robotFileFilterInstructionsSchema } from "@transloadit/zod/v3/robots/file-filter";
+import { robotImageResizeInstructionsSchema } from "@transloadit/zod/v3/robots/image-resize";
+import { robotUploadHandleInstructionsSchema } from "@transloadit/zod/v3/robots/upload-handle";
+import { robotVideoEncodeInstructionsSchema } from "@transloadit/zod/v3/robots/video-encode";
 import { z } from "zod/v3";
 
 type TransloaditSteps = Record<string, Record<string, unknown>>;
 
-const tpl = (value: string) => `$${"{"}${value}}`;
+// biome-ignore lint/style/useTemplate: Template literals emit invalid `${${...}}` in Next build output.
+const tpl = (value: string) => "$" + "{" + value + "}";
+
+type RobotCloudflareStoreInput = z.input<
+  typeof robotCloudflareStoreInstructionsSchema
+>;
+type RobotFileFilterInput = z.input<typeof robotFileFilterInstructionsSchema>;
+type RobotImageResizeInput = z.input<typeof robotImageResizeInstructionsSchema>;
+type RobotUploadHandleInput = z.input<
+  typeof robotUploadHandleInstructionsSchema
+>;
+type RobotVideoEncodeInput = z.input<typeof robotVideoEncodeInstructionsSchema>;
 
 const r2EnvSchema = z.object({
   TRANSLOADIT_R2_CREDENTIALS: z.string().optional(),
@@ -95,8 +91,8 @@ const readR2Config = (): R2Config => {
 const buildStoreStep = (
   use: string,
   r2: R2Config,
-): RobotCloudflareStoreInstructions => {
-  const step: RobotCloudflareStoreInstructions = {
+): RobotCloudflareStoreInput => {
+  const step: RobotCloudflareStoreInput = {
     robot: "/cloudflare/store",
     use,
     result: true,
@@ -114,8 +110,8 @@ const buildStoreStep = (
   return step;
 };
 
-const buildUploadStep = (): RobotUploadHandleInstructions => {
-  const step: RobotUploadHandleInstructions = {
+const buildUploadStep = (): RobotUploadHandleInput => {
+  const step: RobotUploadHandleInput = {
     robot: "/upload/handle",
   };
   robotUploadHandleInstructionsSchema.parse(step);
@@ -125,8 +121,8 @@ const buildUploadStep = (): RobotUploadHandleInstructions => {
 const buildFilterStep = (
   use: string,
   pattern: string,
-): RobotFileFilterInstructions => {
-  const step: RobotFileFilterInstructions = {
+): RobotFileFilterInput => {
+  const step: RobotFileFilterInput = {
     robot: "/file/filter",
     use,
     accepts: [[tpl("file.mime"), "regex", pattern]],
@@ -136,8 +132,8 @@ const buildFilterStep = (
   return step;
 };
 
-const buildResizeStep = (use: string): RobotImageResizeInstructions => {
-  const step: RobotImageResizeInstructions = {
+const buildResizeStep = (use: string): RobotImageResizeInput => {
+  const step: RobotImageResizeInput = {
     robot: "/image/resize",
     use,
     width: 1600,
@@ -148,8 +144,8 @@ const buildResizeStep = (use: string): RobotImageResizeInstructions => {
   return step;
 };
 
-const buildVideoStep = (use: string): RobotVideoEncodeInstructions => {
-  const step: RobotVideoEncodeInstructions = {
+const buildVideoStep = (use: string): RobotVideoEncodeInput => {
+  const step: RobotVideoEncodeInput = {
     robot: "/video/encode",
     use,
     preset: "ipad-high",

@@ -147,7 +147,7 @@ const useUploadToasts = (assemblies: AssemblySummary[] | undefined) => {
 
 const createWeddingAssemblyRef = makeFunctionReference<
   "action",
-  { fileCount: number; guestName?: string },
+  { fileCount: number; guestName?: string; uploadCode?: string },
   AssemblyResponse
 >("wedding:createWeddingAssembly");
 const listAssembliesRef = makeFunctionReference<

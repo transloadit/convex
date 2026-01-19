@@ -29,8 +29,13 @@ const remoteClient =
     : null;
 
 if (remoteClient) {
-  remoteClient.setAdminAuth(remoteAdminKey);
-  remoteClient.setDebug(false);
+  const adminClient = remoteClient as ConvexHttpClient & {
+    setAdminAuth: (token: string) => void;
+    setDebug: (value: boolean) => void;
+  };
+  // Convex's admin auth helpers are intentionally not in the public typings.
+  adminClient.setAdminAuth(remoteAdminKey);
+  adminClient.setDebug(false);
 }
 
 export const runAction = async (
@@ -42,7 +47,14 @@ export const runAction = async (
       name === "createWeddingAssembly"
         ? "wedding:createWeddingAssembly"
         : `transloadit:${name}`;
-    return remoteClient.action(remoteName, args);
+    const remoteAction = remoteClient as ConvexHttpClient & {
+      action: (
+        actionName: string,
+        args: Record<string, unknown>,
+      ) => Promise<unknown>;
+    };
+    // Convex's client types only accept generated function references.
+    return remoteAction.action(remoteName, args);
   }
 
   if (mode === "cloud") {
@@ -53,7 +65,10 @@ export const runAction = async (
     throw new Error("Missing Convex test harness");
   }
 
-  const config = authKey && authSecret ? { authKey, authSecret } : undefined;
+  const config = authKey && authSecret ? { authKey, authSecret } : null;
+  if (!config) {
+    throw new Error("Missing TRANSLOADIT_KEY or TRANSLOADIT_SECRET");
+  }
 
   if (name === "createWeddingAssembly") {
     const notifyUrl = process.env.TRANSLOADIT_NOTIFY_URL;
@@ -87,24 +102,41 @@ export const runAction = async (
   }
 
   if (name === "createAssembly") {
-    return testClient.action(api.lib.createAssembly, { ...args, config });
+    const assemblyArgs = args as Record<string, unknown>;
+    return testClient.action(api.lib.createAssembly, {
+      ...assemblyArgs,
+      config,
+    });
   }
   if (name === "handleWebhook") {
+    const webhookArgs = args as {
+      payload: unknown;
+      signature?: string;
+      rawBody?: string;
+    };
     return testClient.action(api.lib.handleWebhook, {
-      ...args,
-      config: config ? { authSecret: config.authSecret } : undefined,
-      verifySignature: true,
+      ...webhookArgs,
+      config: { authSecret: config.authSecret },
     });
   }
   if (name === "queueWebhook") {
     // Local harness does not run scheduled jobs, so process immediately.
+    const webhookArgs = args as {
+      payload: unknown;
+      signature?: string;
+      rawBody?: string;
+    };
     return testClient.action(api.lib.handleWebhook, {
-      ...args,
-      config: config ? { authSecret: config.authSecret } : undefined,
+      ...webhookArgs,
+      config: { authSecret: config.authSecret },
     });
   }
   if (name === "refreshAssembly") {
-    return testClient.action(api.lib.refreshAssembly, { ...args, config });
+    const refreshArgs = args as { assemblyId: string };
+    return testClient.action(api.lib.refreshAssembly, {
+      ...refreshArgs,
+      config,
+    });
   }
 
   throw new Error(`Unknown action ${name}`);
@@ -112,7 +144,13 @@ export const runAction = async (
 
 export const runQuery = async (name: string, args: Record<string, unknown>) => {
   if (remoteClient) {
-    return remoteClient.query(`transloadit:${name}`, args);
+    const remoteQuery = remoteClient as ConvexHttpClient & {
+      query: (
+        queryName: string,
+        args: Record<string, unknown>,
+      ) => Promise<unknown>;
+    };
+    return remoteQuery.query(`transloadit:${name}`, args);
   }
 
   if (mode === "cloud") {
@@ -129,7 +167,12 @@ export const runQuery = async (name: string, args: Record<string, unknown>) => {
     });
   }
   if (name === "listResults") {
-    return testClient.query(api.lib.listResults, args);
+    const listArgs = args as {
+      assemblyId: string;
+      limit?: number;
+      stepName?: string;
+    };
+    return testClient.query(api.lib.listResults, listArgs);
   }
 
   throw new Error(`Unknown query ${name}`);
