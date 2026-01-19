@@ -16,6 +16,7 @@ const log = (...args: Parameters<typeof console.log>) => {
     console.log(...args);
   }
 };
+const runStdio = ciOutput ? "pipe" : "inherit";
 
 const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -34,25 +35,20 @@ const deployCloud = async () => {
     await mkdir(projectDir, { recursive: true });
 
     log(`Packing @transloadit/convex into ${tgzPath}...`);
-    run("yarn", ["pack", "-o", tgzPath], { cwd: rootDir });
+    run("yarn", ["pack", "-o", tgzPath], { cwd: rootDir, stdio: runStdio });
 
     await writeAppFiles({ projectDir, tgzPath });
 
     log("Installing dependencies...");
-    run("npm", ["install", "--no-fund", "--no-audit"], { cwd: projectDir });
+    run("npm", ["install", "--no-fund", "--no-audit"], {
+      cwd: projectDir,
+      stdio: runStdio,
+    });
 
     log("Deploying Convex app...");
     const deployOutput = run(
       "npx",
-      [
-        "convex",
-        "deploy",
-        "--codegen",
-        "disable",
-        "--typecheck",
-        "disable",
-        "--yes",
-      ],
+      ["convex", "deploy", "--typecheck", "disable", "--yes"],
       {
         cwd: projectDir,
         env: {
@@ -77,6 +73,7 @@ const deployCloud = async () => {
       run("npx", ["convex", "env", "set", name, value], {
         cwd: projectDir,
         env: deployEnv,
+        stdio: runStdio,
       });
     };
 
