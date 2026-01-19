@@ -2,11 +2,11 @@
 
 import { useAuthActions } from "@convex-dev/auth/react";
 import Uppy from "@uppy/core";
-import Dashboard from "@uppy/react/dashboard";
+import Dashboard from "@uppy/react/lib/Dashboard";
 import Tus from "@uppy/tus";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { weddingStepNames } from "../lib/transloadit";
 
 type AssemblyResponse = {
@@ -72,16 +72,14 @@ const getAssemblyUrls = (data: Record<string, unknown>) => {
 };
 
 const useWeddingUppy = () => {
-  const uppy = useMemo(
-    () =>
-      new Uppy({
-        autoProceed: false,
-        restrictions: {
-          allowedFileTypes: ["image/*", "video/*"],
-          maxNumberOfFiles: 12,
-        },
-      }).use(Tus, { endpoint: "" }),
-    [],
+  const [uppy] = useState(() =>
+    new Uppy({
+      autoProceed: false,
+      restrictions: {
+        allowedFileTypes: ["image/*", "video/*"],
+        maxNumberOfFiles: 12,
+      },
+    }).use(Tus, { endpoint: "" }),
   );
 
   useEffect(() => {

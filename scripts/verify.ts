@@ -31,11 +31,7 @@ const runBrowser = async (options: {
     run("yarn", ["exec", "playwright", "install", "chromium"]);
   }
 
-  if (options.mode === "local") {
-    run("yarn", ["example:build"]);
-  } else {
-    run("yarn", ["build"]);
-  }
+  run("yarn", ["build"]);
 
   const testEnv: NodeJS.ProcessEnv = {
     ...process.env,

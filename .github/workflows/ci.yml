@@ -134,6 +134,12 @@ jobs:
           node-version: 24
       - run: corepack enable
       - run: yarn install --immutable
+      - name: Resolve Vercel preview URL
+        run: |
+          echo "E2E_REMOTE_APP_URL=$(node scripts/resolve-vercel-preview.ts)" >> "$GITHUB_ENV"
+        env:
+          VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
       - name: Ensure cloud QA secrets
         run: |
           if [ -z "${E2E_REMOTE_APP_URL}" ]; then
@@ -141,10 +147,10 @@ jobs:
             exit 1
           fi
         env:
-          E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
+          E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
       - run: yarn verify:cloud
         env:
-          E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
+          E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
 
   release:
     name: Publish to npm

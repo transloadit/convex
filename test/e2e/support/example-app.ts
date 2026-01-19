@@ -78,15 +78,7 @@ export const startExampleApp = async ({
   const nextCli = resolve("node_modules/next/dist/bin/next");
   const child = spawn(
     "node",
-    [
-      nextCli,
-      "start",
-      "example",
-      "--hostname",
-      "127.0.0.1",
-      "--port",
-      `${port}`,
-    ],
+    [nextCli, "dev", "example", "--hostname", "127.0.0.1", "--port", `${port}`],
     {
       env: {
         ...process.env,
