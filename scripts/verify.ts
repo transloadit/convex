@@ -52,8 +52,7 @@ const runBrowser = async (options: {
 };
 
 const resolveCloudConfig = () => {
-  const appUrl =
-    process.env.E2E_REMOTE_APP_URL ?? process.env.E2E_APP_URL ?? "";
+  const appUrl = process.env.E2E_REMOTE_APP_URL ?? "";
   if (!appUrl) {
     if (!process.env.CI) {
       throw new Error(
