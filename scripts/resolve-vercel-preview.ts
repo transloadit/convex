@@ -135,25 +135,32 @@ const fetchPreviewUrlFromComments = async (): Promise<string | null> => {
   }
 };
 
+const normalizeUrl = (value: string): string => {
+  if (value.startsWith("http://") || value.startsWith("https://")) {
+    return value;
+  }
+  return `https://${value}`;
+};
+
 await triggerPreviewDeploy();
 
 const deadline = Date.now() + 6 * 60 * 1000;
 while (Date.now() < deadline) {
   const deploymentUrl = await fetchDeploymentUrl();
   if (deploymentUrl) {
-    process.stdout.write(deploymentUrl);
+    process.stdout.write(normalizeUrl(deploymentUrl));
     process.exit(0);
   }
 
   const checkUrl = await fetchCheckRunUrl();
   if (checkUrl) {
-    process.stdout.write(checkUrl);
+    process.stdout.write(normalizeUrl(checkUrl));
     process.exit(0);
   }
 
   const commentUrl = await fetchPreviewUrlFromComments();
   if (commentUrl) {
-    process.stdout.write(commentUrl);
+    process.stdout.write(normalizeUrl(commentUrl));
     process.exit(0);
   }
 
