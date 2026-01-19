@@ -207,7 +207,6 @@ export function makeTransloaditAPI(
         payload: v.any(),
         rawBody: v.optional(v.string()),
         signature: v.optional(v.string()),
-        verifySignature: v.optional(v.boolean()),
       },
       returns: v.object({
         assemblyId: v.string(),
@@ -227,7 +226,6 @@ export function makeTransloaditAPI(
         payload: v.any(),
         rawBody: v.optional(v.string()),
         signature: v.optional(v.string()),
-        verifySignature: v.optional(v.boolean()),
       },
       returns: v.object({
         assemblyId: v.string(),

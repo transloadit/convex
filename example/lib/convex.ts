@@ -57,6 +57,7 @@ export const runAction = async (
     return testClient.action(api.lib.handleWebhook, {
       ...args,
       config: config ? { authSecret: config.authSecret } : undefined,
+      verifySignature: true,
     });
   }
   if (name === "queueWebhook") {

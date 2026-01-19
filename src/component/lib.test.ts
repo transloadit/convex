@@ -40,7 +40,6 @@ describe("Transloadit component lib", () => {
       payload,
       rawBody,
       signature: `sha1:${signature}`,
-      verifySignature: true,
     });
 
     expect(result.assemblyId).toBe("asm_123");
@@ -72,7 +71,6 @@ describe("Transloadit component lib", () => {
       t.action(api.lib.handleWebhook, {
         payload,
         signature: `sha1:${signature}`,
-        verifySignature: true,
       }),
     ).rejects.toThrow("Missing rawBody for webhook verification");
   });
@@ -87,7 +85,6 @@ describe("Transloadit component lib", () => {
         payload,
         rawBody,
         signature: "sha1:bad",
-        verifySignature: true,
       }),
     ).rejects.toThrow("Invalid Transloadit webhook signature");
   });

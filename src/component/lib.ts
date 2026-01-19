@@ -379,6 +379,12 @@ const vWebhookArgs = {
   authSecret: v.optional(v.string()),
 };
 
+const vPublicWebhookArgs = {
+  payload: v.any(),
+  rawBody: v.optional(v.string()),
+  signature: v.optional(v.string()),
+};
+
 export const processWebhook = internalAction({
   args: vWebhookArgs,
   returns: v.object({
@@ -389,7 +395,7 @@ export const processWebhook = internalAction({
   }),
   handler: async (ctx, args) => {
     const rawBody = resolveWebhookRawBody(args);
-    const shouldVerify = args.verifySignature ?? true;
+    const shouldVerify = true;
     const authSecret = args.authSecret ?? process.env.TRANSLOADIT_SECRET;
 
     if (shouldVerify) {
@@ -415,7 +421,7 @@ export const processWebhook = internalAction({
 
 export const handleWebhook = action({
   args: {
-    ...vWebhookArgs,
+    ...vPublicWebhookArgs,
     config: v.optional(
       v.object({
         authSecret: v.string(),
@@ -433,7 +439,7 @@ export const handleWebhook = action({
       payload: args.payload,
       rawBody: args.rawBody,
       signature: args.signature,
-      verifySignature: args.verifySignature,
+      verifySignature: true,
       authSecret: args.config?.authSecret,
     });
   },
@@ -441,7 +447,7 @@ export const handleWebhook = action({
 
 export const queueWebhook = action({
   args: {
-    ...vWebhookArgs,
+    ...vPublicWebhookArgs,
     config: v.optional(
       v.object({
         authSecret: v.string(),
@@ -460,7 +466,7 @@ export const queueWebhook = action({
     }
 
     const rawBody = resolveWebhookRawBody(args);
-    const shouldVerify = args.verifySignature ?? true;
+    const shouldVerify = true;
     const authSecret =
       args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
 
@@ -485,7 +491,7 @@ export const queueWebhook = action({
       payload: args.payload,
       rawBody: args.rawBody,
       signature: args.signature,
-      verifySignature: args.verifySignature,
+      verifySignature: true,
       authSecret: args.config?.authSecret,
     });
 
