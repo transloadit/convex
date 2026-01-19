@@ -4,10 +4,15 @@ import { loadEnv } from "./env.ts";
 loadEnv();
 
 const deployHook = process.env.VERCEL_PREVIEW_DEPLOY_HOOK ?? "";
+const vercelProject = process.env.VERCEL_PROJECT_SLUG ?? "";
+const vercelTeam = process.env.VERCEL_TEAM_SLUG ?? "";
+const vercelBypassToken = process.env.VERCEL_PROTECTION_BYPASS ?? "";
 const githubToken = process.env.GITHUB_TOKEN ?? "";
 const githubRepo = process.env.GITHUB_REPOSITORY ?? "";
 const githubSha = process.env.GITHUB_SHA ?? "";
 const githubEventPath = process.env.GITHUB_EVENT_PATH ?? "";
+const githubHeadRef =
+  process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? "";
 
 if (!githubToken) {
   throw new Error("Missing GITHUB_TOKEN");
@@ -142,6 +147,40 @@ const normalizeUrl = (value: string): string => {
   return `https://${value}`;
 };
 
+const slugifyBranch = (value: string): string =>
+  value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+const fallbackUrl =
+  vercelProject && vercelTeam && githubHeadRef
+    ? `https://${vercelProject}-git-${slugifyBranch(
+        githubHeadRef,
+      )}-${vercelTeam}.vercel.app`
+    : null;
+
+const isPreviewReady = async (url: string) => {
+  try {
+    const target = new URL(url);
+    if (vercelBypassToken) {
+      target.searchParams.set("__vercel_protection_bypass", vercelBypassToken);
+    }
+    const response = await fetch(target, {
+      headers: vercelBypassToken
+        ? { "x-vercel-protection-bypass": vercelBypassToken }
+        : undefined,
+    });
+    if (response.status === 404) return false;
+    if (response.status >= 500) return false;
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 await triggerPreviewDeploy();
 
 const deadline = Date.now() + 6 * 60 * 1000;
@@ -162,6 +201,14 @@ while (Date.now() < deadline) {
   if (commentUrl) {
     process.stdout.write(normalizeUrl(commentUrl));
     process.exit(0);
+  }
+
+  if (fallbackUrl) {
+    const ready = await isPreviewReady(fallbackUrl);
+    if (ready) {
+      process.stdout.write(normalizeUrl(fallbackUrl));
+      process.exit(0);
+    }
   }
 
   await sleep(5000);

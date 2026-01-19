@@ -157,6 +157,9 @@ jobs:
           echo "E2E_REMOTE_APP_URL=$(node scripts/resolve-vercel-preview.ts)" >> "$GITHUB_ENV"
         env:
           VERCEL_PREVIEW_DEPLOY_HOOK: ${{ secrets.VERCEL_PREVIEW_DEPLOY_HOOK }}
+          VERCEL_PROJECT_SLUG: convex
+          VERCEL_TEAM_SLUG: transloadit-com
+          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
           GITHUB_TOKEN: ${{ github.token }}
       - name: Ensure cloud QA secrets
         run: |
