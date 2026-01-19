@@ -107,9 +107,30 @@ describeE2e("e2e upload flow", () => {
       await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
 
       if (useRemote) {
-        await page.waitForSelector('[data-auth-state="authenticated"]', {
-          timeout: 60_000,
-        });
+        try {
+          await page.waitForSelector('[data-auth-state="authenticated"]', {
+            timeout: 60_000,
+          });
+        } catch (error) {
+          const authState = await page
+            .getAttribute("main.page", "data-auth-state")
+            .catch(() => null);
+          const headline = await page
+            .locator(".headline")
+            .first()
+            .textContent()
+            .catch(() => null);
+          const bodySnippet = await page
+            .evaluate(() => document.body?.innerText?.slice(0, 500) ?? "")
+            .catch(() => "");
+          console.log("Cloud auth wait failed.", {
+            authState,
+            headline,
+            bodySnippet,
+            url: page.url(),
+          });
+          throw error;
+        }
       }
 
       const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
