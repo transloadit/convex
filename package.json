@@ -31,6 +31,7 @@
     "verify:real": "yarn verify:cloud",
     "verify:browser": "yarn verify:local",
     "verify:convex": "yarn verify:cloud",
+    "deploy:cloud": "node scripts/deploy-cloud.ts",
     "example:dev": "yarn build && node ./node_modules/next/dist/bin/next dev example",
     "example:build": "yarn build && node ./node_modules/next/dist/bin/next build example",
     "example:start": "yarn build && node ./node_modules/next/dist/bin/next start example",

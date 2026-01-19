@@ -60,6 +60,44 @@ describe("Transloadit component lib", () => {
     expect(results[0]?.stepName).toBe("resized");
   });
 
+  test("handleWebhook stores url when ssl_url missing", async () => {
+    const t = convexTest(schema, modules);
+
+    const payload = {
+      assembly_id: "asm_url",
+      ok: "ASSEMBLY_COMPLETED",
+      results: {
+        stored: [
+          {
+            id: "file_3",
+            url: "https://example.com/file-3.jpg",
+            name: "file-3.jpg",
+            size: 42,
+            mime: "image/jpeg",
+          },
+        ],
+      },
+    };
+
+    const rawBody = JSON.stringify(payload);
+    const signature = createHmac("sha1", "test-secret")
+      .update(rawBody)
+      .digest("hex");
+
+    await t.action(api.lib.handleWebhook, {
+      payload,
+      rawBody,
+      signature: `sha1:${signature}`,
+    });
+
+    const results = await t.query(api.lib.listResults, {
+      assemblyId: "asm_url",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.sslUrl).toBe("https://example.com/file-3.jpg");
+  });
+
   test("handleWebhook requires rawBody when verifying signature", async () => {
     const t = convexTest(schema, modules);
     const payload = { assembly_id: "asm_missing" };

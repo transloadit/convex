@@ -226,7 +226,7 @@ const status = useAssemblyStatusWithPolling(
 ## Example app (Next.js + Uppy wedding gallery)
 
 The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on the client and a Next API route that talks to Convex. If you do not set `CONVEX_URL`/`CONVEX_ADMIN_KEY`, the example uses the in-process Convex test harness.
-Uploads in this demo use Transloadit hosted storage (temporary, ~24 hours). Preview deployments reset the gallery on each deploy; add a storage robot (S3/GCS/etc.) to persist files.
+Uploads are stored via Transloadit and can optionally be persisted to Cloudflare R2.
 
 Quick start (local):
 
@@ -252,6 +252,24 @@ export CONVEX_ADMIN_KEY=...
 
 The example exposes `POST /transloadit/webhook` and forwards webhooks into Convex via `queueWebhook`.
 
+### Storage (optional R2 persistence)
+
+By default, the example uses Transloadit hosted storage. To persist uploads, configure Cloudflare R2 and the `/cloudflare/store` robot:
+
+```bash
+# Either use Transloadit credentials (recommended)
+export TRANSLOADIT_R2_CREDENTIALS=...
+
+# Or supply R2 details directly
+export R2_BUCKET=...
+export R2_ACCESS_KEY_ID=...
+export R2_SECRET_ACCESS_KEY=...
+export R2_ACCOUNT_ID=...   # or R2_HOST
+export R2_PUBLIC_URL=...   # optional public URL prefix
+```
+
+The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default: 24) to discourage spam/abuse.
+
 ### Deploy the example (Vercel + stable Convex)
 
 For a public demo, deploy the `example/` app and point it at a stable Convex deployment.
@@ -259,9 +277,19 @@ For a public demo, deploy the `example/` app and point it at a stable Convex dep
 1. Deploy a Convex app that includes this component (stable/prod deployment).
 2. Set Vercel environment variables for the project:
    - `CONVEX_URL` and `CONVEX_ADMIN_KEY` (point to the stable Convex deployment)
-   - `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`
    - `TRANSLOADIT_NOTIFY_URL` (set to `https://<deployment>.convex.site/transloadit/webhook`)
+   - Optional R2 variables (see above) and `NEXT_PUBLIC_GALLERY_RETENTION_HOURS`
 3. Trigger the Vercel deploy hook (or deploy manually).
+
+To deploy a stable Convex backend for the demo (once per environment), run:
+
+```bash
+export CONVEX_DEPLOY_KEY=...
+export TRANSLOADIT_KEY=...
+export TRANSLOADIT_SECRET=...
+
+yarn deploy:cloud
+```
 
 Once deployed, use the Vercel URL as `E2E_REMOTE_APP_URL` for `yarn verify:cloud`.
 
@@ -287,6 +315,7 @@ Additional commands:
 - `yarn test` (Vitest unit tests)
 - `yarn verify:local` (runs the Next.js wedding example + uploads an image + video)
 - `yarn verify:cloud` (runs the browser flow against a deployed Next.js app + Convex cloud backend)
+- `yarn deploy:cloud` (deploys a stable Convex backend for the demo app)
 - `yarn build` (tsc build + emit package json)
 
 Notes:

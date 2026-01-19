@@ -193,11 +193,15 @@ describeE2e("e2e upload flow", () => {
         throw new Error("No processed results returned");
       }
 
-      const image = data.results.find(
-        (result) => result.stepName === weddingStepNames.image,
+      const image = data.results.find((result) =>
+        [weddingStepNames.image, "images_resized"].includes(
+          result.stepName ?? "",
+        ),
       );
-      const video = data.results.find(
-        (result) => result.stepName === weddingStepNames.video,
+      const video = data.results.find((result) =>
+        [weddingStepNames.video, "videos_encoded"].includes(
+          result.stepName ?? "",
+        ),
       );
 
       expect(image?.sslUrl).toMatch(/^https:\/\//);

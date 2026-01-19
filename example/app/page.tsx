@@ -44,12 +44,24 @@ export default function WeddingUploads() {
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const retentionMs = 23 * 60 * 60 * 1000;
-  // Transloadit hosted storage is temporary; hide older entries to avoid 404s.
-  const visibleResults = results.filter((item) => {
-    if (typeof item.createdAt !== "number") return true;
-    return Date.now() - item.createdAt < retentionMs;
-  });
+  const retentionHours = Number.parseFloat(
+    process.env.NEXT_PUBLIC_GALLERY_RETENTION_HOURS ?? "24",
+  );
+  const retentionMs =
+    Number.isFinite(retentionHours) && retentionHours > 0
+      ? retentionHours * 60 * 60 * 1000
+      : Number.POSITIVE_INFINITY;
+  const retentionLabel =
+    retentionMs === Number.POSITIVE_INFINITY
+      ? "all time"
+      : `${retentionHours}h`;
+  const visibleResults =
+    retentionMs === Number.POSITIVE_INFINITY
+      ? results
+      : results.filter((item) => {
+          if (typeof item.createdAt !== "number") return true;
+          return Date.now() - item.createdAt < retentionMs;
+        });
 
   const uppy = useMemo(
     () =>
@@ -168,7 +180,7 @@ export default function WeddingUploads() {
             height={360}
             width="100%"
             proudlyDisplayPoweredByUppy={false}
-            note="Add photos/videos. Files expire in ~24h; preview deploys reset the gallery."
+            note={`Add photos/videos. Gallery shows ${retentionLabel} to limit spam.`}
           />
         </div>
         <div className="cta">
@@ -236,9 +248,9 @@ export default function WeddingUploads() {
           </div>
         )}
         <p className="status">
-          Files are stored in Transloadit temporary storage and expire after ~24
-          hours. Preview deployments reset this gallery on each deploy. Add a
-          storage robot (S3, GCS, etc.) to persist uploads.
+          Gallery shows the most recent uploads (set
+          NEXT_PUBLIC_GALLERY_RETENTION_HOURS). Configure R2 storage to persist
+          files; otherwise Transloadit temporary storage applies.
         </p>
       </section>
     </main>

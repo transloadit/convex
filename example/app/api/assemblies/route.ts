@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { runAction, runQuery } from "../../../lib/convex";
-import { weddingSteps } from "../../../lib/transloadit";
+import { buildWeddingSteps } from "../../../lib/transloadit-steps";
 
 export async function POST(request: Request) {
   const payload = (await request.json().catch(() => ({}))) as {
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     : 1;
 
   const response = await runAction("createAssembly", {
-    steps: weddingSteps,
+    steps: buildWeddingSteps(),
     notifyUrl,
     numExpectedUploadFiles: fileCount,
     fields: {

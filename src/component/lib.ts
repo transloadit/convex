@@ -273,11 +273,19 @@ export const replaceResultsForAssembly = internalMutation({
     const now = Date.now();
     for (const entry of args.results) {
       const raw = entry.result as Record<string, unknown>;
+      const sslUrl =
+        typeof raw.ssl_url === "string"
+          ? raw.ssl_url
+          : typeof raw.url === "string"
+            ? raw.url
+            : typeof raw.sslUrl === "string"
+              ? raw.sslUrl
+              : undefined;
       await ctx.db.insert("results", {
         assemblyId: args.assemblyId,
         stepName: entry.stepName,
         resultId: typeof raw.id === "string" ? raw.id : undefined,
-        sslUrl: typeof raw.ssl_url === "string" ? raw.ssl_url : undefined,
+        sslUrl,
         name: typeof raw.name === "string" ? raw.name : undefined,
         size: typeof raw.size === "number" ? raw.size : undefined,
         mime: typeof raw.mime === "string" ? raw.mime : undefined,
