@@ -106,6 +106,14 @@ describeE2e("e2e upload flow", () => {
 
       await page.goto(serverUrl, { waitUntil: "domcontentloaded" });
 
+      if (useRemote) {
+        await page.waitForFunction(
+          () => !document.querySelector('[data-testid="auth-status"]'),
+          null,
+          { timeout: 30_000 },
+        );
+      }
+
       const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
       const imagePath = join(tempDir, "sample.png");
       const pngBase64 =

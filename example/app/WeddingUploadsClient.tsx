@@ -457,7 +457,7 @@ const WeddingLayout = ({
           we’ll add them to the live gallery.
         </p>
         {authState && authState !== "authenticated" && (
-          <p className="status">
+          <p className="status" data-testid="auth-status">
             {authState === "loading"
               ? "Signing you in..."
               : "Signing you in as a guest."}
