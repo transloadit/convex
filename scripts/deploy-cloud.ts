@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { generateKeyPairSync } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -114,8 +114,15 @@ const deployCloud = async () => {
     await setEnv("TRANSLOADIT_KEY", requireEnv("TRANSLOADIT_KEY"));
     await setEnv("TRANSLOADIT_SECRET", requireEnv("TRANSLOADIT_SECRET"));
     await setEnv("TRANSLOADIT_NOTIFY_URL", notifyUrl);
-    const jwtPrivateKey =
-      process.env.JWT_PRIVATE_KEY ?? randomBytes(32).toString("base64url");
+    let jwtPrivateKey = process.env.JWT_PRIVATE_KEY;
+    if (!jwtPrivateKey) {
+      const { privateKey } = generateKeyPairSync("rsa", {
+        modulusLength: 2048,
+        publicKeyEncoding: { type: "spki", format: "pem" },
+        privateKeyEncoding: { type: "pkcs8", format: "pem" },
+      });
+      jwtPrivateKey = privateKey;
+    }
     await setEnv("JWT_PRIVATE_KEY", jwtPrivateKey);
 
     const optionalEnv = [
