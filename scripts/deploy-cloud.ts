@@ -19,6 +19,10 @@ const log = (...args: Parameters<typeof console.log>) => {
 const runStdio = ciOutput ? "pipe" : "inherit";
 
 const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const sleep = (ms: number) =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 const deployCloud = async () => {
   requireEnv("TRANSLOADIT_KEY");
@@ -69,17 +73,31 @@ const deployCloud = async () => {
       ...process.env,
       CONVEX_DEPLOY_KEY: requireEnv("CONVEX_DEPLOY_KEY"),
     };
-    const setEnv = (name: string, value: string) => {
-      run("npx", ["convex", "env", "set", name, value], {
-        cwd: projectDir,
-        env: deployEnv,
-        stdio: runStdio,
-      });
+    const setEnv = async (name: string, value: string) => {
+      const attempts = 3;
+      for (let attempt = 1; attempt <= attempts; attempt += 1) {
+        try {
+          run("npx", ["convex", "env", "set", name, value], {
+            cwd: projectDir,
+            env: deployEnv,
+            stdio: runStdio,
+          });
+          return;
+        } catch (error) {
+          if (attempt === attempts) {
+            throw error;
+          }
+          log(
+            `Failed to set ${name} (attempt ${attempt}/${attempts}). Retrying...`,
+          );
+          await sleep(1000 * attempt);
+        }
+      }
     };
 
-    setEnv("TRANSLOADIT_KEY", requireEnv("TRANSLOADIT_KEY"));
-    setEnv("TRANSLOADIT_SECRET", requireEnv("TRANSLOADIT_SECRET"));
-    setEnv("TRANSLOADIT_NOTIFY_URL", notifyUrl);
+    await setEnv("TRANSLOADIT_KEY", requireEnv("TRANSLOADIT_KEY"));
+    await setEnv("TRANSLOADIT_SECRET", requireEnv("TRANSLOADIT_SECRET"));
+    await setEnv("TRANSLOADIT_NOTIFY_URL", notifyUrl);
 
     const optionalEnv = [
       "TRANSLOADIT_R2_CREDENTIALS",
@@ -94,7 +112,7 @@ const deployCloud = async () => {
     for (const name of optionalEnv) {
       const value = process.env[name];
       if (value) {
-        setEnv(name, value);
+        await setEnv(name, value);
       }
     }
 
