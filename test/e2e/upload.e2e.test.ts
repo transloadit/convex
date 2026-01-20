@@ -81,15 +81,16 @@ describeE2e("e2e upload flow", () => {
   test("uploads wedding photos and videos", async () => {
     const browser = await chromium.launch();
     const page = await browser.newPage();
+    const appOrigin = useRemote ? new URL(serverUrl).origin : serverUrl;
     const shouldTrackRequest = (url: string) =>
       url.includes("transloadit") ||
       url.includes("resumable") ||
       url.includes("convex.cloud") ||
-      url.includes("convex.site");
+      url.includes("convex.site") ||
+      (appOrigin ? url.startsWith(appOrigin) : false);
     const diagnostics = attachBrowserDiagnostics(page, { shouldTrackRequest });
 
     try {
-      const appOrigin = useRemote ? new URL(serverUrl).origin : "";
       if (useRemote && vercelBypassToken) {
         await page.route("**/*", async (route) => {
           const url = route.request().url();
