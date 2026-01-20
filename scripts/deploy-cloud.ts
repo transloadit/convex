@@ -65,7 +65,8 @@ const deployCloud = async () => {
     );
 
     const { deploymentName, deploymentUrl } = parseDeployOutput(deployOutput);
-    const notifyUrl = `https://${deploymentName}.convex.site/transloadit/webhook`;
+    const siteUrl = `https://${deploymentName}.convex.site`;
+    const notifyUrl = `${siteUrl}/transloadit/webhook`;
     log(`Deployment URL: ${deploymentUrl}`);
     log(`Webhook URL: ${notifyUrl}`);
 
@@ -107,6 +108,7 @@ const deployCloud = async () => {
     await setEnv("TRANSLOADIT_KEY", requireEnv("TRANSLOADIT_KEY"));
     await setEnv("TRANSLOADIT_SECRET", requireEnv("TRANSLOADIT_SECRET"));
     await setEnv("TRANSLOADIT_NOTIFY_URL", notifyUrl);
+    await setEnv("CONVEX_SITE_URL", siteUrl);
     let jwtPrivateKey = process.env.JWT_PRIVATE_KEY;
     if (!jwtPrivateKey) {
       const { privateKey } = generateKeyPairSync("rsa", {

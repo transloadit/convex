@@ -390,7 +390,14 @@ const CloudWeddingUploads = () => {
 
   useEffect(() => {
     if (isLoading || isAuthenticated) return;
-    void signIn("anonymous").catch(() => {});
+    let cancelled = false;
+    void signIn("anonymous").catch((error) => {
+      if (cancelled) return;
+      console.warn("Convex auth sign-in failed", error);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [isLoading, isAuthenticated, signIn]);
 
   const startUpload = async () => {
