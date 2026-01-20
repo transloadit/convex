@@ -5,7 +5,14 @@ import { type Infer, v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.ts";
 import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.ts";
 
-export { parseTransloaditWebhook } from "../component/apiUtils.ts";
+export type {
+  ParsedWebhookRequest,
+  VerifiedWebhookRequest,
+} from "../component/apiUtils.ts";
+export {
+  parseAndVerifyTransloaditWebhook,
+  parseTransloaditWebhook,
+} from "../component/apiUtils.ts";
 export type { TransloaditAssembly } from "../shared/assemblyUrls.ts";
 export {
   parseAssemblyFields,

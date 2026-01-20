@@ -53,12 +53,12 @@ yarn template:ensure
 
 The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`, creates or updates the template `convex-demo`, and prints the template id. The wedding example uses inline steps, so a template is optional.
 
-## Flow overview
+## Golden path (secure by default)
 
-1. A Convex action creates the Assembly (secret stays server-side).
-2. The client uploads via tus using `tus_url` + `assembly_ssl_url`.
-3. Transloadit posts a signed webhook; we `queueWebhook` to persist results.
-4. The UI queries results/status and renders the gallery.
+1. **Server-only create**: a Convex action creates the Assembly (auth secret stays server-side).
+2. **Client upload**: use `tus_url` + `assembly_ssl_url` for resumable uploads.
+3. **Webhook ingestion**: verify the signature and `queueWebhook` for durable processing.
+4. **Realtime UI**: query status/results and render the gallery.
 
 ## Backend API
 
@@ -104,7 +104,7 @@ Transloadit sends webhooks as `multipart/form-data` with `transloadit` (JSON) an
 ```ts
 // convex/http.ts
 import { httpRouter } from "convex/server";
-import { parseTransloaditWebhook } from "@transloadit/convex";
+import { parseAndVerifyTransloaditWebhook } from "@transloadit/convex";
 import { api } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 
@@ -115,22 +115,26 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const { payload, rawBody, signature } =
-      await parseTransloaditWebhook(request);
+      await parseAndVerifyTransloaditWebhook(request, {
+        authSecret: process.env.TRANSLOADIT_SECRET!,
+      });
 
-    await ctx.runAction(api.transloadit.handleWebhook, {
+    await ctx.runAction(api.transloadit.queueWebhook, {
       payload,
       rawBody,
       signature,
     });
 
-    return new Response(null, { status: 204 });
+    return new Response(null, { status: 202 });
   }),
 });
 
 export default http;
 ```
 
-If you want to queue webhook processing (durable retry via Convex scheduling), use `queueWebhook` and return HTTP 202:
+Note: `queueWebhook` already verifies the signature. If you prefer to verify only inside the component, use `parseTransloaditWebhook` instead.
+
+If you want to handle webhooks synchronously (no queue), use `handleWebhook` and return HTTP 204:
 
 ```ts
 await ctx.runAction(api.transloadit.queueWebhook, {
@@ -161,7 +165,10 @@ const transloadit = new Transloadit(components.transloadit, {
 ### Resumable tus upload
 
 ```tsx
-import { useTransloaditTusUpload } from "@transloadit/convex/react";
+import {
+  uploadWithTransloaditTus,
+  useTransloaditTusUpload,
+} from "@transloadit/convex/react";
 import { api } from "../convex/_generated/api";
 
 function TusUpload() {
@@ -186,6 +193,21 @@ function TusUpload() {
 ```
 
 Note: Transloadit expects tus metadata `fieldname`. The hook sets it to `file` by default; override via `fieldName` or `metadata.fieldname`. You can also use `onAssemblyCreated` to access the assembly id before the upload finishes.
+
+If you want an imperative helper (e.g. in a custom uploader), use `uploadWithTransloaditTus`:
+
+```tsx
+import { useAction } from "convex/react";
+
+const createAssembly = useAction(api.transloadit.createAssembly);
+
+await uploadWithTransloaditTus(
+  createAssembly,
+  file,
+  { templateId: "template_id_here" },
+  { onStateChange: (state) => console.log(state) },
+);
+```
 
 ### Reactive status/results
 

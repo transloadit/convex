@@ -104,6 +104,10 @@ export type ParsedWebhookRequest = {
   signature?: string;
 };
 
+export type VerifiedWebhookRequest = ParsedWebhookRequest & {
+  verified: boolean;
+};
+
 export async function parseTransloaditWebhook(
   request: Request,
 ): Promise<ParsedWebhookRequest> {
@@ -120,6 +124,33 @@ export async function parseTransloaditWebhook(
     rawBody: rawPayload,
     signature: typeof signature === "string" ? signature : undefined,
   };
+}
+
+export async function parseAndVerifyTransloaditWebhook(
+  request: Request,
+  options: {
+    authSecret: string;
+    requireSignature?: boolean;
+  },
+): Promise<VerifiedWebhookRequest> {
+  const parsed = await parseTransloaditWebhook(request);
+  const authSecret = options.authSecret;
+  if (!authSecret) {
+    throw new Error("Missing authSecret for webhook verification");
+  }
+  const verified = await verifyWebhookSignature({
+    rawBody: parsed.rawBody,
+    signatureHeader: parsed.signature,
+    authSecret,
+  });
+
+  if (options.requireSignature ?? true) {
+    if (!verified) {
+      throw new Error("Invalid Transloadit webhook signature");
+    }
+  }
+
+  return { ...parsed, verified };
 }
 
 function safeCompare(a: string, b: string): boolean {

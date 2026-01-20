@@ -111,10 +111,23 @@ body {
 }
 
 .card {
+  position: relative;
   background: #faf6f0;
   border-radius: 16px;
   padding: 12px;
   border: 1px solid #e8ddcf;
+}
+
+.badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(46, 38, 34, 0.08);
+  color: #4d3c31;
 }
 
 .card img,
@@ -128,6 +141,46 @@ body {
   margin-top: 8px;
   font-size: 0.85rem;
   color: #705f52;
+}
+
+.timeline {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 16px;
+  background: #fff8ee;
+  border: 1px solid #f1dfc7;
+}
+
+.timeline-step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #7c6a5e;
+  font-size: 0.9rem;
+}
+
+.timeline-step.active {
+  color: #3e2f26;
+  font-weight: 600;
+}
+
+.timeline-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #d8c8b8;
+}
+
+.timeline-step.active .timeline-dot {
+  background: #c96e4b;
+}
+
+.timeline-error {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: #b6402b;
 }
 
 .uppy-Dashboard {

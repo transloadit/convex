@@ -23,10 +23,10 @@
       - `parseAssemblyFields`, `parseAssemblyResults`, `parseAssemblyStatus`.
       - Export a `TransloaditAssembly` type for the response shape.
 - [x] Add a “create + tus upload” helper for the 80% use‑case.
-- [ ] Provide a webhook “safe mode” helper:
+- [x] Provide a webhook “safe mode” helper:
       - parse + verify signature + return typed payload.
-- [ ] Improve demo UX:
+- [x] Improve demo UX:
       - Upload timeline (created → uploading → processing → stored).
       - Per‑file cards with resized + video poster.
-- [ ] Tighten README golden path:
+- [x] Tighten README golden path:
       - Short narrative flow, fewer code blocks, emphasize secure‑by‑default toggles.

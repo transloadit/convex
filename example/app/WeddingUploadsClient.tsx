@@ -26,11 +26,13 @@ type AssemblyStatus = {
 type AssemblyResult = {
   assemblyId?: string;
   _id?: string;
+  resultId?: string;
   sslUrl?: string;
   name?: string;
   mime?: string;
   stepName?: string;
   createdAt?: number;
+  raw?: Record<string, unknown>;
 };
 
 type AssemblySummary = {
@@ -54,6 +56,14 @@ type UploadResult = {
   }>;
 };
 
+type UploadStage =
+  | "idle"
+  | "creating"
+  | "uploading"
+  | "processing"
+  | "complete"
+  | "error";
+
 const retentionHours = Number.parseFloat(
   process.env.NEXT_PUBLIC_GALLERY_RETENTION_HOURS ?? "24",
 );
@@ -71,6 +81,49 @@ const filterResults = (results: AssemblyResult[]) => {
     return Date.now() - item.createdAt < retentionMs;
   });
 };
+
+const stageRank: Record<UploadStage, number> = {
+  idle: 0,
+  creating: 1,
+  uploading: 2,
+  processing: 3,
+  complete: 4,
+  error: 5,
+};
+
+const shouldAdvanceStage = (current: UploadStage, next: UploadStage) =>
+  stageRank[next] >= stageRank[current];
+
+const terminalErrorStatuses = new Set([
+  "ASSEMBLY_FAILED",
+  "ASSEMBLY_CANCELED",
+  "ASSEMBLY_ABORTED",
+  "ASSEMBLY_EXPIRED",
+  "REQUEST_ABORTED",
+]);
+
+const deriveStageFromStatus = (status: string | null | undefined) => {
+  if (!status) return null;
+  if (status === "ASSEMBLY_COMPLETED") return "complete";
+  if (status === "ASSEMBLY_EXECUTING") return "processing";
+  if (status === "ASSEMBLY_UPLOADING") return "uploading";
+  if (terminalErrorStatuses.has(status)) return "error";
+  return null;
+};
+
+const getRawString = (result: AssemblyResult, key: string) => {
+  if (!result.raw) return null;
+  const value = result.raw[key];
+  return typeof value === "string" ? value : null;
+};
+
+const getOriginalKey = (result: AssemblyResult) =>
+  getRawString(result, "original_id") ??
+  getRawString(result, "original_basename") ??
+  result.name ??
+  result.resultId ??
+  result._id ??
+  null;
 
 const terminalStatuses = new Set([
   "ASSEMBLY_COMPLETED",
@@ -118,6 +171,37 @@ const useAssemblyPoller = ({
       clearInterval(interval);
     };
   }, [assemblyId, intervalMs, onError, refresh, status]);
+};
+
+const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
+  const steps: Array<{ stage: UploadStage; label: string }> = [
+    { stage: "creating", label: "Assembly created" },
+    { stage: "uploading", label: "Uploading files" },
+    { stage: "processing", label: "Processing & storing" },
+    { stage: "complete", label: "Gallery updated" },
+  ];
+  const currentRank = stageRank[stage];
+
+  return (
+    <div className="timeline" data-testid="upload-timeline">
+      {steps.map((step) => {
+        const isActive = currentRank >= stageRank[step.stage];
+        const isCurrent = stage === step.stage;
+        return (
+          <div
+            className={`timeline-step${isActive ? " active" : ""}${isCurrent ? " current" : ""}`}
+            key={step.stage}
+          >
+            <span className="timeline-dot" />
+            <span className="timeline-label">{step.label}</span>
+          </div>
+        );
+      })}
+      {stage === "error" && (
+        <div className="timeline-error">Upload failed. Try again.</div>
+      )}
+    </div>
+  );
 };
 
 const useWeddingUppy = () => {
@@ -241,14 +325,31 @@ const refreshAssemblyRef = makeFunctionReference<
 
 const Gallery = ({ results }: { results: AssemblyResult[] }) => {
   const visibleResults = filterResults(results);
+  const thumbStep = weddingStepNames.videoThumbs;
+  const imageStep = weddingStepNames.image;
+  const videoStep = weddingStepNames.video;
+  const thumbByOriginal = new Map<string, string>();
 
-  return visibleResults.length === 0 ? (
+  for (const result of visibleResults) {
+    if (result.stepName !== thumbStep) continue;
+    if (!result.sslUrl) continue;
+    const key = getOriginalKey(result);
+    if (!key) continue;
+    thumbByOriginal.set(key, result.sslUrl);
+  }
+
+  const galleryItems = visibleResults.filter((result) => {
+    const step = result.stepName;
+    return step === imageStep || step === videoStep;
+  });
+
+  return galleryItems.length === 0 ? (
     <p className="status" data-testid="gallery-empty">
       Uploads will appear here once processing completes.
     </p>
   ) : (
     <div className="gallery" data-testid="gallery">
-      {visibleResults.map((item) => {
+      {galleryItems.map((item) => {
         const key =
           item._id ||
           item.sslUrl ||
@@ -256,12 +357,18 @@ const Gallery = ({ results }: { results: AssemblyResult[] }) => {
           `${item.assemblyId ?? "assembly"}-${item.stepName ?? "step"}-${item.createdAt ?? 0}`;
         const mime = item.mime ?? "";
         const isVideo = mime.startsWith("video");
+        const originalKey = getOriginalKey(item);
+        const posterUrl =
+          isVideo && originalKey ? thumbByOriginal.get(originalKey) : null;
+        const badge = isVideo ? "Encoded video" : "Resized image";
+
         return (
           <div className="card" data-assembly-id={item.assemblyId} key={key}>
+            <div className="badge">{badge}</div>
             {item.sslUrl ? (
               isVideo ? (
                 // biome-ignore lint/a11y/useMediaCaption: demo clips have no caption tracks
-                <video src={item.sslUrl} controls />
+                <video src={item.sslUrl} controls poster={posterUrl ?? ""} />
               ) : (
                 <img src={item.sslUrl} alt={item.name ?? "Uploaded"} />
               )
@@ -285,6 +392,7 @@ const LocalWeddingUploads = () => {
   const [results, setResults] = useState<AssemblyResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [stage, setStage] = useState<UploadStage>("idle");
   const [guestName, setGuestName] = useState("Guest");
   const [uploadCode, setUploadCode] = useState("");
   const uppy = useWeddingUppy();
@@ -306,9 +414,11 @@ const LocalWeddingUploads = () => {
 
   const startUpload = async () => {
     setError(null);
+    setStage("creating");
     const files = uppy.getFiles();
     if (!files.length) {
       setError("Select at least one image or video.");
+      setStage("error");
       return;
     }
 
@@ -328,6 +438,7 @@ const LocalWeddingUploads = () => {
       }
       const assembly = (await response.json()) as AssemblyResponse;
       setAssemblyId(assembly.assemblyId);
+      setStage("uploading");
 
       const { tusUrl, assemblyUrl } = parseAssemblyUrls(assembly.data);
       if (!tusUrl || !assemblyUrl) {
@@ -359,14 +470,24 @@ const LocalWeddingUploads = () => {
       if (failure) {
         throw new Error(failure);
       }
+      setStage("processing");
       await refreshResults(assembly.assemblyId, true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed";
       setError(message);
+      setStage("error");
     } finally {
       setIsUploading(false);
     }
   };
+
+  useEffect(() => {
+    const nextStage = deriveStageFromStatus(status);
+    if (!nextStage) return;
+    if (shouldAdvanceStage(stage, nextStage)) {
+      setStage(nextStage);
+    }
+  }, [stage, status]);
 
   useAssemblyPoller({
     assemblyId,
@@ -388,6 +509,7 @@ const LocalWeddingUploads = () => {
       error={error}
       assemblyId={assemblyId}
       status={status}
+      stage={stage}
     >
       <Gallery results={results} />
     </WeddingLayout>
@@ -398,6 +520,7 @@ const CloudWeddingUploads = () => {
   const [assemblyId, setAssemblyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [stage, setStage] = useState<UploadStage>("idle");
   const [guestName, setGuestName] = useState("Guest");
   const [uploadCode, setUploadCode] = useState("");
   const uppy = useWeddingUppy();
@@ -441,15 +564,26 @@ const CloudWeddingUploads = () => {
     },
   });
 
+  useEffect(() => {
+    const nextStage = deriveStageFromStatus(status?.ok ?? null);
+    if (!nextStage) return;
+    if (shouldAdvanceStage(stage, nextStage)) {
+      setStage(nextStage);
+    }
+  }, [stage, status?.ok]);
+
   const startUpload = async () => {
     setError(null);
+    setStage("creating");
     const files = uppy.getFiles();
     if (!files.length) {
       setError("Select at least one image or video.");
+      setStage("error");
       return;
     }
     if (!isAuthenticated) {
       setError("Signing you in...");
+      setStage("error");
       return;
     }
 
@@ -461,6 +595,7 @@ const CloudWeddingUploads = () => {
         uploadCode,
       });
       setAssemblyId(assembly.assemblyId);
+      setStage("uploading");
 
       const { tusUrl, assemblyUrl } = parseAssemblyUrls(assembly.data);
       if (!tusUrl || !assemblyUrl) {
@@ -492,9 +627,11 @@ const CloudWeddingUploads = () => {
       if (failure) {
         throw new Error(failure);
       }
+      setStage("processing");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Upload failed";
       setError(message);
+      setStage("error");
     } finally {
       setIsUploading(false);
     }
@@ -512,6 +649,7 @@ const CloudWeddingUploads = () => {
       error={error}
       assemblyId={assemblyId}
       status={status?.ok ?? "pending"}
+      stage={stage}
       toasts={toasts}
       authState={
         isLoading ? "loading" : isAuthenticated ? "authenticated" : "guest"
@@ -533,6 +671,7 @@ const WeddingLayout = ({
   error,
   assemblyId,
   status,
+  stage,
   toasts,
   authState,
   children,
@@ -547,6 +686,7 @@ const WeddingLayout = ({
   error: string | null;
   assemblyId: string | null;
   status: string;
+  stage: UploadStage;
   toasts?: Toast[];
   authState?: "loading" | "authenticated" | "guest";
   children: React.ReactNode;
@@ -610,6 +750,7 @@ const WeddingLayout = ({
             {isUploading ? "Uploading…" : "Upload to the gallery"}
           </button>
         </div>
+        <UploadTimeline stage={stage} />
         {error && (
           <p className="status" data-testid="upload-error">
             {error}
@@ -625,8 +766,8 @@ const WeddingLayout = ({
       <section className="panel">
         <h2 className="headline">Live gallery</h2>
         <p className="subhead">
-          Curated highlights from {weddingStepNames.image} and{" "}
-          {weddingStepNames.video}.
+          Curated highlights processed by Transloadit — resized images and
+          encoded videos.
         </p>
         {children}
         <p className="status">

@@ -3,6 +3,7 @@ import { robotFileFilterInstructionsSchema } from "@transloadit/zod/v3/robots/fi
 import { robotImageResizeInstructionsSchema } from "@transloadit/zod/v3/robots/image-resize";
 import { robotUploadHandleInstructionsSchema } from "@transloadit/zod/v3/robots/upload-handle";
 import { robotVideoEncodeInstructionsSchema } from "@transloadit/zod/v3/robots/video-encode";
+import { robotVideoThumbsInstructionsSchema } from "@transloadit/zod/v3/robots/video-thumbs";
 import type { z } from "zod/v3";
 import { type R2Config, readR2ConfigFromEnv } from "./r2";
 
@@ -20,6 +21,7 @@ type RobotUploadHandleInput = z.input<
   typeof robotUploadHandleInstructionsSchema
 >;
 type RobotVideoEncodeInput = z.input<typeof robotVideoEncodeInstructionsSchema>;
+type RobotVideoThumbsInput = z.input<typeof robotVideoThumbsInstructionsSchema>;
 
 const buildStoreStep = (
   use: string,
@@ -87,6 +89,18 @@ const buildVideoStep = (use: string): RobotVideoEncodeInput => {
   return step;
 };
 
+const buildVideoThumbsStep = (use: string): RobotVideoThumbsInput => {
+  const step: RobotVideoThumbsInput = {
+    robot: "/video/thumbs",
+    use,
+    count: 1,
+    format: "jpg",
+    width: 640,
+  };
+  robotVideoThumbsInstructionsSchema.parse(step);
+  return step;
+};
+
 export const buildWeddingSteps = (): TransloaditSteps => {
   const r2 = readR2ConfigFromEnv(process.env);
 
@@ -95,8 +109,10 @@ export const buildWeddingSteps = (): TransloaditSteps => {
     images_filtered: buildFilterStep(":original", "^image"),
     videos_filtered: buildFilterStep(":original", "^video"),
     images_resized: buildResizeStep("images_filtered"),
+    videos_thumbs: buildVideoThumbsStep("videos_filtered"),
     videos_encoded: buildVideoStep("videos_filtered"),
     images_output: buildStoreStep("images_resized", r2),
+    videos_thumbs_output: buildStoreStep("videos_thumbs", r2),
     videos_output: buildStoreStep("videos_encoded", r2),
   };
 };
