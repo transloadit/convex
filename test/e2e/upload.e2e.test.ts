@@ -206,7 +206,15 @@ describeE2e("e2e upload flow", () => {
         state: "attached",
       });
 
-      const fileInput = page.locator('input[type="file"]').first();
+      await page.waitForFunction(
+        () => Boolean((window as { __uppy?: unknown }).__uppy),
+        undefined,
+        { timeout: 20_000 },
+      );
+
+      const fileInput = page
+        .locator('[data-testid="uppy-dashboard"] input[type="file"]')
+        .first();
       await fileInput.waitFor({ state: "attached" });
       await fileInput.setInputFiles([imagePath, videoPath]);
       await page.waitForFunction(
@@ -215,7 +223,7 @@ describeE2e("e2e upload flow", () => {
             window as { __uppy?: { getFiles: () => unknown[] } }
           ).__uppy?.getFiles?.().length === 2,
         undefined,
-        { timeout: 10_000 },
+        { timeout: 20_000 },
       );
       await page.click('[data-testid="start-upload"]');
 
