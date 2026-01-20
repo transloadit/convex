@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from "node:crypto";
+import { createPublicKey, generateKeyPairSync } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -118,6 +118,18 @@ const deployCloud = async () => {
       jwtPrivateKey = privateKey;
     }
     await setEnv("JWT_PRIVATE_KEY", jwtPrivateKey);
+    const jwk = createPublicKey(jwtPrivateKey).export({ format: "jwk" });
+    const jwks = JSON.stringify({
+      keys: [
+        {
+          ...jwk,
+          use: "sig",
+          alg: "RS256",
+          kid: "convex",
+        },
+      ],
+    });
+    await setEnv("JWKS", jwks);
 
     const optionalEnv = [
       "TRANSLOADIT_R2_CREDENTIALS",
