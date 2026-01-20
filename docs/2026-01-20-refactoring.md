@@ -40,3 +40,4 @@
 - [x] Update README + example to use the new helpers where it keeps code cleaner.
 - [x] Add a multi-file Tus helper with concurrency + cancellation + per-file/overall progress.
 - [x] Add a “copy payload” panel in the example (shows createAssembly args, redacted).
+- [x] Add a typed result map for common robots (image resize, video encode, store).

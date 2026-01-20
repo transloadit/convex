@@ -26,6 +26,15 @@ export {
   parseAssemblyUrls,
 } from "../shared/assemblyUrls.ts";
 export type {
+  ImageResizeResult,
+  ResultByRobot,
+  ResultForRobot,
+  StoreResult,
+  TransloaditResult,
+  VideoEncodeResult,
+  VideoThumbsResult,
+} from "../shared/resultTypes.ts";
+export type {
   TusMetadataOptions,
   TusUploadConfig,
 } from "../shared/tusUpload.ts";

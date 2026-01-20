@@ -177,6 +177,15 @@ const fields = parseAssemblyFields(assembly.data);
 const results = parseAssemblyResults(assembly.data);
 ```
 
+For common robots, you can reference typed results by robot name:
+
+```ts
+import type { ResultForRobot } from "@transloadit/convex";
+
+type ResizeResult = ResultForRobot<"/image/resize">;
+type EncodeResult = ResultForRobot<"/video/encode">;
+```
+
 For Uppy/Tus wiring, you can build the metadata + endpoint in one go:
 
 ```ts
