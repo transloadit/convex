@@ -5,6 +5,7 @@ export const {
   createAssembly,
   handleWebhook,
   queueWebhook,
+  refreshAssembly,
   getAssemblyStatus,
   listAssemblies,
   listResults,
