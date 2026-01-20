@@ -1,6 +1,6 @@
 import { parseTransloaditWebhook } from "@transloadit/convex";
 import { httpRouter } from "convex/server";
-import { api } from "./_generated/api";
+import { components } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 
 const http = httpRouter();
@@ -60,7 +60,7 @@ http.route({
     const { payload, rawBody, signature } =
       await parseTransloaditWebhook(request);
 
-    await ctx.runAction(api.transloadit.queueWebhook, {
+    await ctx.runAction(components.transloadit.lib.queueWebhook, {
       payload,
       rawBody,
       signature,

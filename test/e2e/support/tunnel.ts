@@ -6,20 +6,27 @@ export type TunnelInfo = {
   notifyUrl?: string;
 };
 
-export async function startTunnel(port: number) {
+const startTunnelOnce = (port: number) => {
   const process = spawn(
     "node",
     [resolve("scripts/start-webhook-tunnel.ts"), "--json", "--port", `${port}`],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
 
-  const info = await new Promise<TunnelInfo>((resolvePromise, reject) => {
+  const info = new Promise<TunnelInfo>((resolvePromise, reject) => {
     let buffer = "";
     const logs: string[] = [];
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
     const finish = (error?: Error) => {
       if (timeoutId) clearTimeout(timeoutId);
+      if (error) {
+        const leftover = buffer.trim();
+        if (leftover) {
+          logs.push(leftover);
+          buffer = "";
+        }
+      }
       if (error) {
         const details = logs.length ? `\n${logs.join("\n")}` : "";
         reject(new Error(`${error.message}${details}`));
@@ -34,15 +41,19 @@ export async function startTunnel(port: number) {
 
     const onData = (chunk: Buffer) => {
       buffer += chunk.toString();
-      const newlineIndex = buffer.indexOf("\n");
-      if (newlineIndex === -1) return;
-      const line = buffer.slice(0, newlineIndex).trim();
-      buffer = buffer.slice(newlineIndex + 1);
-      if (!line) return;
-      try {
-        resolvePromise(JSON.parse(line) as TunnelInfo);
-      } catch {
-        logs.push(line);
+      let newlineIndex = buffer.indexOf("\n");
+      while (newlineIndex !== -1) {
+        const line = buffer.slice(0, newlineIndex).trim();
+        buffer = buffer.slice(newlineIndex + 1);
+        if (line) {
+          try {
+            resolvePromise(JSON.parse(line) as TunnelInfo);
+            return;
+          } catch {
+            logs.push(line);
+          }
+        }
+        newlineIndex = buffer.indexOf("\n");
       }
     };
 
@@ -57,4 +68,19 @@ export async function startTunnel(port: number) {
   });
 
   return { process, info };
+};
+
+export async function startTunnel(port: number) {
+  let attempt = 0;
+  let lastError: Error | null = null;
+  while (attempt < 3) {
+    attempt += 1;
+    try {
+      const { process, info } = startTunnelOnce(port);
+      return { process, info: await info };
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+    }
+  }
+  throw lastError ?? new Error("Failed to start webhook tunnel");
 }

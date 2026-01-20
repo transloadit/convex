@@ -41,6 +41,14 @@ type R2Config = {
 
 const readR2Config = (): R2Config => {
   const env = r2EnvSchema.parse(process.env);
+  const clean = (value?: string) => value?.trim() || undefined;
+  const credentials = clean(env.TRANSLOADIT_R2_CREDENTIALS);
+  const bucket = clean(env.R2_BUCKET);
+  const accessKeyId = clean(env.R2_ACCESS_KEY_ID);
+  const secretAccessKey = clean(env.R2_SECRET_ACCESS_KEY);
+  const accountId = clean(env.R2_ACCOUNT_ID);
+  const hostValue = clean(env.R2_HOST);
+  const publicUrl = clean(env.R2_PUBLIC_URL);
   const normalizeHost = (value?: string) => {
     if (!value) return undefined;
     if (value.startsWith("http://") || value.startsWith("https://")) {
@@ -53,24 +61,22 @@ const readR2Config = (): R2Config => {
     return value.endsWith("/") ? value : `${value}/`;
   };
   const host = normalizeHost(
-    env.R2_HOST ??
-      (env.R2_ACCOUNT_ID
-        ? `${env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-        : undefined),
+    hostValue ??
+      (accountId ? `${accountId}.r2.cloudflarestorage.com` : undefined),
   );
 
-  if (env.TRANSLOADIT_R2_CREDENTIALS) {
+  if (credentials) {
     return {
-      credentials: env.TRANSLOADIT_R2_CREDENTIALS,
-      bucket: env.R2_BUCKET,
-      accessKeyId: env.R2_ACCESS_KEY_ID,
-      secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+      credentials,
+      bucket,
+      accessKeyId,
+      secretAccessKey,
       host,
-      urlPrefix: normalizeUrlPrefix(env.R2_PUBLIC_URL),
+      urlPrefix: normalizeUrlPrefix(publicUrl),
     };
   }
 
-  if (!env.R2_BUCKET || !env.R2_ACCESS_KEY_ID || !env.R2_SECRET_ACCESS_KEY) {
+  if (!bucket || !accessKeyId || !secretAccessKey) {
     throw new Error(
       "Missing R2 credentials. Set TRANSLOADIT_R2_CREDENTIALS or provide R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY.",
     );
@@ -80,11 +86,11 @@ const readR2Config = (): R2Config => {
   }
 
   return {
-    bucket: env.R2_BUCKET,
-    accessKeyId: env.R2_ACCESS_KEY_ID,
-    secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+    bucket,
+    accessKeyId,
+    secretAccessKey,
     host,
-    urlPrefix: normalizeUrlPrefix(env.R2_PUBLIC_URL),
+    urlPrefix: normalizeUrlPrefix(publicUrl),
   };
 };
 

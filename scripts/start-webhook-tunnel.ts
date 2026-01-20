@@ -102,7 +102,16 @@ if (Number.isNaN(port)) {
 const cloudflared = await ensureCloudflared();
 const tunnel = spawn(
   cloudflared,
-  ["tunnel", "--url", `http://localhost:${port}`],
+  [
+    "tunnel",
+    "--url",
+    `http://localhost:${port}`,
+    "--protocol",
+    "http2",
+    "--no-autoupdate",
+    "--retries",
+    "20",
+  ],
   {
     stdio: ["ignore", "pipe", "pipe"],
   },

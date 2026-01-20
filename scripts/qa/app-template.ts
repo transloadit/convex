@@ -439,7 +439,7 @@ export const writeAppFiles = async ({
     [
       'import { parseTransloaditWebhook } from "@transloadit/convex";',
       'import { httpRouter, httpActionGeneric } from "convex/server";',
-      'import { queueWebhook } from "./transloadit";',
+      'import { components } from "./_generated/api";',
       "",
       "const http = httpRouter();",
       "const httpAction = httpActionGeneric;",
@@ -499,7 +499,7 @@ export const writeAppFiles = async ({
       "    const { payload, rawBody, signature } =",
       "      await parseTransloaditWebhook(request);",
       "",
-      "    await ctx.runAction(queueWebhook, {",
+      "    await ctx.runAction(components.transloadit.lib.queueWebhook, {",
       "      payload,",
       "      rawBody,",
       "      signature,",
