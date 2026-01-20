@@ -151,11 +151,27 @@ const useAssemblyPoller = ({
   onError?: (error: Error) => void;
   shouldContinue?: () => boolean;
 }) => {
+  const refreshRef = useRef(refresh);
+  const onErrorRef = useRef(onError);
+  const shouldContinueRef = useRef(shouldContinue);
+
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    shouldContinueRef.current = shouldContinue;
+  }, [shouldContinue]);
+
   useEffect(() => {
     if (!assemblyId) return;
     const shouldKeepPolling = () => {
       if (!isTerminalStatus(status)) return true;
-      return shouldContinue?.() ?? false;
+      return shouldContinueRef.current?.() ?? false;
     };
     if (!shouldKeepPolling()) return;
     let cancelled = false;
@@ -163,12 +179,12 @@ const useAssemblyPoller = ({
       if (cancelled) return;
       if (!shouldKeepPolling()) return;
       try {
-        await refresh();
+        await refreshRef.current();
       } catch (error) {
         if (!cancelled) {
           const resolved =
             error instanceof Error ? error : new Error("Refresh failed");
-          onError?.(resolved);
+          onErrorRef.current?.(resolved);
         }
       }
     };
@@ -178,7 +194,7 @@ const useAssemblyPoller = ({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [assemblyId, intervalMs, onError, refresh, shouldContinue, status]);
+  }, [assemblyId, intervalMs, status]);
 };
 
 const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
