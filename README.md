@@ -236,6 +236,24 @@ await uploadWithTransloaditTus(
 );
 ```
 
+For multi-file uploads with concurrency + cancellation:
+
+```tsx
+import { uploadFilesWithTransloaditTus } from "@transloadit/convex/react";
+
+const controller = uploadFilesWithTransloaditTus(createAssembly, files, {
+  concurrency: 3,
+  onFileProgress: (file, progress) => console.log(file.name, progress),
+  onOverallProgress: (progress) => console.log("overall", progress),
+});
+
+// Optional: cancel in-flight uploads
+// controller.cancel();
+
+const result = await controller.promise;
+console.log(result.files);
+```
+
 ### Reactive status/results
 
 ```tsx

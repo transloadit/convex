@@ -60,6 +60,7 @@ export const createWeddingAssembly = action({
   returns: v.object({
     assemblyId: v.string(),
     data: v.any(),
+    params: v.any(),
   }),
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -82,8 +83,7 @@ export const createWeddingAssembly = action({
     const steps = buildWeddingSteps();
     const notifyUrl = requireEnv("TRANSLOADIT_NOTIFY_URL");
     const fileCount = Math.max(1, args.fileCount);
-
-    return ctx.runAction(components.transloadit.lib.createAssembly, {
+    const assemblyArgs = {
       steps,
       notifyUrl,
       numExpectedUploadFiles: fileCount,
@@ -94,10 +94,50 @@ export const createWeddingAssembly = action({
         userId: identity.subject,
       },
       userId: identity.subject,
-      config: {
-        authKey: requireEnv("TRANSLOADIT_KEY"),
-        authSecret: requireEnv("TRANSLOADIT_SECRET"),
+    };
+
+    const assembly = await ctx.runAction(
+      components.transloadit.lib.createAssembly,
+      {
+        ...assemblyArgs,
+        config: {
+          authKey: requireEnv("TRANSLOADIT_KEY"),
+          authSecret: requireEnv("TRANSLOADIT_SECRET"),
+        },
       },
-    });
+    );
+
+    const params = redactSecrets(assemblyArgs);
+
+    return {
+      ...assembly,
+      params,
+    };
   },
 });
+
+const secretKeys = new Set([
+  "secret",
+  "key",
+  "credentials",
+  "authSecret",
+  "authKey",
+]);
+
+const redactSecrets = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => redactSecrets(item));
+  }
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).map(
+      ([key, val]) => {
+        if (secretKeys.has(key)) {
+          return [key, "***"];
+        }
+        return [key, redactSecrets(val)];
+      },
+    );
+    return Object.fromEntries(entries);
+  }
+  return value;
+};

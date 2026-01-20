@@ -100,6 +100,37 @@ export type TusUploadEvents = {
   onStateChange?: (state: UploadState) => void;
 };
 
+export type MultiFileTusUploadOptions = Omit<
+  TusUploadOptions,
+  "metadata" | "fieldName" | "onProgress"
+> & {
+  concurrency?: number;
+  metadata?: Record<string, string> | ((file: File) => Record<string, string>);
+  fieldName?: string | ((file: File) => string);
+  onFileProgress?: (file: File, progress: number) => void;
+  onFileComplete?: (file: File) => void;
+  onFileError?: (file: File, error: Error) => void;
+  onOverallProgress?: (progress: number) => void;
+  onStateChange?: (state: UploadState) => void;
+  failFast?: boolean;
+  signal?: AbortSignal;
+};
+
+export type MultiFileTusUploadResult = {
+  assemblyId: string;
+  data: Record<string, unknown>;
+  files: Array<{
+    file: File;
+    status: "success" | "error" | "canceled";
+    error?: Error;
+  }>;
+};
+
+export type MultiFileTusUploadController = {
+  promise: Promise<MultiFileTusUploadResult>;
+  cancel: () => void;
+};
+
 export async function uploadWithTransloaditTus(
   createAssembly: CreateAssemblyHandler,
   file: File,
@@ -272,6 +303,299 @@ export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
     }),
     [state.error, state.isUploading, state.progress, upload, reset],
   );
+}
+
+export function uploadFilesWithTransloaditTus(
+  createAssembly: CreateAssemblyHandler,
+  files: File[],
+  options: MultiFileTusUploadOptions,
+): MultiFileTusUploadController {
+  const concurrency = Math.max(1, options.concurrency ?? 3);
+  const state: UploadState = {
+    isUploading: true,
+    progress: 0,
+    error: null,
+  };
+  const results: MultiFileTusUploadResult["files"] = files.map((file) => ({
+    file,
+    status: "canceled",
+  }));
+  const inFlight = new Set<Upload>();
+  const abortController = new AbortController();
+  let cancelled = false;
+
+  const emitState = (next: UploadState) => {
+    state.isUploading = next.isUploading;
+    state.progress = next.progress;
+    state.error = next.error;
+    options.onStateChange?.(next);
+  };
+
+  const cancel = () => {
+    if (cancelled) return;
+    cancelled = true;
+    abortController.abort();
+    for (const uploader of inFlight) {
+      try {
+        uploader.abort(true);
+      } catch {
+        // ignore abort errors
+      }
+    }
+  };
+
+  if (options.signal) {
+    if (options.signal.aborted) {
+      cancel();
+    } else {
+      options.signal.addEventListener("abort", cancel, { once: true });
+    }
+  }
+
+  const promise = (async () => {
+    if (files.length === 0) {
+      throw new Error("No files provided for upload");
+    }
+
+    emitState({ ...state });
+
+    const assembly = await createAssembly({
+      templateId: options.templateId,
+      steps: options.steps,
+      fields: options.fields,
+      notifyUrl: options.notifyUrl,
+      numExpectedUploadFiles: options.numExpectedUploadFiles ?? files.length,
+      expires: options.expires,
+      additionalParams: options.additionalParams,
+      userId: options.userId,
+    });
+
+    options.onAssemblyCreated?.(assembly);
+
+    type RetryError = {
+      originalResponse?: {
+        getStatus?: () => number;
+        getHeader?: (header: string) => string | undefined;
+      } | null;
+    };
+
+    const getStatus = (error: RetryError) =>
+      error.originalResponse?.getStatus &&
+      typeof error.originalResponse.getStatus === "function"
+        ? error.originalResponse.getStatus()
+        : 0;
+
+    const retryDelays = options.retryDelays
+      ? [...options.retryDelays]
+      : [1000, 5000, 15000, 30000];
+    const rateLimitRetryDelays = options.rateLimitRetryDelays
+      ? [...options.rateLimitRetryDelays]
+      : [20_000, 40_000, 80_000];
+
+    const shouldRetry = (error: RetryError) => {
+      const status = getStatus(error);
+      if (!status) return true;
+      if (status === 409 || status === 423) return true;
+      return status < 400 || status >= 500;
+    };
+
+    const perFileBytes = new Map<number, { uploaded: number; total: number }>();
+    const updateOverallProgress = () => {
+      let totalUploaded = 0;
+      let totalBytes = 0;
+      for (const { uploaded, total } of perFileBytes.values()) {
+        totalUploaded += uploaded;
+        totalBytes += total;
+      }
+      const overall =
+        totalBytes > 0 ? Math.round((totalUploaded / totalBytes) * 100) : 0;
+      emitState({ isUploading: true, progress: overall, error: null });
+      options.onOverallProgress?.(overall);
+    };
+
+    const resolveMetadata = (file: File) =>
+      typeof options.metadata === "function"
+        ? options.metadata(file)
+        : options.metadata;
+
+    const resolveFieldName = (file: File) =>
+      typeof options.fieldName === "function"
+        ? options.fieldName(file)
+        : options.fieldName;
+
+    const uploadFile = async (file: File, index: number) => {
+      const { endpoint, metadata } = buildTusUploadConfig(assembly.data, file, {
+        fieldName: resolveFieldName(file),
+        metadata: resolveMetadata(file),
+      });
+
+      let uploadUrl: string | null = null;
+      let rateLimitAttempt = 0;
+      let uploader: Upload | null = null;
+
+      const runUpload = () =>
+        new Promise<void>((resolve, reject) => {
+          if (cancelled) {
+            reject(new Error("Upload canceled"));
+            return;
+          }
+          const onAbort = () => {
+            reject(new Error("Upload canceled"));
+          };
+          abortController.signal.addEventListener("abort", onAbort, {
+            once: true,
+          });
+
+          let currentUploader: Upload;
+          const uploadOptions: ConstructorParameters<typeof Upload>[1] = {
+            endpoint,
+            metadata,
+            retryDelays,
+            uploadDataDuringCreation: options.uploadDataDuringCreation ?? false,
+            onUploadUrlAvailable: () => {
+              uploadUrl = currentUploader.url;
+            },
+            onShouldRetry: (error, retryAttempt) =>
+              options.onShouldRetry?.(error, retryAttempt) ??
+              shouldRetry(error),
+            onProgress: (bytesUploaded, bytesTotal) => {
+              perFileBytes.set(index, {
+                uploaded: bytesUploaded,
+                total: bytesTotal,
+              });
+              const progress = Math.round((bytesUploaded / bytesTotal) * 100);
+              options.onFileProgress?.(file, progress);
+              updateOverallProgress();
+            },
+            onError: (error) => {
+              abortController.signal.removeEventListener("abort", onAbort);
+              reject(error);
+            },
+            onSuccess: () => {
+              abortController.signal.removeEventListener("abort", onAbort);
+              resolve();
+            },
+          };
+
+          if (options.chunkSize !== undefined) {
+            uploadOptions.chunkSize = options.chunkSize;
+          }
+          if (uploadUrl) {
+            uploadOptions.uploadUrl = uploadUrl;
+          }
+          if (options.overridePatchMethod !== undefined) {
+            uploadOptions.overridePatchMethod = options.overridePatchMethod;
+          }
+          if (options.storeFingerprintForResuming !== undefined) {
+            uploadOptions.storeFingerprintForResuming =
+              options.storeFingerprintForResuming;
+          }
+          if (options.removeFingerprintOnSuccess !== undefined) {
+            uploadOptions.removeFingerprintOnSuccess =
+              options.removeFingerprintOnSuccess;
+          }
+
+          currentUploader = new Upload(file, uploadOptions);
+          uploader = currentUploader;
+          inFlight.add(currentUploader);
+
+          currentUploader.start();
+        }).finally(() => {
+          if (uploader) {
+            inFlight.delete(uploader);
+          }
+        });
+
+      while (true) {
+        try {
+          await runUpload();
+          break;
+        } catch (error) {
+          if (cancelled) {
+            throw error;
+          }
+          const status = getStatus(error as RetryError);
+          if (
+            status === 429 &&
+            rateLimitAttempt < rateLimitRetryDelays.length
+          ) {
+            const delay = rateLimitRetryDelays[rateLimitAttempt] ?? 0;
+            rateLimitAttempt += 1;
+            await new Promise((resolve) => setTimeout(resolve, delay));
+            continue;
+          }
+          throw error;
+        }
+      }
+    };
+
+    let nextIndex = 0;
+    const errors: Error[] = [];
+
+    const worker = async () => {
+      while (true) {
+        if (cancelled) return;
+        const index = nextIndex;
+        nextIndex += 1;
+        if (index >= files.length) return;
+        const file = files[index];
+        try {
+          await uploadFile(file, index);
+          results[index] = { file, status: "success" };
+          options.onFileComplete?.(file);
+        } catch (error) {
+          if (cancelled) {
+            results[index] = { file, status: "canceled" };
+            return;
+          }
+          const err =
+            error instanceof Error ? error : new Error("Upload failed");
+          results[index] = { file, status: "error", error: err };
+          errors.push(err);
+          options.onFileError?.(file, err);
+          if (options.failFast ?? false) {
+            cancel();
+            return;
+          }
+        }
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(concurrency, files.length) }, worker),
+    );
+
+    if (cancelled) {
+      const error = new Error("Upload canceled");
+      (error as Error & { results?: MultiFileTusUploadResult }).results = {
+        assemblyId: assembly.assemblyId,
+        data: assembly.data,
+        files: results,
+      };
+      throw error;
+    }
+
+    const hasErrors = results.some((result) => result.status === "error");
+    const resultPayload: MultiFileTusUploadResult = {
+      assemblyId: assembly.assemblyId,
+      data: assembly.data,
+      files: results,
+    };
+
+    if (hasErrors) {
+      const error = new Error(
+        `Failed to upload ${errors.length} file${errors.length === 1 ? "" : "s"}`,
+      );
+      (error as Error & { results?: MultiFileTusUploadResult }).results =
+        resultPayload;
+      throw error;
+    }
+
+    emitState({ isUploading: false, progress: 100, error: null });
+    return resultPayload;
+  })();
+
+  return { promise, cancel };
 }
 
 export function useAssemblyStatus(

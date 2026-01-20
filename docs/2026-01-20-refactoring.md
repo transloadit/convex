@@ -38,3 +38,5 @@
 - [x] Add a helper for building Tus metadata + endpoint (Uppy-friendly) without app boilerplate.
 - [x] Add a “verify + queue” convenience helper for Convex HTTP handlers.
 - [x] Update README + example to use the new helpers where it keeps code cleaner.
+- [x] Add a multi-file Tus helper with concurrency + cancellation + per-file/overall progress.
+- [x] Add a “copy payload” panel in the example (shows createAssembly args, redacted).

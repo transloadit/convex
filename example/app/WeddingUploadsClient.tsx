@@ -1,13 +1,14 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
+import { buildTusUploadConfig } from "@transloadit/convex";
 import Uppy from "@uppy/core";
 import Tus from "@uppy/tus";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { parseAssemblyUrls, weddingStepNames } from "../lib/transloadit";
+import { weddingStepNames } from "../lib/transloadit";
 import { Providers } from "./providers";
 
 const Dashboard = dynamic(() => import("@uppy/react/dashboard"), {
@@ -17,6 +18,7 @@ const Dashboard = dynamic(() => import("@uppy/react/dashboard"), {
 type AssemblyResponse = {
   assemblyId: string;
   data: Record<string, unknown>;
+  params?: Record<string, unknown>;
 };
 
 type AssemblyStatus = {
@@ -392,6 +394,10 @@ const Gallery = ({ results }: { results: AssemblyResult[] }) => {
 
 const LocalWeddingUploads = () => {
   const [assemblyId, setAssemblyId] = useState<string | null>(null);
+  const [assemblyParams, setAssemblyParams] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [status, setStatus] = useState<string>("pending");
   const [results, setResults] = useState<AssemblyResult[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -442,31 +448,31 @@ const LocalWeddingUploads = () => {
       }
       const assembly = (await response.json()) as AssemblyResponse;
       setAssemblyId(assembly.assemblyId);
+      setAssemblyParams(assembly.params ?? null);
       setStage("uploading");
 
-      const { tusUrl, assemblyUrl } = parseAssemblyUrls(assembly.data);
-      if (!tusUrl || !assemblyUrl) {
-        throw new Error("Missing tus_url or assembly_url in response");
-      }
-
       const tus = uppy.getPlugin("Tus");
-      if (tus && "setOptions" in tus) {
-        tus.setOptions({ endpoint: tusUrl, addRequestId: true });
-      }
-
+      let tusEndpoint: string | null = null;
       for (const file of files) {
-        uppy.setFileMeta(file.id, {
-          assembly_url: assemblyUrl,
-          fieldname: "file",
-          filename: file.name,
-        });
+        const { endpoint, metadata } = buildTusUploadConfig(
+          assembly.data,
+          file.data as File,
+          { fieldName: "file" },
+        );
+        if (!tusEndpoint) {
+          tusEndpoint = endpoint;
+        }
+        uppy.setFileMeta(file.id, metadata);
         uppy.setFileState(file.id, {
           tus: {
             ...(file.tus ?? {}),
-            endpoint: tusUrl,
+            endpoint,
             addRequestId: true,
           },
         });
+      }
+      if (tus && "setOptions" in tus && tusEndpoint) {
+        tus.setOptions({ endpoint: tusEndpoint, addRequestId: true });
       }
 
       const result = (await uppy.upload()) as UploadResult;
@@ -512,6 +518,7 @@ const LocalWeddingUploads = () => {
       onUpload={() => void startUpload()}
       error={error}
       assemblyId={assemblyId}
+      assemblyParams={assemblyParams}
       status={status}
       stage={stage}
     >
@@ -522,6 +529,10 @@ const LocalWeddingUploads = () => {
 
 const CloudWeddingUploads = () => {
   const [assemblyId, setAssemblyId] = useState<string | null>(null);
+  const [assemblyParams, setAssemblyParams] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [stage, setStage] = useState<UploadStage>("idle");
@@ -599,31 +610,31 @@ const CloudWeddingUploads = () => {
         uploadCode,
       });
       setAssemblyId(assembly.assemblyId);
+      setAssemblyParams(assembly.params ?? null);
       setStage("uploading");
 
-      const { tusUrl, assemblyUrl } = parseAssemblyUrls(assembly.data);
-      if (!tusUrl || !assemblyUrl) {
-        throw new Error("Missing tus_url or assembly_url in response");
-      }
-
       const tus = uppy.getPlugin("Tus");
-      if (tus && "setOptions" in tus) {
-        tus.setOptions({ endpoint: tusUrl, addRequestId: true });
-      }
-
+      let tusEndpoint: string | null = null;
       for (const file of files) {
-        uppy.setFileMeta(file.id, {
-          assembly_url: assemblyUrl,
-          fieldname: "file",
-          filename: file.name,
-        });
+        const { endpoint, metadata } = buildTusUploadConfig(
+          assembly.data,
+          file.data as File,
+          { fieldName: "file" },
+        );
+        if (!tusEndpoint) {
+          tusEndpoint = endpoint;
+        }
+        uppy.setFileMeta(file.id, metadata);
         uppy.setFileState(file.id, {
           tus: {
             ...(file.tus ?? {}),
-            endpoint: tusUrl,
+            endpoint,
             addRequestId: true,
           },
         });
+      }
+      if (tus && "setOptions" in tus && tusEndpoint) {
+        tus.setOptions({ endpoint: tusEndpoint, addRequestId: true });
       }
 
       const result = (await uppy.upload()) as UploadResult;
@@ -658,6 +669,7 @@ const CloudWeddingUploads = () => {
       authState={
         isLoading ? "loading" : isAuthenticated ? "authenticated" : "guest"
       }
+      assemblyParams={assemblyParams}
     >
       <Gallery results={results ?? []} />
     </WeddingLayout>
@@ -674,6 +686,7 @@ const WeddingLayout = ({
   onUpload,
   error,
   assemblyId,
+  assemblyParams,
   status,
   stage,
   toasts,
@@ -689,12 +702,26 @@ const WeddingLayout = ({
   onUpload: () => void;
   error: string | null;
   assemblyId: string | null;
+  assemblyParams: Record<string, unknown> | null;
   status: string;
   stage: UploadStage;
   toasts?: Toast[];
   authState?: "loading" | "authenticated" | "guest";
   children: React.ReactNode;
 }) => {
+  const [copied, setCopied] = useState(false);
+  const payloadText = assemblyParams
+    ? JSON.stringify(assemblyParams, null, 2)
+    : null;
+
+  const handleCopy = async () => {
+    if (!payloadText) return;
+    if (!navigator.clipboard) return;
+    await navigator.clipboard.writeText(payloadText);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <main
       className="page"
@@ -764,6 +791,24 @@ const WeddingLayout = ({
           <div className="status">
             <p data-testid="assembly-id">ID: {assemblyId}</p>
             <p data-testid="assembly-status">Status: {status}</p>
+          </div>
+        )}
+        {payloadText && (
+          <div className="payload-panel" data-testid="assembly-payload">
+            <div className="payload-header">
+              <span>createAssembly payload</span>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => void handleCopy()}
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <pre className="payload-code">{payloadText}</pre>
+            <p className="payload-note">
+              Secrets are redacted server-side before returning this payload.
+            </p>
           </div>
         )}
       </section>
