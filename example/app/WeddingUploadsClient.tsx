@@ -552,6 +552,7 @@ const WeddingLayout = ({
             height={360}
             width="100%"
             proudlyDisplayPoweredByUppy={false}
+            hideUploadButton
             note={`Add photos/videos. Gallery shows ${retentionLabel} to limit spam.`}
           />
         </div>
