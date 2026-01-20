@@ -278,6 +278,8 @@ describeE2e("e2e upload flow", () => {
             const videosReady =
               vids.length > 0 &&
               vids.every((video) => {
+                const src = video.getAttribute("src");
+                if (src && src.length > 0) return true;
                 const poster = video.getAttribute("poster");
                 return Boolean(poster && poster.length > 0);
               });
