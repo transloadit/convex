@@ -194,6 +194,11 @@ const getAssemblyStatusRef = makeFunctionReference<
   { assemblyId: string },
   AssemblyStatus | null
 >("transloadit:getAssemblyStatus");
+const refreshAssemblyRef = makeFunctionReference<
+  "action",
+  { assemblyId: string },
+  { assemblyId: string; resultCount: number; ok?: string; status?: string }
+>("transloadit:refreshAssembly");
 
 const Gallery = ({ results }: { results: AssemblyResult[] }) => {
   const visibleResults = filterResults(results);
@@ -374,6 +379,7 @@ const CloudWeddingUploads = () => {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();
   const createWeddingAssembly = useAction(createWeddingAssemblyRef);
+  const refreshAssembly = useAction(refreshAssemblyRef);
   const status = useQuery(
     getAssemblyStatusRef,
     assemblyId ? { assemblyId } : "skip",
@@ -399,6 +405,31 @@ const CloudWeddingUploads = () => {
       cancelled = true;
     };
   }, [isLoading, isAuthenticated, signIn]);
+
+  useEffect(() => {
+    if (!assemblyId) return;
+    const statusValue = status?.ok ?? "pending";
+    if (statusValue === "ASSEMBLY_COMPLETED") return;
+    let cancelled = false;
+
+    const poll = async () => {
+      if (cancelled) return;
+      try {
+        await refreshAssembly({ assemblyId });
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("Refresh assembly failed", error);
+        }
+      }
+    };
+
+    void poll();
+    const interval = setInterval(poll, 8000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [assemblyId, refreshAssembly, status?.ok]);
 
   const startUpload = async () => {
     setError(null);
