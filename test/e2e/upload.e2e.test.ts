@@ -159,6 +159,22 @@ describeE2e("e2e upload flow", () => {
           const bodyTextSnippet = await page
             .evaluate(() => document.body?.innerText?.slice(0, 500) ?? "")
             .catch(() => "");
+          const authStorage = await page
+            .evaluate(() => {
+              const entries: Array<{ key: string; value: string | null }> = [];
+              try {
+                for (let index = 0; index < localStorage.length; index += 1) {
+                  const key = localStorage.key(index);
+                  if (!key) continue;
+                  if (!key.includes("__convexAuth")) continue;
+                  entries.push({ key, value: localStorage.getItem(key) });
+                }
+              } catch {
+                return { error: "localStorage unavailable" };
+              }
+              return entries;
+            })
+            .catch(() => "localStorage read failed");
           const hasVercelProtection = bodyHtml.includes("Vercel");
           console.log("Cloud auth wait failed.", {
             title,
@@ -168,6 +184,7 @@ describeE2e("e2e upload flow", () => {
             headline,
             bodyHtmlSnippet,
             bodyTextSnippet,
+            authStorage,
             hasVercelProtection,
             url: page.url(),
           });
