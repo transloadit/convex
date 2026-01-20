@@ -108,7 +108,6 @@ const deployCloud = async () => {
     await setEnv("TRANSLOADIT_KEY", requireEnv("TRANSLOADIT_KEY"));
     await setEnv("TRANSLOADIT_SECRET", requireEnv("TRANSLOADIT_SECRET"));
     await setEnv("TRANSLOADIT_NOTIFY_URL", notifyUrl);
-    await setEnv("CONVEX_SITE_URL", siteUrl);
     let jwtPrivateKey = process.env.JWT_PRIVATE_KEY;
     if (!jwtPrivateKey) {
       const { privateKey } = generateKeyPairSync("rsa", {
@@ -123,10 +122,8 @@ const deployCloud = async () => {
     const jwks = JSON.stringify({
       keys: [
         {
-          ...jwk,
           use: "sig",
-          alg: "RS256",
-          kid: "convex",
+          ...jwk,
         },
       ],
     });
