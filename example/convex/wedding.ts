@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { buildWeddingSteps } from "../lib/transloadit-steps";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { action, internalMutation } from "./_generated/server";
 
 const MAX_UPLOADS_PER_HOUR = 6;
@@ -14,7 +14,7 @@ const requireEnv = (name: string) => {
   return value;
 };
 
-const checkUploadLimit = internalMutation({
+export const checkUploadLimit = internalMutation({
   args: { userId: v.string() },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -67,7 +67,9 @@ export const createWeddingAssembly = action({
       throw new Error("Authentication required.");
     }
 
-    await ctx.runMutation(checkUploadLimit, { userId: identity.subject });
+    await ctx.runMutation(internal.wedding.checkUploadLimit, {
+      userId: identity.subject,
+    });
 
     const requiredCode = process.env.WEDDING_UPLOAD_CODE;
     if (requiredCode) {
