@@ -9,7 +9,7 @@
 - [x] Unify assembly refresh polling:
       - One helper to handle local `/api/assemblies?refresh=1` vs cloud `refreshAssembly` action.
       - Use it in both Local + Cloud wedding flows.
-- [ ] Extract reusable Playwright diagnostics helper:
+- [x] Extract reusable Playwright diagnostics helper:
       - Console, request/response log, and failure dump.
       - Use in `test/e2e/upload.e2e.test.ts`.
 - [ ] Eliminate untyped step builders in QA template:

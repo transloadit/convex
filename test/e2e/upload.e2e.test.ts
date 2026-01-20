@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
+import { attachBrowserDiagnostics } from "./support/diagnostics.js";
 import { startExampleApp } from "./support/example-app.js";
 import { runtime } from "./support/runtime.js";
 import { sleep } from "./support/sleep.js";
@@ -80,44 +81,12 @@ describeE2e("e2e upload flow", () => {
   test("uploads wedding photos and videos", async () => {
     const browser = await chromium.launch();
     const page = await browser.newPage();
-    const consoleMessages: string[] = [];
-    const requestFailures: string[] = [];
-    const requestLog: string[] = [];
-
-    page.on("console", (message) => {
-      consoleMessages.push(`[${message.type()}] ${message.text()}`);
-    });
-    page.on("pageerror", (error) => {
-      consoleMessages.push(`[pageerror] ${error.message}`);
-    });
     const shouldTrackRequest = (url: string) =>
       url.includes("transloadit") ||
       url.includes("resumable") ||
       url.includes("convex.cloud") ||
       url.includes("convex.site");
-
-    page.on("requestfailed", (request) => {
-      const url = request.url();
-      if (shouldTrackRequest(url)) {
-        requestFailures.push(`${url} ${request.failure()?.errorText ?? ""}`);
-      }
-    });
-    page.on("request", (request) => {
-      const url = request.url();
-      if (shouldTrackRequest(url)) {
-        requestLog.push(
-          `${new Date().toISOString()} ${request.method()} ${url}`,
-        );
-      }
-    });
-    page.on("response", (response) => {
-      const url = response.url();
-      if (shouldTrackRequest(url)) {
-        requestLog.push(
-          `${new Date().toISOString()} ${response.status()} ${url}`,
-        );
-      }
-    });
+    const diagnostics = attachBrowserDiagnostics(page, { shouldTrackRequest });
 
     try {
       const appOrigin = useRemote ? new URL(serverUrl).origin : "";
@@ -330,9 +299,7 @@ describeE2e("e2e upload flow", () => {
 
       await waitForAssemblyMedia(assemblyId);
     } catch (error) {
-      if (consoleMessages.length) {
-        console.log("Browser console logs:", consoleMessages);
-      }
+      diagnostics.dump();
       const uppyState = await page
         .evaluate(() => {
           const uppy = (window as { __uppy?: DebugUppy }).__uppy;
@@ -355,13 +322,6 @@ describeE2e("e2e upload flow", () => {
         .catch(() => null);
       if (uppyState) {
         console.log("Uppy state:", uppyState);
-      }
-      if (requestFailures.length) {
-        console.log("Browser request failures:", requestFailures);
-      }
-      if (requestLog.length) {
-        const tail = requestLog.slice(-200);
-        console.log("Browser request log (last 200):", tail);
       }
       throw error;
     } finally {
