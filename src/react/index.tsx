@@ -2,7 +2,7 @@ import { useAction, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload } from "tus-js-client";
-import { parseAssemblyUrls } from "../shared/assemblyUrls.ts";
+import { buildTusUploadConfig } from "../shared/tusUpload.ts";
 
 export type CreateAssemblyFn = FunctionReference<
   "action",
@@ -133,33 +133,10 @@ export async function uploadWithTransloaditTus(
 
     const data = assembly.data as Record<string, unknown>;
     options.onAssemblyCreated?.(assembly);
-    const { tusUrl, assemblyUrl } = parseAssemblyUrls(data);
-
-    if (!tusUrl) {
-      throw new Error(
-        "Transloadit response missing tus_url for resumable upload",
-      );
-    }
-
-    if (!assemblyUrl) {
-      throw new Error(
-        "Transloadit response missing assembly_url for resumable upload",
-      );
-    }
-
-    const metadata: Record<string, string> = {
-      filename: file.name,
-      ...options.metadata,
-    };
-    if (file.type) {
-      metadata.filetype = file.type;
-    }
-    if (!metadata.fieldname) {
-      metadata.fieldname = options.fieldName ?? "file";
-    }
-    if (!metadata.assembly_url) {
-      metadata.assembly_url = assemblyUrl;
-    }
+    const { endpoint, metadata } = buildTusUploadConfig(data, file, {
+      fieldName: options.fieldName,
+      metadata: options.metadata,
+    });
 
     type RetryError = {
       originalResponse?: {
@@ -195,7 +172,7 @@ export async function uploadWithTransloaditTus(
       new Promise<void>((resolve, reject) => {
         let uploader: Upload;
         const uploadOptions: ConstructorParameters<typeof Upload>[1] = {
-          endpoint: tusUrl,
+          endpoint,
           metadata,
           retryDelays,
           uploadDataDuringCreation: options.uploadDataDuringCreation ?? false,

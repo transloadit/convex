@@ -18,6 +18,11 @@ export type AssemblyUrls = {
   assemblyUrl: string | null;
 };
 
+export type NormalizedAssemblyUrls = {
+  tus: { url: string | null };
+  assembly: { url: string | null };
+};
+
 const tusUrlKeys = ["tus_url", "tusUrl"] as const;
 const assemblyUrlKeys = [
   "assembly_ssl_url",
@@ -47,6 +52,16 @@ export const parseAssemblyUrls = (data: unknown): AssemblyUrls => {
   return {
     tusUrl: pickString(data, tusUrlKeys),
     assemblyUrl: pickString(data, assemblyUrlKeys),
+  };
+};
+
+export const normalizeAssemblyUploadUrls = (
+  data: unknown,
+): NormalizedAssemblyUrls => {
+  const { tusUrl, assemblyUrl } = parseAssemblyUrls(data);
+  return {
+    tus: { url: tusUrl },
+    assembly: { url: assemblyUrl },
   };
 };
 

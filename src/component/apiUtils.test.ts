@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, test } from "vitest";
 import {
   buildTransloaditParams,
+  buildWebhookQueueArgs,
   parseAndVerifyTransloaditWebhook,
   parseTransloaditWebhook,
   signTransloaditParams,
@@ -114,5 +115,45 @@ describe("apiUtils", () => {
         authSecret: "secret",
       }),
     ).rejects.toThrow("Invalid Transloadit webhook signature");
+  });
+
+  test("buildWebhookQueueArgs returns webhook payload args", async () => {
+    const payload = { ok: "ASSEMBLY_COMPLETED", assembly_id: "asm_123" };
+    const rawBody = JSON.stringify(payload);
+    const secret = "webhook-secret";
+    const digest = createHmac("sha384", secret).update(rawBody).digest("hex");
+    const formData = new FormData();
+    formData.append("transloadit", rawBody);
+    formData.append("signature", `sha384:${digest}`);
+
+    const request = new Request("http://localhost", {
+      method: "POST",
+      body: formData,
+    });
+
+    const args = await buildWebhookQueueArgs(request, { authSecret: secret });
+    expect(args.payload).toEqual(payload);
+    expect(args.rawBody).toBe(rawBody);
+    expect(args.signature).toBe(`sha384:${digest}`);
+  });
+
+  test("buildWebhookQueueArgs can skip verification", async () => {
+    const payload = { ok: "ASSEMBLY_COMPLETED", assembly_id: "asm_123" };
+    const rawBody = JSON.stringify(payload);
+    const formData = new FormData();
+    formData.append("transloadit", rawBody);
+
+    const request = new Request("http://localhost", {
+      method: "POST",
+      body: formData,
+    });
+
+    const args = await buildWebhookQueueArgs(request, {
+      authSecret: "secret",
+      requireSignature: false,
+    });
+    expect(args.payload).toEqual(payload);
+    expect(args.rawBody).toBe(rawBody);
+    expect(args.signature).toBeUndefined();
   });
 });

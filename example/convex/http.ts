@@ -1,4 +1,4 @@
-import { parseTransloaditWebhook } from "@transloadit/convex";
+import { buildWebhookQueueArgs } from "@transloadit/convex";
 import { httpRouter } from "convex/server";
 import { api } from "./_generated/api";
 import { httpAction } from "./_generated/server";
@@ -57,14 +57,12 @@ http.route({
   path: "/transloadit/webhook",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const { payload, rawBody, signature } =
-      await parseTransloaditWebhook(request);
-
-    await ctx.runAction(api.transloadit.queueWebhook, {
-      payload,
-      rawBody,
-      signature,
+    const args = await buildWebhookQueueArgs(request, {
+      authSecret: requireEnv("TRANSLOADIT_SECRET"),
+      requireSignature: false,
     });
+
+    await ctx.runAction(api.transloadit.queueWebhook, args);
 
     return new Response(null, { status: 202 });
   }),

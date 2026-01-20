@@ -104,7 +104,7 @@ Transloadit sends webhooks as `multipart/form-data` with `transloadit` (JSON) an
 ```ts
 // convex/http.ts
 import { httpRouter } from "convex/server";
-import { parseAndVerifyTransloaditWebhook } from "@transloadit/convex";
+import { buildWebhookQueueArgs } from "@transloadit/convex";
 import { api } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 
@@ -114,16 +114,12 @@ http.route({
   path: "/transloadit/webhook",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    const { payload, rawBody, signature } =
-      await parseAndVerifyTransloaditWebhook(request, {
-        authSecret: process.env.TRANSLOADIT_SECRET!,
-      });
-
-    await ctx.runAction(api.transloadit.queueWebhook, {
-      payload,
-      rawBody,
-      signature,
+    const args = await buildWebhookQueueArgs(request, {
+      authSecret: process.env.TRANSLOADIT_SECRET!,
+      requireSignature: false,
     });
+
+    await ctx.runAction(api.transloadit.queueWebhook, args);
 
     return new Response(null, { status: 202 });
   }),
@@ -132,7 +128,7 @@ http.route({
 export default http;
 ```
 
-Note: `queueWebhook` already verifies the signature. If you prefer to verify only inside the component, use `parseTransloaditWebhook` instead.
+Note: `queueWebhook` already verifies the signature. If you want to verify before queueing, set `requireSignature: true`.
 
 If you want to handle webhooks synchronously (no queue), use `handleWebhook` and return HTTP 204:
 
@@ -166,6 +162,7 @@ When working with raw assembly payloads, use the helpers to avoid stringly-typed
 
 ```ts
 import {
+  normalizeAssemblyUploadUrls,
   parseAssemblyFields,
   parseAssemblyResults,
   parseAssemblyStatus,
@@ -174,9 +171,20 @@ import {
 
 const assembly = await createAssembly(...);
 const { tusUrl, assemblyUrl } = parseAssemblyUrls(assembly.data);
+const normalized = normalizeAssemblyUploadUrls(assembly.data);
 const status = parseAssemblyStatus(assembly.data);
 const fields = parseAssemblyFields(assembly.data);
 const results = parseAssemblyResults(assembly.data);
+```
+
+For Uppy/Tus wiring, you can build the metadata + endpoint in one go:
+
+```ts
+import { buildTusUploadConfig } from "@transloadit/convex";
+
+const { endpoint, metadata } = buildTusUploadConfig(assembly.data, file, {
+  fieldName: "file",
+});
 ```
 
 ## React usage

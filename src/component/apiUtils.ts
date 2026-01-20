@@ -153,6 +153,25 @@ export async function parseAndVerifyTransloaditWebhook(
   return { ...parsed, verified };
 }
 
+export async function buildWebhookQueueArgs(
+  request: Request,
+  options: {
+    authSecret: string;
+    requireSignature?: boolean;
+  },
+): Promise<ParsedWebhookRequest> {
+  if (options.requireSignature === false) {
+    return parseTransloaditWebhook(request);
+  }
+
+  const parsed = await parseAndVerifyTransloaditWebhook(request, options);
+  return {
+    payload: parsed.payload,
+    rawBody: parsed.rawBody,
+    signature: parsed.signature,
+  };
+}
+
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let mismatch = 0;

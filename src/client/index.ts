@@ -10,16 +10,26 @@ export type {
   VerifiedWebhookRequest,
 } from "../component/apiUtils.ts";
 export {
+  buildWebhookQueueArgs,
   parseAndVerifyTransloaditWebhook,
   parseTransloaditWebhook,
 } from "../component/apiUtils.ts";
-export type { TransloaditAssembly } from "../shared/assemblyUrls.ts";
+export type {
+  NormalizedAssemblyUrls,
+  TransloaditAssembly,
+} from "../shared/assemblyUrls.ts";
 export {
+  normalizeAssemblyUploadUrls,
   parseAssemblyFields,
   parseAssemblyResults,
   parseAssemblyStatus,
   parseAssemblyUrls,
 } from "../shared/assemblyUrls.ts";
+export type {
+  TusMetadataOptions,
+  TusUploadConfig,
+} from "../shared/tusUpload.ts";
+export { buildTusUploadConfig } from "../shared/tusUpload.ts";
 export type { AssemblyStatus, AssemblyInstructionsInput };
 
 export interface TransloaditConfig {

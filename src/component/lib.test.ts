@@ -98,6 +98,79 @@ describe("Transloadit component lib", () => {
     expect(results[0]?.sslUrl).toBe("https://example.com/file-3.jpg");
   });
 
+  test("listResults exposes expected fields for common robot outputs", async () => {
+    const t = convexTest(schema, modules);
+
+    const payload = {
+      assembly_id: "asm_schema",
+      ok: "ASSEMBLY_COMPLETED",
+      results: {
+        images_resized: [
+          {
+            id: "img_1",
+            ssl_url: "https://example.com/img.jpg",
+            name: "img.jpg",
+            mime: "image/jpeg",
+            width: 1600,
+            height: 1200,
+          },
+        ],
+        videos_encoded: [
+          {
+            id: "vid_1",
+            ssl_url: "https://example.com/vid.mp4",
+            name: "vid.mp4",
+            mime: "video/mp4",
+            duration: 12.5,
+          },
+        ],
+        videos_thumbs_output: [
+          {
+            id: "thumb_1",
+            ssl_url: "https://example.com/thumb.jpg",
+            name: "thumb.jpg",
+            mime: "image/jpeg",
+            original_id: "vid_1",
+          },
+        ],
+      },
+    };
+
+    const rawBody = JSON.stringify(payload);
+    const signature = createHmac("sha1", "test-secret")
+      .update(rawBody)
+      .digest("hex");
+
+    await t.action(api.lib.handleWebhook, {
+      payload,
+      rawBody,
+      signature: `sha1:${signature}`,
+    });
+
+    const results = await t.query(api.lib.listResults, {
+      assemblyId: "asm_schema",
+    });
+
+    expect(results).toHaveLength(3);
+
+    const byStep = new Map(results.map((result) => [result.stepName, result]));
+    const image = byStep.get("images_resized");
+    const video = byStep.get("videos_encoded");
+    const thumb = byStep.get("videos_thumbs_output");
+
+    expect(image?.sslUrl).toBe("https://example.com/img.jpg");
+    expect(image?.mime).toBe("image/jpeg");
+    expect(image?.raw?.width).toBe(1600);
+    expect(image?.raw?.height).toBe(1200);
+
+    expect(video?.sslUrl).toBe("https://example.com/vid.mp4");
+    expect(video?.mime).toBe("video/mp4");
+    expect(video?.raw?.duration).toBe(12.5);
+
+    expect(thumb?.sslUrl).toBe("https://example.com/thumb.jpg");
+    expect(thumb?.raw?.original_id).toBe("vid_1");
+  });
+
   test("handleWebhook requires rawBody when verifying signature", async () => {
     const t = convexTest(schema, modules);
     const payload = { assembly_id: "asm_missing" };

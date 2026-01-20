@@ -30,3 +30,11 @@
       - Per‑file cards with resized + video poster.
 - [x] Tighten README golden path:
       - Short narrative flow, fewer code blocks, emphasize secure‑by‑default toggles.
+
+# Refactor TODO (Full-stack DX)
+
+- [x] Add a result schema smoke test that validates expected fields from `listResults`.
+- [x] Add a helper that normalizes assembly upload URLs into a stable shape (`{ tus: { url }, assembly: { url } }`).
+- [x] Add a helper for building Tus metadata + endpoint (Uppy-friendly) without app boilerplate.
+- [x] Add a “verify + queue” convenience helper for Convex HTTP handlers.
+- [x] Update README + example to use the new helpers where it keeps code cleaner.
