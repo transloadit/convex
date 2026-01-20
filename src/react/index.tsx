@@ -2,6 +2,7 @@ import { useAction, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload } from "tus-js-client";
+import { parseAssemblyUrls } from "../shared/assemblyUrls.ts";
 
 export type CreateAssemblyFn = FunctionReference<
   "action",
@@ -101,19 +102,13 @@ export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
 
         const data = assembly.data as Record<string, unknown>;
         options.onAssemblyCreated?.(assembly);
-        const tusUrl = typeof data.tus_url === "string" ? data.tus_url : "";
+        const { tusUrl, assemblyUrl } = parseAssemblyUrls(data);
 
         if (!tusUrl) {
           throw new Error(
             "Transloadit response missing tus_url for resumable upload",
           );
         }
-
-        const assemblyUrl =
-          (typeof data.assembly_ssl_url === "string" &&
-            data.assembly_ssl_url) ||
-          (typeof data.assembly_url === "string" && data.assembly_url) ||
-          "";
 
         if (!assemblyUrl) {
           throw new Error(

@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
+import { parseAssemblyUrls } from "@transloadit/convex";
 import Uppy from "@uppy/core";
 import Tus from "@uppy/tus";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
@@ -70,15 +71,6 @@ const filterResults = (results: AssemblyResult[]) => {
     if (typeof item.createdAt !== "number") return true;
     return Date.now() - item.createdAt < retentionMs;
   });
-};
-
-const getAssemblyUrls = (data: Record<string, unknown>) => {
-  const tusUrl = typeof data.tus_url === "string" ? data.tus_url : "";
-  const assemblyUrl =
-    (typeof data.assembly_ssl_url === "string" && data.assembly_ssl_url) ||
-    (typeof data.assembly_url === "string" && data.assembly_url) ||
-    "";
-  return { tusUrl, assemblyUrl };
 };
 
 const terminalStatuses = new Set([
@@ -338,7 +330,7 @@ const LocalWeddingUploads = () => {
       const assembly = (await response.json()) as AssemblyResponse;
       setAssemblyId(assembly.assemblyId);
 
-      const { tusUrl, assemblyUrl } = getAssemblyUrls(assembly.data);
+      const { tusUrl, assemblyUrl } = parseAssemblyUrls(assembly.data);
       if (!tusUrl || !assemblyUrl) {
         throw new Error("Missing tus_url or assembly_url in response");
       }
@@ -471,7 +463,7 @@ const CloudWeddingUploads = () => {
       });
       setAssemblyId(assembly.assemblyId);
 
-      const { tusUrl, assemblyUrl } = getAssemblyUrls(assembly.data);
+      const { tusUrl, assemblyUrl } = parseAssemblyUrls(assembly.data);
       if (!tusUrl || !assemblyUrl) {
         throw new Error("Missing tus_url or assembly_url in response");
       }

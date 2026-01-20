@@ -14,5 +14,5 @@
       - Use in `test/e2e/upload.e2e.test.ts`.
 - [x] Eliminate untyped step builders in QA template:
       - Generate steps via the typed builder used by the example app, or share a generator.
-- [ ] Normalize assembly response URL parsing:
+- [x] Normalize assembly response URL parsing:
       - Replace ad‑hoc `getAssemblyUrls` with a typed helper/schema.
