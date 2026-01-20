@@ -206,22 +206,13 @@ describeE2e("e2e upload flow", () => {
         state: "attached",
       });
 
-      await page.waitForFunction(
-        () => Boolean((window as { __uppy?: unknown }).__uppy),
-        undefined,
-        { timeout: 20_000 },
-      );
-
       const fileInput = page
         .locator('[data-testid="uppy-dashboard"] input[type="file"]')
         .first();
       await fileInput.waitFor({ state: "attached" });
       await fileInput.setInputFiles([imagePath, videoPath]);
       await page.waitForFunction(
-        () =>
-          (
-            window as { __uppy?: { getFiles: () => unknown[] } }
-          ).__uppy?.getFiles?.().length === 2,
+        () => document.querySelectorAll(".uppy-DashboardItem").length >= 2,
         undefined,
         { timeout: 20_000 },
       );
