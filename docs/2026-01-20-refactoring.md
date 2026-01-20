@@ -22,7 +22,7 @@
 - [x] Add typed helpers for assembly responses:
       - `parseAssemblyFields`, `parseAssemblyResults`, `parseAssemblyStatus`.
       - Export a `TransloaditAssembly` type for the response shape.
-- [ ] Add a “create + tus upload” helper for the 80% use‑case.
+- [x] Add a “create + tus upload” helper for the 80% use‑case.
 - [ ] Provide a webhook “safe mode” helper:
       - parse + verify signature + return typed payload.
 - [ ] Improve demo UX:

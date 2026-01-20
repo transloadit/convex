@@ -20,6 +20,26 @@ export type CreateAssemblyFn = FunctionReference<
   { assemblyId: string; data: Record<string, unknown> }
 >;
 
+export type CreateAssemblyArgs = {
+  templateId?: string;
+  steps?: unknown;
+  fields?: unknown;
+  notifyUrl?: string;
+  numExpectedUploadFiles?: number;
+  expires?: string;
+  additionalParams?: unknown;
+  userId?: string;
+};
+
+export type CreateAssemblyResponse = {
+  assemblyId: string;
+  data: Record<string, unknown>;
+};
+
+export type CreateAssemblyHandler = (
+  args: CreateAssemblyArgs,
+) => Promise<CreateAssemblyResponse>;
+
 export type GetAssemblyStatusFn = FunctionReference<
   "query",
   "public",
@@ -76,6 +96,175 @@ export interface TusUploadOptions extends UploadOptions {
   }) => void;
 }
 
+export type TusUploadEvents = {
+  onStateChange?: (state: UploadState) => void;
+};
+
+export async function uploadWithTransloaditTus(
+  createAssembly: CreateAssemblyHandler,
+  file: File,
+  options: TusUploadOptions,
+  events: TusUploadEvents = {},
+): Promise<CreateAssemblyResponse> {
+  let currentState: UploadState = {
+    isUploading: true,
+    progress: 0,
+    error: null,
+  };
+
+  const emitState = (next: UploadState) => {
+    currentState = next;
+    events.onStateChange?.(next);
+  };
+
+  emitState(currentState);
+
+  try {
+    const assembly = await createAssembly({
+      templateId: options.templateId,
+      steps: options.steps,
+      fields: options.fields,
+      notifyUrl: options.notifyUrl,
+      numExpectedUploadFiles: options.numExpectedUploadFiles ?? 1,
+      expires: options.expires,
+      additionalParams: options.additionalParams,
+      userId: options.userId,
+    });
+
+    const data = assembly.data as Record<string, unknown>;
+    options.onAssemblyCreated?.(assembly);
+    const { tusUrl, assemblyUrl } = parseAssemblyUrls(data);
+
+    if (!tusUrl) {
+      throw new Error(
+        "Transloadit response missing tus_url for resumable upload",
+      );
+    }
+
+    if (!assemblyUrl) {
+      throw new Error(
+        "Transloadit response missing assembly_url for resumable upload",
+      );
+    }
+
+    const metadata: Record<string, string> = {
+      filename: file.name,
+      ...options.metadata,
+    };
+    if (file.type) {
+      metadata.filetype = file.type;
+    }
+    if (!metadata.fieldname) {
+      metadata.fieldname = options.fieldName ?? "file";
+    }
+    if (!metadata.assembly_url) {
+      metadata.assembly_url = assemblyUrl;
+    }
+
+    type RetryError = {
+      originalResponse?: {
+        getStatus?: () => number;
+        getHeader?: (header: string) => string | undefined;
+      } | null;
+    };
+
+    const getStatus = (error: RetryError) =>
+      error.originalResponse?.getStatus &&
+      typeof error.originalResponse.getStatus === "function"
+        ? error.originalResponse.getStatus()
+        : 0;
+
+    const retryDelays = options.retryDelays
+      ? [...options.retryDelays]
+      : [1000, 5000, 15000, 30000];
+    const rateLimitRetryDelays = options.rateLimitRetryDelays
+      ? [...options.rateLimitRetryDelays]
+      : [20_000, 40_000, 80_000];
+
+    const shouldRetry = (error: RetryError) => {
+      const status = getStatus(error);
+      if (!status) return true;
+      if (status === 409 || status === 423) return true;
+      return status < 400 || status >= 500;
+    };
+
+    let uploadUrl: string | null = null;
+    let rateLimitAttempt = 0;
+
+    const runUpload = () =>
+      new Promise<void>((resolve, reject) => {
+        let uploader: Upload;
+        const uploadOptions: ConstructorParameters<typeof Upload>[1] = {
+          endpoint: tusUrl,
+          metadata,
+          retryDelays,
+          uploadDataDuringCreation: options.uploadDataDuringCreation ?? false,
+          onUploadUrlAvailable: () => {
+            uploadUrl = uploader.url;
+          },
+          onShouldRetry: (error, retryAttempt) =>
+            options.onShouldRetry?.(error, retryAttempt) ?? shouldRetry(error),
+          onProgress: (bytesUploaded, bytesTotal) => {
+            const progress = Math.round((bytesUploaded / bytesTotal) * 100);
+            emitState({ isUploading: true, progress, error: null });
+            options.onProgress?.(progress);
+          },
+          onError: (error) => {
+            reject(error);
+          },
+          onSuccess: () => {
+            resolve();
+          },
+        };
+
+        if (options.chunkSize !== undefined) {
+          uploadOptions.chunkSize = options.chunkSize;
+        }
+        if (uploadUrl) {
+          uploadOptions.uploadUrl = uploadUrl;
+        }
+        if (options.overridePatchMethod !== undefined) {
+          uploadOptions.overridePatchMethod = options.overridePatchMethod;
+        }
+        if (options.storeFingerprintForResuming !== undefined) {
+          uploadOptions.storeFingerprintForResuming =
+            options.storeFingerprintForResuming;
+        }
+        if (options.removeFingerprintOnSuccess !== undefined) {
+          uploadOptions.removeFingerprintOnSuccess =
+            options.removeFingerprintOnSuccess;
+        }
+
+        uploader = new Upload(file, uploadOptions);
+
+        uploader.start();
+      });
+
+    while (true) {
+      try {
+        await runUpload();
+        break;
+      } catch (error) {
+        const status = getStatus(error as RetryError);
+        if (status === 429 && rateLimitAttempt < rateLimitRetryDelays.length) {
+          const delay = rateLimitRetryDelays[rateLimitAttempt] ?? 0;
+          rateLimitAttempt += 1;
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+        throw error;
+      }
+    }
+
+    emitState({ isUploading: false, progress: 100, error: null });
+    return assembly;
+  } catch (error) {
+    const err = error instanceof Error ? error : new Error("Upload failed");
+    emitState({ isUploading: false, progress: 0, error: err });
+    throw err;
+  }
+}
+
 export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
   const create = useAction(createAssembly);
   const [state, setState] = useState<UploadState>({
@@ -85,159 +274,10 @@ export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
   });
 
   const upload = useCallback(
-    async (file: File, options: TusUploadOptions) => {
-      setState({ isUploading: true, progress: 0, error: null });
-
-      try {
-        const assembly = await create({
-          templateId: options.templateId,
-          steps: options.steps,
-          fields: options.fields,
-          notifyUrl: options.notifyUrl,
-          numExpectedUploadFiles: options.numExpectedUploadFiles ?? 1,
-          expires: options.expires,
-          additionalParams: options.additionalParams,
-          userId: options.userId,
-        });
-
-        const data = assembly.data as Record<string, unknown>;
-        options.onAssemblyCreated?.(assembly);
-        const { tusUrl, assemblyUrl } = parseAssemblyUrls(data);
-
-        if (!tusUrl) {
-          throw new Error(
-            "Transloadit response missing tus_url for resumable upload",
-          );
-        }
-
-        if (!assemblyUrl) {
-          throw new Error(
-            "Transloadit response missing assembly_url for resumable upload",
-          );
-        }
-
-        const metadata: Record<string, string> = {
-          filename: file.name,
-          ...options.metadata,
-        };
-        if (file.type) {
-          metadata.filetype = file.type;
-        }
-        if (!metadata.fieldname) {
-          metadata.fieldname = options.fieldName ?? "file";
-        }
-        if (!metadata.assembly_url) {
-          metadata.assembly_url = assemblyUrl;
-        }
-
-        type RetryError = {
-          originalResponse?: {
-            getStatus?: () => number;
-            getHeader?: (header: string) => string | undefined;
-          } | null;
-        };
-
-        const getStatus = (error: RetryError) =>
-          error.originalResponse?.getStatus &&
-          typeof error.originalResponse.getStatus === "function"
-            ? error.originalResponse.getStatus()
-            : 0;
-
-        const retryDelays = options.retryDelays
-          ? [...options.retryDelays]
-          : [1000, 5000, 15000, 30000];
-        const rateLimitRetryDelays = options.rateLimitRetryDelays
-          ? [...options.rateLimitRetryDelays]
-          : [20_000, 40_000, 80_000];
-
-        const shouldRetry = (error: RetryError) => {
-          const status = getStatus(error);
-          if (!status) return true;
-          if (status === 409 || status === 423) return true;
-          return status < 400 || status >= 500;
-        };
-
-        let uploadUrl: string | null = null;
-        let rateLimitAttempt = 0;
-
-        const runUpload = () =>
-          new Promise<void>((resolve, reject) => {
-            let uploader: Upload;
-            const uploadOptions: ConstructorParameters<typeof Upload>[1] = {
-              endpoint: tusUrl,
-              metadata,
-              retryDelays,
-              uploadDataDuringCreation:
-                options.uploadDataDuringCreation ?? false,
-              onUploadUrlAvailable: () => {
-                uploadUrl = uploader.url;
-              },
-              onShouldRetry: (error, retryAttempt) =>
-                options.onShouldRetry?.(error, retryAttempt) ??
-                shouldRetry(error),
-              onProgress: (bytesUploaded, bytesTotal) => {
-                const progress = Math.round((bytesUploaded / bytesTotal) * 100);
-                setState((prev) => ({ ...prev, progress }));
-                options.onProgress?.(progress);
-              },
-              onError: (error) => {
-                reject(error);
-              },
-              onSuccess: () => {
-                resolve();
-              },
-            };
-
-            if (options.chunkSize !== undefined) {
-              uploadOptions.chunkSize = options.chunkSize;
-            }
-            if (uploadUrl) {
-              uploadOptions.uploadUrl = uploadUrl;
-            }
-            if (options.overridePatchMethod !== undefined) {
-              uploadOptions.overridePatchMethod = options.overridePatchMethod;
-            }
-            if (options.storeFingerprintForResuming !== undefined) {
-              uploadOptions.storeFingerprintForResuming =
-                options.storeFingerprintForResuming;
-            }
-            if (options.removeFingerprintOnSuccess !== undefined) {
-              uploadOptions.removeFingerprintOnSuccess =
-                options.removeFingerprintOnSuccess;
-            }
-
-            uploader = new Upload(file, uploadOptions);
-
-            uploader.start();
-          });
-
-        while (true) {
-          try {
-            await runUpload();
-            break;
-          } catch (error) {
-            const status = getStatus(error as RetryError);
-            if (
-              status === 429 &&
-              rateLimitAttempt < rateLimitRetryDelays.length
-            ) {
-              const delay = rateLimitRetryDelays[rateLimitAttempt] ?? 0;
-              rateLimitAttempt += 1;
-              await new Promise((resolve) => setTimeout(resolve, delay));
-              continue;
-            }
-            throw error;
-          }
-        }
-
-        setState({ isUploading: false, progress: 100, error: null });
-        return assembly;
-      } catch (error) {
-        const err = error instanceof Error ? error : new Error("Upload failed");
-        setState({ isUploading: false, progress: 0, error: err });
-        throw err;
-      }
-    },
+    async (file: File, options: TusUploadOptions) =>
+      uploadWithTransloaditTus(create, file, options, {
+        onStateChange: setState,
+      }),
     [create],
   );
 
