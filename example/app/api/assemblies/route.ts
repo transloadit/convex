@@ -28,7 +28,12 @@ export async function GET(request: Request) {
   }
 
   if (url.searchParams.get("refresh") === "1") {
-    await runAction("refreshAssembly", { assemblyId });
+    try {
+      await runAction("refreshAssembly", { assemblyId });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn("Refresh assembly failed", message);
+    }
   }
 
   const [status, results] = await Promise.all([
