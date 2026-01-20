@@ -1,5 +1,6 @@
-import { mkdir, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 type WriteAppFilesOptions = {
   projectDir: string;
@@ -11,7 +12,16 @@ export const writeAppFiles = async ({
   tgzPath,
 }: WriteAppFilesOptions) => {
   const convexDir = join(projectDir, "convex");
+  const libDir = join(projectDir, "lib");
+  const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
   await mkdir(convexDir, { recursive: true });
+  await mkdir(libDir, { recursive: true });
+
+  const r2Source = await readFile(
+    join(repoRoot, "example", "lib", "r2.ts"),
+    "utf8",
+  );
+  await writeFile(join(libDir, "r2.ts"), r2Source, "utf8");
 
   await writeFile(
     join(projectDir, "package.json"),
@@ -267,6 +277,7 @@ export const writeAppFiles = async ({
       'import { action, internalMutation } from "./_generated/server";',
       'import { v } from "convex/values";',
       'import { components, internal } from "./_generated/api";',
+      'import { readR2ConfigFromEnv } from "../lib/r2";',
       "",
       "const MAX_UPLOADS_PER_HOUR = 6;",
       "const WINDOW_MS = 60 * 60 * 1000;",
@@ -280,54 +291,23 @@ export const writeAppFiles = async ({
       "};",
       "",
       "const buildWeddingSteps = () => {",
-      "  const clean = (value?: string) => (value ? value.trim() : undefined);",
-      "  const credentials = clean(process.env.TRANSLOADIT_R2_CREDENTIALS);",
-      "  const bucket = clean(process.env.R2_BUCKET);",
-      "  const accessKeyId = clean(process.env.R2_ACCESS_KEY_ID);",
-      "  const secretAccessKey = clean(process.env.R2_SECRET_ACCESS_KEY);",
-      "  const accountId = clean(process.env.R2_ACCOUNT_ID);",
-      "  const hostValue = clean(process.env.R2_HOST);",
-      "  const publicUrl = clean(process.env.R2_PUBLIC_URL);",
-      "  const normalizeHost = (value?: string) => {",
-      "    if (!value) return undefined;",
-      '    if (value.startsWith("http://") || value.startsWith("https://")) {',
-      "      return value;",
-      "    }",
-      '    return "https://" + value;',
-      "  };",
-      "  const normalizeUrlPrefix = (value?: string) => {",
-      "    if (!value) return undefined;",
-      '    return value.endsWith("/") ? value : value + "/";',
-      "  };",
-      "  const host = normalizeHost(",
-      "    hostValue ??",
-      '      (accountId ? accountId + ".r2.cloudflarestorage.com" : undefined),',
-      "  );",
-      "  const urlPrefix = normalizeUrlPrefix(publicUrl);",
-      "",
-      "  if (!credentials && (!bucket || !accessKeyId || !secretAccessKey)) {",
-      '    throw new Error("Missing R2 credentials. Set TRANSLOADIT_R2_CREDENTIALS or R2_BUCKET/R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY.");',
-      "  }",
-      "  if (!credentials && !host) {",
-      '    throw new Error("Missing R2 host. Set R2_HOST or R2_ACCOUNT_ID.");',
-      "  }",
-      "",
+      "  const r2 = readR2ConfigFromEnv(process.env);",
       "  const storeStep = {",
       '    robot: "/cloudflare/store",',
       "    result: true,",
       '    path: "wedding/" + "$" + "{fields.album}" + "/" + "$" + "{unique_prefix}" + "/" + "$" + "{file.url_name}",',
       "  } as Record<string, unknown>;",
       "",
-      "  if (credentials) {",
-      "    storeStep.credentials = credentials;",
+      "  if (r2.credentials) {",
+      "    storeStep.credentials = r2.credentials;",
       "  } else {",
-      "    storeStep.bucket = bucket;",
-      "    storeStep.key = accessKeyId;",
-      "    storeStep.secret = secretAccessKey;",
-      "    storeStep.host = host;",
+      "    storeStep.bucket = r2.bucket;",
+      "    storeStep.key = r2.accessKeyId;",
+      "    storeStep.secret = r2.secretAccessKey;",
+      "    storeStep.host = r2.host;",
       "  }",
-      "  if (urlPrefix) {",
-      "    storeStep.url_prefix = urlPrefix;",
+      "  if (r2.urlPrefix) {",
+      "    storeStep.url_prefix = r2.urlPrefix;",
       "  }",
       "",
       "  return {",

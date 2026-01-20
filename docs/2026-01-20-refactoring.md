@@ -1,6 +1,6 @@
 # Refactor TODO (2026-01-20)
 
-- [ ] Extract shared R2 config parsing/normalization into a single helper and reuse in:
+- [x] Extract shared R2 config parsing/normalization into a single helper and reuse in:
       - `example/lib/transloadit-steps.ts`
       - `scripts/qa/app-template.ts`
 - [ ] Route webhook handling through the same wrapper in both runtime app and QA template:

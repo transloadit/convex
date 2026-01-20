@@ -3,7 +3,8 @@ import { robotFileFilterInstructionsSchema } from "@transloadit/zod/v3/robots/fi
 import { robotImageResizeInstructionsSchema } from "@transloadit/zod/v3/robots/image-resize";
 import { robotUploadHandleInstructionsSchema } from "@transloadit/zod/v3/robots/upload-handle";
 import { robotVideoEncodeInstructionsSchema } from "@transloadit/zod/v3/robots/video-encode";
-import { z } from "zod/v3";
+import type { z } from "zod/v3";
+import { type R2Config, readR2ConfigFromEnv } from "./r2";
 
 type TransloaditSteps = Record<string, Record<string, unknown>>;
 
@@ -19,80 +20,6 @@ type RobotUploadHandleInput = z.input<
   typeof robotUploadHandleInstructionsSchema
 >;
 type RobotVideoEncodeInput = z.input<typeof robotVideoEncodeInstructionsSchema>;
-
-const r2EnvSchema = z.object({
-  TRANSLOADIT_R2_CREDENTIALS: z.string().optional(),
-  R2_BUCKET: z.string().optional(),
-  R2_ACCESS_KEY_ID: z.string().optional(),
-  R2_SECRET_ACCESS_KEY: z.string().optional(),
-  R2_ACCOUNT_ID: z.string().optional(),
-  R2_HOST: z.string().optional(),
-  R2_PUBLIC_URL: z.string().optional(),
-});
-
-type R2Config = {
-  credentials?: string;
-  bucket?: string;
-  accessKeyId?: string;
-  secretAccessKey?: string;
-  host?: string;
-  urlPrefix?: string;
-};
-
-const readR2Config = (): R2Config => {
-  const env = r2EnvSchema.parse(process.env);
-  const clean = (value?: string) => value?.trim() || undefined;
-  const credentials = clean(env.TRANSLOADIT_R2_CREDENTIALS);
-  const bucket = clean(env.R2_BUCKET);
-  const accessKeyId = clean(env.R2_ACCESS_KEY_ID);
-  const secretAccessKey = clean(env.R2_SECRET_ACCESS_KEY);
-  const accountId = clean(env.R2_ACCOUNT_ID);
-  const hostValue = clean(env.R2_HOST);
-  const publicUrl = clean(env.R2_PUBLIC_URL);
-  const normalizeHost = (value?: string) => {
-    if (!value) return undefined;
-    if (value.startsWith("http://") || value.startsWith("https://")) {
-      return value;
-    }
-    return `https://${value}`;
-  };
-  const normalizeUrlPrefix = (value?: string) => {
-    if (!value) return undefined;
-    return value.endsWith("/") ? value : `${value}/`;
-  };
-  const host = normalizeHost(
-    hostValue ??
-      (accountId ? `${accountId}.r2.cloudflarestorage.com` : undefined),
-  );
-
-  if (credentials) {
-    return {
-      credentials,
-      bucket,
-      accessKeyId,
-      secretAccessKey,
-      host,
-      urlPrefix: normalizeUrlPrefix(publicUrl),
-    };
-  }
-
-  if (!bucket || !accessKeyId || !secretAccessKey) {
-    throw new Error(
-      "Missing R2 credentials. Set TRANSLOADIT_R2_CREDENTIALS or provide R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY.",
-    );
-  }
-  if (!host) {
-    throw new Error("Missing R2 host. Set R2_HOST or R2_ACCOUNT_ID.");
-  }
-
-  return {
-    bucket,
-    accessKeyId,
-    secretAccessKey,
-    host,
-    urlPrefix: normalizeUrlPrefix(publicUrl),
-  };
-};
 
 const buildStoreStep = (
   use: string,
@@ -161,7 +88,7 @@ const buildVideoStep = (use: string): RobotVideoEncodeInput => {
 };
 
 export const buildWeddingSteps = (): TransloaditSteps => {
-  const r2 = readR2Config();
+  const r2 = readR2ConfigFromEnv(process.env);
 
   return {
     ":original": buildUploadStep(),
