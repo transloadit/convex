@@ -120,13 +120,6 @@ describeE2e("e2e upload flow", () => {
     });
 
     try {
-      if (useRemote && vercelBypassToken) {
-        await page.setExtraHTTPHeaders({
-          "x-vercel-protection-bypass": vercelBypassToken,
-          "x-vercel-set-bypass-cookie": "true",
-        });
-      }
-
       const navigation = await page.goto(serverUrl, {
         waitUntil: "domcontentloaded",
       });
