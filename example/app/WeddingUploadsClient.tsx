@@ -1,14 +1,13 @@
 "use client";
 
 import { useAuthActions } from "@convex-dev/auth/react";
-import { buildTusUploadConfig } from "@transloadit/convex";
 import Uppy from "@uppy/core";
 import Tus from "@uppy/tus";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { weddingStepNames } from "../lib/transloadit";
+import { buildTusUploadConfig, weddingStepNames } from "../lib/transloadit";
 import { Providers } from "./providers";
 
 const Dashboard = dynamic(() => import("@uppy/react/dashboard"), {
