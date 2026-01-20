@@ -6,7 +6,7 @@
 - [x] Route webhook handling through the same wrapper in both runtime app and QA template:
       - `example/convex/http.ts` should call `./transloadit` wrapper (not raw component).
       - QA template should mirror the same pattern.
-- [ ] Unify assembly refresh polling:
+- [x] Unify assembly refresh polling:
       - One helper to handle local `/api/assemblies?refresh=1` vs cloud `refreshAssembly` action.
       - Use it in both Local + Cloud wedding flows.
 - [ ] Extract reusable Playwright diagnostics helper:
