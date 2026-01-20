@@ -6,7 +6,13 @@ import type { ComponentApi } from "../component/_generated/component.ts";
 import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.ts";
 
 export { parseTransloaditWebhook } from "../component/apiUtils.ts";
-export { parseAssemblyUrls } from "../shared/assemblyUrls.ts";
+export type { TransloaditAssembly } from "../shared/assemblyUrls.ts";
+export {
+  parseAssemblyFields,
+  parseAssemblyResults,
+  parseAssemblyStatus,
+  parseAssemblyUrls,
+} from "../shared/assemblyUrls.ts";
 export type { AssemblyStatus, AssemblyInstructionsInput };
 
 export interface TransloaditConfig {

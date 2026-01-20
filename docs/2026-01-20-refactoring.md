@@ -19,7 +19,7 @@
 
 # Refactor TODO (Showcase polish)
 
-- [ ] Add typed helpers for assembly responses:
+- [x] Add typed helpers for assembly responses:
       - `parseAssemblyFields`, `parseAssemblyResults`, `parseAssemblyStatus`.
       - Export a `TransloaditAssembly` type for the response shape.
 - [ ] Add a “create + tus upload” helper for the 80% use‑case.
