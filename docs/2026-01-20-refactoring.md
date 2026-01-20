@@ -16,3 +16,17 @@
       - Generate steps via the typed builder used by the example app, or share a generator.
 - [x] Normalize assembly response URL parsing:
       - Replace ad‑hoc `getAssemblyUrls` with a typed helper/schema.
+
+# Refactor TODO (Showcase polish)
+
+- [ ] Add typed helpers for assembly responses:
+      - `parseAssemblyFields`, `parseAssemblyResults`, `parseAssemblyStatus`.
+      - Export a `TransloaditAssembly` type for the response shape.
+- [ ] Add a “create + tus upload” helper for the 80% use‑case.
+- [ ] Provide a webhook “safe mode” helper:
+      - parse + verify signature + return typed payload.
+- [ ] Improve demo UX:
+      - Upload timeline (created → uploading → processing → stored).
+      - Per‑file cards with resized + video poster.
+- [ ] Tighten README golden path:
+      - Short narrative flow, fewer code blocks, emphasize secure‑by‑default toggles.
