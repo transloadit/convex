@@ -120,6 +120,23 @@ describeE2e("e2e upload flow", () => {
     });
 
     try {
+      const appOrigin = useRemote ? new URL(serverUrl).origin : "";
+      if (useRemote && vercelBypassToken) {
+        await page.route("**/*", async (route) => {
+          const url = route.request().url();
+          if (!url.startsWith(appOrigin)) {
+            await route.continue();
+            return;
+          }
+          const headers = {
+            ...route.request().headers(),
+            "x-vercel-protection-bypass": vercelBypassToken,
+            "x-vercel-set-bypass-cookie": "true",
+          };
+          await route.continue({ headers });
+        });
+      }
+
       const navigation = await page.goto(serverUrl, {
         waitUntil: "domcontentloaded",
       });
