@@ -298,60 +298,6 @@ describeE2e("e2e upload flow", () => {
           if (ready.imagesReady && ready.videosReady) return;
           await sleep(1000);
         }
-        const debug = await page.evaluate(async (assemblyId) => {
-          const response = await fetch(
-            `/api/assemblies?assemblyId=${encodeURIComponent(assemblyId)}`,
-          );
-          const data = (await response.json()) as {
-            status?: { ok?: string };
-            results?: Array<{
-              stepName?: string;
-              sslUrl?: string;
-              raw?: Record<string, unknown>;
-            }>;
-          };
-          const results = Array.isArray(data.results) ? data.results : [];
-          return {
-            status: data.status?.ok ?? null,
-            resultsCount: results.length,
-            steps: results.map((result) => result.stepName ?? "unknown"),
-            sample: results.slice(0, 3).map((result) => {
-              const raw = result.raw ?? {};
-              const rawMeta =
-                raw &&
-                typeof raw === "object" &&
-                !Array.isArray(raw) &&
-                typeof (raw as { meta?: unknown }).meta === "object" &&
-                (raw as { meta?: unknown }).meta !== null &&
-                !Array.isArray((raw as { meta?: unknown }).meta)
-                  ? ((raw as { meta?: unknown }).meta as Record<
-                      string,
-                      unknown
-                    >)
-                  : null;
-              return {
-                stepName: result.stepName ?? "unknown",
-                sslUrl: result.sslUrl ?? null,
-                rawKeys: Object.keys(raw).slice(0, 10),
-                rawUrl:
-                  (raw as { ssl_url?: string }).ssl_url ??
-                  (raw as { url?: string }).url ??
-                  (raw as { cdn_url?: string }).cdn_url ??
-                  (raw as { storage_url?: string }).storage_url ??
-                  null,
-                rawMetaKeys: rawMeta ? Object.keys(rawMeta).slice(0, 10) : [],
-                rawMetaUrl: rawMeta
-                  ? ((rawMeta.ssl_url as string | undefined) ??
-                    (rawMeta.url as string | undefined) ??
-                    (rawMeta.cdn_url as string | undefined) ??
-                    (rawMeta.storage_url as string | undefined) ??
-                    null)
-                  : null,
-              };
-            }),
-          };
-        }, targetAssemblyId);
-        console.log("Assembly results debug:", debug);
         throw new Error("Timed out waiting for gallery media to load");
       };
 
