@@ -8,15 +8,10 @@ if (!siteUrl) {
   throw new Error("Missing CONVEX_SITE_URL or CONVEX_URL for auth.config.ts");
 }
 
-const jwksUrl = new URL("transloadit/jwks", siteUrl).toString();
-
 export default {
   providers: [
     {
-      type: "customJwt",
-      issuer: siteUrl,
-      jwks: jwksUrl,
-      algorithm: "RS256",
+      domain: siteUrl,
       applicationID: "convex",
     },
   ],
