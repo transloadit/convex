@@ -206,13 +206,13 @@ describeE2e("e2e upload flow", () => {
         state: "attached",
       });
 
-      const fileInput = page
-        .locator('[data-testid="uppy-dashboard"] input[type="file"]')
-        .first();
+      const fileInput = page.locator(
+        '[data-testid="uppy-dashboard"] input.uppy-Dashboard-input[name="files[]"]:not([webkitdirectory])',
+      );
       await fileInput.waitFor({ state: "attached" });
       await fileInput.setInputFiles([imagePath, videoPath]);
       await page.waitForFunction(
-        () => document.querySelectorAll(".uppy-DashboardItem").length >= 2,
+        () => document.querySelectorAll(".uppy-Dashboard-Item").length >= 2,
         undefined,
         { timeout: 20_000 },
       );
