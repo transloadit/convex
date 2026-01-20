@@ -93,6 +93,22 @@ export const writeAppFiles = async ({
   );
 
   await writeFile(
+    join(convexDir, "auth.config.ts"),
+    [
+      "export default {",
+      "  providers: [",
+      "    {",
+      "      domain: process.env.CONVEX_SITE_URL,",
+      '      applicationID: "convex",',
+      "    },",
+      "  ],",
+      "};",
+      "",
+    ].join("\n"),
+    "utf8",
+  );
+
+  await writeFile(
     join(convexDir, "http.ts"),
     [
       'import { parseTransloaditWebhook } from "@transloadit/convex";',
