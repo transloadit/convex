@@ -13,7 +13,7 @@ export default {
     {
       type: "customJwt",
       issuer: siteUrl,
-      jwks: `${siteUrl}/auth/jwks`,
+      jwks: `${siteUrl}/transloadit/jwks`,
       algorithm: "RS256",
       applicationID: "convex",
     },

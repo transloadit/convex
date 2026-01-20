@@ -14,7 +14,7 @@ const requireEnv = (name: string) => {
 };
 
 http.route({
-  path: "/auth/jwks",
+  path: "/transloadit/jwks",
   method: "GET",
   handler: httpAction(async () => {
     return new Response(requireEnv("JWKS"), {
