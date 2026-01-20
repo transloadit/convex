@@ -368,7 +368,11 @@ const Gallery = ({ results }: { results: AssemblyResult[] }) => {
             {item.sslUrl ? (
               isVideo ? (
                 // biome-ignore lint/a11y/useMediaCaption: demo clips have no caption tracks
-                <video src={item.sslUrl} controls poster={posterUrl ?? ""} />
+                <video
+                  src={item.sslUrl}
+                  controls
+                  poster={posterUrl ?? undefined}
+                />
               ) : (
                 <img src={item.sslUrl} alt={item.name ?? "Uploaded"} />
               )

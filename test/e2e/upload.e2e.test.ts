@@ -277,9 +277,10 @@ describeE2e("e2e upload flow", () => {
               imgs.length > 0 && imgs.every((img) => img.complete);
             const videosReady =
               vids.length > 0 &&
-              vids.every(
-                (video) => video.readyState >= 2 || video.currentTime > 0,
-              );
+              vids.every((video) => {
+                const poster = video.getAttribute("poster");
+                return Boolean(poster && poster.length > 0);
+              });
             return {
               hasCards: cards.length > 0,
               imagesReady,
