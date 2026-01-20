@@ -11,7 +11,10 @@ if (!siteUrl) {
 export default {
   providers: [
     {
-      domain: siteUrl,
+      type: "customJwt",
+      issuer: siteUrl,
+      jwks: `${siteUrl}/auth/jwks`,
+      algorithm: "RS256",
       applicationID: "convex",
     },
   ],
