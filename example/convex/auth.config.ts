@@ -11,7 +11,10 @@ if (!siteUrl) {
 export default {
   providers: [
     {
-      domain: siteUrl,
+      type: "customJwt",
+      issuer: siteUrl,
+      jwks: `${siteUrl}/transloadit/jwks`,
+      algorithm: "RS256",
       applicationID: "convex",
     },
   ],

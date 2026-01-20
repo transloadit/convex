@@ -13,43 +13,8 @@ const requireEnv = (name: string) => {
   return value;
 };
 
-const resolveSiteUrl = () => {
-  const siteUrl =
-    process.env.CONVEX_SITE_URL ??
-    (process.env.CONVEX_URL?.includes(".convex.cloud")
-      ? process.env.CONVEX_URL.replace(".convex.cloud", ".convex.site")
-      : process.env.CONVEX_URL);
-  if (!siteUrl) {
-    throw new Error("Missing CONVEX_SITE_URL or CONVEX_URL");
-  }
-  return siteUrl;
-};
-
 http.route({
-  path: "/.well-known/openid-configuration",
-  method: "GET",
-  handler: httpAction(async () => {
-    const siteUrl = resolveSiteUrl();
-    return new Response(
-      JSON.stringify({
-        issuer: siteUrl,
-        jwks_uri: `${siteUrl}/.well-known/jwks.json`,
-        authorization_endpoint: `${siteUrl}/oauth/authorize`,
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control":
-            "public, max-age=15, stale-while-revalidate=15, stale-if-error=86400",
-        },
-      },
-    );
-  }),
-});
-
-http.route({
-  path: "/.well-known/jwks.json",
+  path: "/transloadit/jwks",
   method: "GET",
   handler: httpAction(async () => {
     return new Response(requireEnv("JWKS"), {
