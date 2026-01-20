@@ -142,19 +142,26 @@ const useAssemblyPoller = ({
   refresh,
   intervalMs,
   onError,
+  shouldContinue,
 }: {
   assemblyId: string | null;
   status: string | null | undefined;
   refresh: () => Promise<void>;
   intervalMs: number;
   onError?: (error: Error) => void;
+  shouldContinue?: () => boolean;
 }) => {
   useEffect(() => {
     if (!assemblyId) return;
-    if (isTerminalStatus(status)) return;
+    const shouldKeepPolling = () => {
+      if (!isTerminalStatus(status)) return true;
+      return shouldContinue?.() ?? false;
+    };
+    if (!shouldKeepPolling()) return;
     let cancelled = false;
     const poll = async () => {
       if (cancelled) return;
+      if (!shouldKeepPolling()) return;
       try {
         await refresh();
       } catch (error) {
@@ -171,7 +178,7 @@ const useAssemblyPoller = ({
       cancelled = true;
       clearInterval(interval);
     };
-  }, [assemblyId, intervalMs, onError, refresh, status]);
+  }, [assemblyId, intervalMs, onError, refresh, shouldContinue, status]);
 };
 
 const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
@@ -504,6 +511,7 @@ const LocalWeddingUploads = () => {
     intervalMs: 4000,
     refresh: () => refreshResults(assemblyId ?? "", true),
     onError: (err) => setError(err.message),
+    shouldContinue: () => results.length === 0,
   });
 
   return (
@@ -576,6 +584,7 @@ const CloudWeddingUploads = () => {
     onError: (error) => {
       console.warn("Refresh assembly failed", error);
     },
+    shouldContinue: () => (results?.length ?? 0) === 0,
   });
 
   useEffect(() => {
