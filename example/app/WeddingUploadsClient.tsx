@@ -614,7 +614,12 @@ export default function WeddingUploadsClient({
 }) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [resolvedConvexUrl, setResolvedConvexUrl] = useState<string | null>(
-    null,
+    () => {
+      if (convexUrl) return convexUrl;
+      if (typeof window === "undefined") return null;
+      const params = new URLSearchParams(window.location.search);
+      return params.get("convexUrl");
+    },
   );
 
   useEffect(() => {
@@ -626,12 +631,15 @@ export default function WeddingUploadsClient({
       setResolvedConvexUrl(convexUrl);
       return;
     }
+    if (resolvedConvexUrl) {
+      return;
+    }
     const params = new URLSearchParams(window.location.search);
     const fromQuery = params.get("convexUrl");
     if (fromQuery) {
       setResolvedConvexUrl(fromQuery);
     }
-  }, [convexUrl]);
+  }, [convexUrl, resolvedConvexUrl]);
   if (!isHydrated) {
     return null;
   }
