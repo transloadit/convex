@@ -160,6 +160,25 @@ const transloadit = new Transloadit(components.transloadit, {
 });
 ```
 
+## Typed helpers
+
+When working with raw assembly payloads, use the helpers to avoid stringly-typed access:
+
+```ts
+import {
+  parseAssemblyFields,
+  parseAssemblyResults,
+  parseAssemblyStatus,
+  parseAssemblyUrls,
+} from "@transloadit/convex";
+
+const assembly = await createAssembly(...);
+const { tusUrl, assemblyUrl } = parseAssemblyUrls(assembly.data);
+const status = parseAssemblyStatus(assembly.data);
+const fields = parseAssemblyFields(assembly.data);
+const results = parseAssemblyResults(assembly.data);
+```
+
 ## React usage
 
 ### Resumable tus upload
