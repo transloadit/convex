@@ -6,7 +6,7 @@ import Tus from "@uppy/tus";
 import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { buildTusUploadConfig, weddingStepNames } from "../lib/transloadit";
 import { Providers } from "./providers";
 
@@ -413,7 +413,7 @@ const LocalWeddingUploads = () => {
   const [uploadCode, setUploadCode] = useState("");
   const uppy = useWeddingUppy();
 
-  const refreshResults = async (id: string, refresh = false) => {
+  const refreshResults = useCallback(async (id: string, refresh = false) => {
     const params = new URLSearchParams({ assemblyId: id });
     if (refresh) params.set("refresh", "1");
     const response = await fetch(`/api/assemblies?${params.toString()}`);
@@ -426,7 +426,7 @@ const LocalWeddingUploads = () => {
     };
     setStatus(data.status?.ok ?? "pending");
     setResults(data.results ?? []);
-  };
+  }, []);
 
   const startUpload = async () => {
     setError(null);
@@ -505,13 +505,22 @@ const LocalWeddingUploads = () => {
     }
   }, [stage, status]);
 
+  const refreshLocal = useCallback(() => {
+    if (!assemblyId) return Promise.resolve();
+    return refreshResults(assemblyId, true);
+  }, [assemblyId, refreshResults]);
+  const shouldContinueLocal = useCallback(
+    () => results.length === 0,
+    [results.length],
+  );
+
   useAssemblyPoller({
     assemblyId,
     status,
     intervalMs: 4000,
-    refresh: () => refreshResults(assemblyId ?? "", true),
+    refresh: refreshLocal,
     onError: (err) => setError(err.message),
-    shouldContinue: () => results.length === 0,
+    shouldContinue: shouldContinueLocal,
   });
 
   return (
@@ -576,15 +585,24 @@ const CloudWeddingUploads = () => {
     };
   }, [isLoading, isAuthenticated, signIn]);
 
+  const refreshCloud = useCallback(() => {
+    if (!assemblyId) return Promise.resolve();
+    return refreshAssembly({ assemblyId });
+  }, [assemblyId, refreshAssembly]);
+  const shouldContinueCloud = useCallback(
+    () => (results?.length ?? 0) === 0,
+    [results?.length],
+  );
+
   useAssemblyPoller({
     assemblyId,
     status: status?.ok ?? null,
     intervalMs: 8000,
-    refresh: () => refreshAssembly({ assemblyId: assemblyId ?? "" }),
+    refresh: refreshCloud,
     onError: (error) => {
       console.warn("Refresh assembly failed", error);
     },
-    shouldContinue: () => (results?.length ?? 0) === 0,
+    shouldContinue: shouldContinueCloud,
   });
 
   useEffect(() => {
