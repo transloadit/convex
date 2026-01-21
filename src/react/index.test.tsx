@@ -173,6 +173,54 @@ describe("useTransloaditUpload", () => {
     expect(result.current.results).toEqual(currentResults);
     expect(result.current.status?.ok).toBe("ASSEMBLY_UPLOADING");
   });
+
+  test("reset clears upload state", async () => {
+    const createAssembly = vi.fn(async () => ({
+      assemblyId: "asm_reset",
+      data: {
+        tus_url: "https://tus.example.com",
+        assembly_ssl_url: "https://api2.transloadit.com/assemblies/asm_reset",
+      },
+    }));
+
+    const getStatus = {} as GetAssemblyStatusFn;
+    const listResults = {} as ListResultsFn;
+    const refreshAssembly = refreshMock as unknown as RefreshAssemblyFn;
+    currentStatus = { raw: { ok: "ASSEMBLY_UPLOADING" } };
+    currentResults = [{ stepName: "resize", raw: { ssl_url: "https://file" } }];
+    queryHandler = (fn) => {
+      if (fn === getStatus) return currentStatus;
+      if (fn === listResults) return currentResults;
+      return null;
+    };
+    queryMock.mockImplementation((fn, args) => queryHandler(fn, args));
+
+    const { result } = renderHook(() =>
+      useTransloaditUpload({
+        createAssembly: createAssembly as unknown as CreateAssemblyFn,
+        getStatus,
+        listResults,
+        refreshAssembly,
+      }),
+    );
+
+    const file = new File(["hello"], "hello.txt", { type: "text/plain" });
+
+    await act(async () => {
+      await result.current.upload([file], {
+        steps: { resize: { robot: "/image/resize" } },
+      });
+    });
+
+    expect(result.current.assemblyId).toBe("asm_reset");
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.assemblyId).toBeNull();
+    expect(result.current.error).toBeNull();
+  });
 });
 
 describe("useTransloaditUppy", () => {

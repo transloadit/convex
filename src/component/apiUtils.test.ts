@@ -212,4 +212,30 @@ describe("apiUtils", () => {
     });
     expect(response.status).toBe(204);
   });
+
+  test("handleWebhookRequest honors a custom response status", async () => {
+    const payload = { ok: "ASSEMBLY_COMPLETED", assembly_id: "asm_123" };
+    const rawBody = JSON.stringify(payload);
+    const formData = new FormData();
+    formData.append("transloadit", rawBody);
+    formData.append("signature", "sha384:abc");
+
+    const request = new Request("http://localhost", {
+      method: "POST",
+      body: formData,
+    });
+    const runAction = vi.fn().mockResolvedValue(null);
+
+    const response = await handleWebhookRequest(request, {
+      runAction,
+      responseStatus: 299,
+    });
+
+    expect(runAction).toHaveBeenCalledWith({
+      payload,
+      rawBody,
+      signature: "sha384:abc",
+    });
+    expect(response.status).toBe(299);
+  });
 });
