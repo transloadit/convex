@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ASSEMBLY_STATUS_COMPLETED,
   ASSEMBLY_STATUS_UPLOADING,
+  getAssemblyStage,
   isAssemblyCompletedStatus,
   isAssemblyUploadingStatus,
   parseAssemblyFields,
@@ -63,5 +64,8 @@ describe("assembly helpers", () => {
     expect(isAssemblyCompletedStatus(ASSEMBLY_STATUS_COMPLETED)).toBe(true);
     expect(isAssemblyCompletedStatus(ASSEMBLY_STATUS_UPLOADING)).toBe(false);
     expect(isAssemblyUploadingStatus(ASSEMBLY_STATUS_UPLOADING)).toBe(true);
+    expect(getAssemblyStage({ ok: ASSEMBLY_STATUS_COMPLETED })).toBe(
+      "complete",
+    );
   });
 });

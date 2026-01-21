@@ -14,6 +14,7 @@ export {
   ASSEMBLY_STATUS_COMPLETED,
   ASSEMBLY_STATUS_UPLOADING,
   buildTusUploadConfig,
+  getAssemblyStage,
   getResultOriginalKey,
   getResultUrl,
   isAssemblyBusyStatus,

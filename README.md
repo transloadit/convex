@@ -183,6 +183,10 @@ You can also access the assembly status guards directly:
 
 ```ts
 import { isAssemblyTerminal, isAssemblyTerminalError } from "@transloadit/convex";
+
+// Or map a raw status into a human-friendly stage string:
+import { getAssemblyStage } from "@transloadit/convex";
+const stage = getAssemblyStage(status); // "uploading" | "processing" | "complete" | "error" | null
 ```
 
 For common robots, you can reference typed results by robot name:

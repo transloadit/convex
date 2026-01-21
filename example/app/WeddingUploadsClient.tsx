@@ -13,13 +13,9 @@ import {
   type AssemblyResultResponse,
   type AssemblyStatus,
   buildTusUploadConfig,
+  getAssemblyStage,
   getResultOriginalKey,
-  isAssemblyBusyStatus,
-  isAssemblyCompletedStatus,
   isAssemblyTerminal,
-  isAssemblyTerminalError,
-  isAssemblyTerminalOk,
-  isAssemblyUploadingStatus,
   parseAssemblyStatus,
   weddingStepNames,
 } from "../lib/transloadit";
@@ -88,16 +84,7 @@ const shouldAdvanceStage = (current: UploadStage, next: UploadStage) =>
   stageRank[next] >= stageRank[current];
 
 const deriveStageFromStatus = (status: AssemblyStatus | null | undefined) => {
-  if (!status) return null;
-  if (isAssemblyCompletedStatus(status.ok ?? null)) return "complete";
-  if (isAssemblyBusyStatus(status.ok ?? null)) {
-    return isAssemblyUploadingStatus(status.ok ?? null)
-      ? "uploading"
-      : "processing";
-  }
-  if (isAssemblyTerminalError(status)) return "error";
-  if (isAssemblyTerminalOk(status)) return "error";
-  return null;
+  return getAssemblyStage(status);
 };
 
 const useAssemblyPoller = ({

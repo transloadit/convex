@@ -36,6 +36,7 @@ export type {
 export {
   ASSEMBLY_STATUS_COMPLETED,
   ASSEMBLY_STATUS_UPLOADING,
+  getAssemblyStage,
   isAssemblyCompletedStatus,
   isAssemblyUploadingStatus,
   normalizeAssemblyUploadUrls,

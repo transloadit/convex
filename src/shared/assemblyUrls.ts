@@ -2,6 +2,9 @@ import {
   type AssemblyStatus,
   type AssemblyStatusResults,
   assemblyStatusSchema,
+  isAssemblyBusyStatus,
+  isAssemblyTerminalError,
+  isAssemblyTerminalOk,
 } from "@transloadit/zod/v3/assemblyStatus";
 
 export type TransloaditAssembly = AssemblyStatus;
@@ -18,6 +21,22 @@ export const isAssemblyUploadingStatus = (
   status: string | null | undefined,
 ): status is typeof ASSEMBLY_STATUS_UPLOADING =>
   status === ASSEMBLY_STATUS_UPLOADING;
+
+export type AssemblyStage = "uploading" | "processing" | "complete" | "error";
+
+export const getAssemblyStage = (
+  status: AssemblyStatus | null | undefined,
+): AssemblyStage | null => {
+  if (!status) return null;
+  const ok = typeof status.ok === "string" ? status.ok : null;
+  if (isAssemblyCompletedStatus(ok)) return "complete";
+  if (isAssemblyBusyStatus(ok)) {
+    return isAssemblyUploadingStatus(ok) ? "uploading" : "processing";
+  }
+  if (isAssemblyTerminalError(status)) return "error";
+  if (isAssemblyTerminalOk(status)) return "error";
+  return null;
+};
 
 export type AssemblyUrlFields = {
   tus_url?: string;
