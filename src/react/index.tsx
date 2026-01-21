@@ -314,6 +314,12 @@ export async function uploadWithAssembly<
   return { assembly, uploadResult };
 }
 
+/**
+ * Low-level tus upload helper. Prefer `useTransloaditUpload` for new code.
+ */
+/**
+ * Low-level tus upload helper. Prefer `useTransloaditUpload` for new code.
+ */
 export async function uploadWithTransloaditTus(
   createAssembly: CreateAssemblyHandler,
   file: File,
@@ -456,6 +462,9 @@ export async function uploadWithTransloaditTus(
   }
 }
 
+/**
+ * @deprecated Prefer `useTransloaditUpload` (single + multi-file) for new code.
+ */
 export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
   const create = useAction(createAssembly);
   const [state, setState] = useState<UploadState>({
@@ -488,6 +497,9 @@ export function useTransloaditTusUpload(createAssembly: CreateAssemblyFn) {
   );
 }
 
+/**
+ * Low-level multi-file tus uploader. Prefer `useTransloaditUpload` for new code.
+ */
 export function uploadFilesWithTransloaditTus(
   createAssembly: CreateAssemblyHandler,
   files: File[],
@@ -1125,6 +1137,9 @@ export function useAssemblyStatusWithPolling(
   return status;
 }
 
+/**
+ * @deprecated Prefer `useAssemblyStatusWithPolling` for public usage.
+ */
 export function useAssemblyPoller(options: {
   assemblyId: string | null;
   status: AssemblyStatus | null | undefined;

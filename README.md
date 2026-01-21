@@ -137,9 +137,10 @@ return handleWebhookRequest(request, {
 });
 ```
 
-## Client wrapper
+## Client wrapper (optional)
 
-If you prefer a class-based API (similar to other Convex components), use `Transloadit`:
+Most integrations should use `makeTransloaditAPI` (above). If you prefer a class-based API
+(similar to other Convex components), use `Transloadit`:
 
 ```ts
 import { Transloadit } from "@transloadit/convex";
@@ -205,7 +206,49 @@ const { endpoint, metadata } = buildTusUploadConfig(assembly.data, file, {
 
 ## React usage
 
-### Resumable tus upload
+### Happy path upload hook (recommended)
+
+```tsx
+import { useTransloaditUpload } from "@transloadit/convex/react";
+import { api } from "../convex/_generated/api";
+
+const { upload, status, results, isUploading, progress } =
+  useTransloaditUpload({
+    createAssembly: api.transloadit.createAssembly,
+    getStatus: api.transloadit.getAssemblyStatus,
+    listResults: api.transloadit.listResults,
+    refreshAssembly: api.transloadit.refreshAssembly,
+  });
+
+await upload(files, {
+  steps,
+  notifyUrl,
+  numExpectedUploadFiles: Array.from(files).length,
+});
+```
+
+Set `pollIntervalMs: 0` to disable polling (webhooks only).
+
+### Uppy helper (recommended for Uppy)
+
+```tsx
+import { useTransloaditUppy } from "@transloadit/convex/react";
+import { api } from "../convex/_generated/api";
+
+const { startUpload, status, results, stage } = useTransloaditUppy({
+  uppy,
+  createAssembly: api.wedding.createWeddingAssembly,
+  getStatus: api.transloadit.getAssemblyStatus,
+  listResults: api.transloadit.listResults,
+  refreshAssembly: api.transloadit.refreshAssembly,
+});
+
+await startUpload({
+  createAssemblyArgs: { guestName, uploadCode },
+});
+```
+
+### Low-level tus helpers (advanced)
 
 ```tsx
 import {
@@ -235,7 +278,7 @@ function TusUpload() {
 }
 ```
 
-Note: Transloadit expects tus metadata `fieldname`. The hook sets it to `file` by default; override via `fieldName` or `metadata.fieldname`. You can also use `onAssemblyCreated` to access the assembly id before the upload finishes.
+Note: Transloadit expects tus metadata `fieldname`. The hook sets it to `file` by default; override via `fieldName` or `metadata.fieldname`. You can also use `onAssemblyCreated` to access the assembly id before the upload finishes. `useTransloaditTusUpload` is deprecated; prefer `useTransloaditUpload` for new code.
 
 If you want an imperative helper (e.g. in a custom uploader), use `uploadWithTransloaditTus`:
 
@@ -269,48 +312,6 @@ const controller = uploadFilesWithTransloaditTus(createAssembly, files, {
 const result = await controller.promise;
 console.log(result.files);
 ```
-
-### Uppy helper
-
-```tsx
-import { useTransloaditUppy } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-const { startUpload, status, results, stage } = useTransloaditUppy({
-  uppy,
-  createAssembly: api.wedding.createWeddingAssembly,
-  getStatus: api.transloadit.getAssemblyStatus,
-  listResults: api.transloadit.listResults,
-  refreshAssembly: api.transloadit.refreshAssembly,
-});
-
-await startUpload({
-  createAssemblyArgs: { guestName, uploadCode },
-});
-```
-
-### Happy path upload hook
-
-```tsx
-import { useTransloaditUpload } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-const { upload, status, results, isUploading, progress } =
-  useTransloaditUpload({
-    createAssembly: api.transloadit.createAssembly,
-    getStatus: api.transloadit.getAssemblyStatus,
-    listResults: api.transloadit.listResults,
-    refreshAssembly: api.transloadit.refreshAssembly,
-  });
-
-await upload(files, {
-  steps,
-  notifyUrl,
-  numExpectedUploadFiles: Array.from(files).length,
-});
-```
-
-Set `pollIntervalMs: 0` to disable polling (webhooks only).
 
 ### Reactive status/results
 

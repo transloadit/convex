@@ -134,6 +134,9 @@ export const vCreateAssemblyArgs = v.object({
   userId: v.optional(v.string()),
 });
 
+/**
+ * @deprecated Prefer `makeTransloaditAPI` or `Transloadit` for new code.
+ */
 export class TransloaditClient {
   declare component: TransloaditComponent;
   declare config: TransloaditConfig;
@@ -232,6 +235,9 @@ export class TransloaditClient {
 
 export class Transloadit extends TransloaditClient {}
 
+/**
+ * @deprecated Prefer `new Transloadit(...)` or `makeTransloaditAPI(...)`.
+ */
 export function createTransloadit(
   component: TransloaditComponent,
   config?: Partial<TransloaditConfig>,
