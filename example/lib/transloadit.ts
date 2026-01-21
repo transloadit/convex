@@ -4,4 +4,18 @@ export const weddingStepNames = {
   videoThumbs: "videos_thumbs",
 };
 
-export { buildTusUploadConfig } from "../../src/shared/tusUpload.ts";
+export type {
+  AssemblyResponse,
+  AssemblyResultResponse,
+  AssemblyStatus,
+} from "../../src/client/index.ts";
+
+export {
+  buildTusUploadConfig,
+  isAssemblyBusyStatus,
+  isAssemblyTerminal,
+  isAssemblyTerminalError,
+  isAssemblyTerminalOk,
+  isAssemblyTerminalOkStatus,
+  parseAssemblyStatus,
+} from "../../src/client/index.ts";

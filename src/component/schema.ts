@@ -1,16 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
-export const assemblyStatusValues = [
-  "ASSEMBLY_UPLOADING",
-  "ASSEMBLY_EXECUTING",
-  "ASSEMBLY_COMPLETED",
-  "ASSEMBLY_CANCELED",
-  "ASSEMBLY_FAILED",
-] as const;
-
-export type AssemblyStatus = (typeof assemblyStatusValues)[number];
-
 export default defineSchema({
   assemblies: defineTable({
     assemblyId: v.string(),

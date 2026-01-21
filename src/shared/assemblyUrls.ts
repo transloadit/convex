@@ -1,7 +1,8 @@
-import type {
-  AssemblyStatus,
-  AssemblyStatusResults,
-} from "@transloadit/types/assemblyStatus";
+import {
+  type AssemblyStatus,
+  type AssemblyStatusResults,
+  assemblyStatusSchema,
+} from "@transloadit/zod/v3/assemblyStatus";
 
 export type TransloaditAssembly = AssemblyStatus;
 
@@ -68,8 +69,8 @@ export const normalizeAssemblyUploadUrls = (
 export const parseAssemblyStatus = (
   data: unknown,
 ): TransloaditAssembly | null => {
-  if (!isRecord(data)) return null;
-  return data as TransloaditAssembly;
+  const parsed = assemblyStatusSchema.safeParse(data);
+  return parsed.success ? parsed.data : null;
 };
 
 export const parseAssemblyFields = (data: unknown): Record<string, unknown> => {

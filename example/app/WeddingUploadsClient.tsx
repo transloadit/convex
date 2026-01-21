@@ -7,40 +7,28 @@ import { useAction, useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buildTusUploadConfig, weddingStepNames } from "../lib/transloadit";
+import {
+  type AssemblyResponse,
+  type AssemblyResultResponse,
+  type AssemblyStatus,
+  buildTusUploadConfig,
+  isAssemblyBusyStatus,
+  isAssemblyTerminal,
+  isAssemblyTerminalError,
+  isAssemblyTerminalOk,
+  parseAssemblyStatus,
+  weddingStepNames,
+} from "../lib/transloadit";
 import { Providers } from "./providers";
 
 const Dashboard = dynamic(() => import("@uppy/react/dashboard"), {
   ssr: false,
 });
 
-type AssemblyResponse = {
+type WeddingAssemblyResponse = {
   assemblyId: string;
   data: Record<string, unknown>;
   params?: Record<string, unknown>;
-};
-
-type AssemblyStatus = {
-  ok?: string;
-};
-
-type AssemblyResult = {
-  assemblyId?: string;
-  _id?: string;
-  resultId?: string;
-  sslUrl?: string;
-  name?: string;
-  mime?: string;
-  stepName?: string;
-  createdAt?: number;
-  raw?: Record<string, unknown>;
-};
-
-type AssemblySummary = {
-  _id?: string;
-  assemblyId?: string;
-  createdAt?: number;
-  fields?: Record<string, unknown>;
 };
 
 type Toast = {
@@ -75,7 +63,7 @@ const retentionMs =
 const retentionLabel =
   retentionMs === Number.POSITIVE_INFINITY ? "all time" : `${retentionHours}h`;
 
-const filterResults = (results: AssemblyResult[]) => {
+const filterResults = (results: AssemblyResultResponse[]) => {
   if (retentionMs === Number.POSITIVE_INFINITY) return results;
   return results.filter((item) => {
     if (typeof item.createdAt !== "number") return true;
@@ -95,46 +83,30 @@ const stageRank: Record<UploadStage, number> = {
 const shouldAdvanceStage = (current: UploadStage, next: UploadStage) =>
   stageRank[next] >= stageRank[current];
 
-const terminalErrorStatuses = new Set([
-  "ASSEMBLY_FAILED",
-  "ASSEMBLY_CANCELED",
-  "ASSEMBLY_ABORTED",
-  "ASSEMBLY_EXPIRED",
-  "REQUEST_ABORTED",
-]);
-
-const deriveStageFromStatus = (status: string | null | undefined) => {
+const deriveStageFromStatus = (status: AssemblyStatus | null | undefined) => {
   if (!status) return null;
-  if (status === "ASSEMBLY_COMPLETED") return "complete";
-  if (status === "ASSEMBLY_EXECUTING") return "processing";
-  if (status === "ASSEMBLY_UPLOADING") return "uploading";
-  if (terminalErrorStatuses.has(status)) return "error";
+  if (status.ok === "ASSEMBLY_COMPLETED") return "complete";
+  if (isAssemblyBusyStatus(status.ok ?? null)) {
+    return status.ok === "ASSEMBLY_UPLOADING" ? "uploading" : "processing";
+  }
+  if (isAssemblyTerminalError(status)) return "error";
+  if (isAssemblyTerminalOk(status)) return "error";
   return null;
 };
 
-const getRawString = (result: AssemblyResult, key: string) => {
+const getRawString = (result: AssemblyResultResponse, key: string) => {
   if (!result.raw) return null;
-  const value = result.raw[key];
+  const value = (result.raw as Record<string, unknown>)[key];
   return typeof value === "string" ? value : null;
 };
 
-const getOriginalKey = (result: AssemblyResult) =>
+const getOriginalKey = (result: AssemblyResultResponse) =>
   getRawString(result, "original_id") ??
   getRawString(result, "original_basename") ??
   result.name ??
   result.resultId ??
   result._id ??
   null;
-
-const terminalStatuses = new Set([
-  "ASSEMBLY_COMPLETED",
-  "ASSEMBLY_FAILED",
-  "ASSEMBLY_CANCELED",
-  "ASSEMBLY_ABORTED",
-]);
-
-const isTerminalStatus = (status: string | null | undefined) =>
-  status ? terminalStatuses.has(status) : false;
 
 const useAssemblyPoller = ({
   assemblyId,
@@ -145,7 +117,7 @@ const useAssemblyPoller = ({
   shouldContinue,
 }: {
   assemblyId: string | null;
-  status: string | null | undefined;
+  status: AssemblyStatus | null | undefined;
   refresh: () => Promise<void>;
   intervalMs: number;
   onError?: (error: Error) => void;
@@ -170,7 +142,7 @@ const useAssemblyPoller = ({
   useEffect(() => {
     if (!assemblyId) return;
     const shouldKeepPolling = () => {
-      if (!isTerminalStatus(status)) return true;
+      if (!isAssemblyTerminal(status)) return true;
       return shouldContinueRef.current?.() ?? false;
     };
     if (!shouldKeepPolling()) return;
@@ -254,7 +226,7 @@ const useWeddingUppy = () => {
   return uppy;
 };
 
-const useUploadToasts = (assemblies: AssemblySummary[] | undefined) => {
+const useUploadToasts = (assemblies: AssemblyResponse[] | undefined) => {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seen = useRef<Set<string>>(new Set());
   const initialized = useRef(false);
@@ -324,22 +296,22 @@ const formatUploadFailure = (result: UploadResult) => {
 const createWeddingAssemblyRef = makeFunctionReference<
   "action",
   { fileCount: number; guestName?: string; uploadCode?: string },
-  AssemblyResponse
+  WeddingAssemblyResponse
 >("wedding:createWeddingAssembly");
 const listAssembliesRef = makeFunctionReference<
   "query",
   { status?: string; userId?: string; limit?: number },
-  AssemblySummary[]
+  AssemblyResponse[]
 >("transloadit:listAssemblies");
 const listResultsRef = makeFunctionReference<
   "query",
   { assemblyId: string; stepName?: string; limit?: number },
-  AssemblyResult[]
+  AssemblyResultResponse[]
 >("transloadit:listResults");
 const getAssemblyStatusRef = makeFunctionReference<
   "query",
   { assemblyId: string },
-  AssemblyStatus | null
+  AssemblyResponse | null
 >("transloadit:getAssemblyStatus");
 const refreshAssemblyRef = makeFunctionReference<
   "action",
@@ -347,7 +319,7 @@ const refreshAssemblyRef = makeFunctionReference<
   { assemblyId: string; resultCount: number; ok?: string; status?: string }
 >("transloadit:refreshAssembly");
 
-const Gallery = ({ results }: { results: AssemblyResult[] }) => {
+const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
   const visibleResults = filterResults(results);
   const thumbStep = weddingStepNames.videoThumbs;
   const imageStep = weddingStepNames.image;
@@ -421,7 +393,10 @@ const LocalWeddingUploads = () => {
     unknown
   > | null>(null);
   const [status, setStatus] = useState<string>("pending");
-  const [results, setResults] = useState<AssemblyResult[]>([]);
+  const [results, setResults] = useState<AssemblyResultResponse[]>([]);
+  const [assemblyStatus, setAssemblyStatus] = useState<AssemblyStatus | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [stage, setStage] = useState<UploadStage>("idle");
@@ -437,10 +412,12 @@ const LocalWeddingUploads = () => {
       throw new Error("Failed to load assembly status");
     }
     const data = (await response.json()) as {
-      status: AssemblyStatus | null;
-      results: AssemblyResult[];
+      status: AssemblyResponse | null;
+      results: AssemblyResultResponse[];
     };
-    setStatus(data.status?.ok ?? "pending");
+    const parsedStatus = parseAssemblyStatus(data.status?.raw ?? null);
+    setAssemblyStatus(parsedStatus);
+    setStatus(parsedStatus?.ok ?? "pending");
     setResults(data.results ?? []);
   }, []);
 
@@ -468,7 +445,7 @@ const LocalWeddingUploads = () => {
       if (!response.ok) {
         throw new Error("Failed to create assembly");
       }
-      const assembly = (await response.json()) as AssemblyResponse;
+      const assembly = (await response.json()) as WeddingAssemblyResponse;
       setAssemblyId(assembly.assemblyId);
       setAssemblyParams(assembly.params ?? null);
       setStage("uploading");
@@ -514,12 +491,12 @@ const LocalWeddingUploads = () => {
   };
 
   useEffect(() => {
-    const nextStage = deriveStageFromStatus(status);
+    const nextStage = deriveStageFromStatus(assemblyStatus);
     if (!nextStage) return;
     if (shouldAdvanceStage(stage, nextStage)) {
       setStage(nextStage);
     }
-  }, [stage, status]);
+  }, [assemblyStatus, stage]);
 
   const refreshLocal = useCallback(() => {
     if (!assemblyId) return Promise.resolve();
@@ -532,7 +509,7 @@ const LocalWeddingUploads = () => {
 
   useAssemblyPoller({
     assemblyId,
-    status,
+    status: assemblyStatus,
     intervalMs: 4000,
     refresh: refreshLocal,
     onError: (err) => setError(err.message),
@@ -575,10 +552,11 @@ const CloudWeddingUploads = () => {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const createWeddingAssembly = useAction(createWeddingAssemblyRef);
   const refreshAssembly = useAction(refreshAssemblyRef);
-  const status = useQuery(
+  const statusRecord = useQuery(
     getAssemblyStatusRef,
     assemblyId ? { assemblyId } : "skip",
   );
+  const status = parseAssemblyStatus(statusRecord?.raw ?? null);
   const results = useQuery(
     listResultsRef,
     assemblyId ? { assemblyId } : "skip",
@@ -612,7 +590,7 @@ const CloudWeddingUploads = () => {
 
   useAssemblyPoller({
     assemblyId,
-    status: status?.ok ?? null,
+    status,
     intervalMs: 8000,
     refresh: refreshCloud,
     onError: (error) => {
@@ -622,12 +600,12 @@ const CloudWeddingUploads = () => {
   });
 
   useEffect(() => {
-    const nextStage = deriveStageFromStatus(status?.ok ?? null);
+    const nextStage = deriveStageFromStatus(status);
     if (!nextStage) return;
     if (shouldAdvanceStage(stage, nextStage)) {
       setStage(nextStage);
     }
-  }, [stage, status?.ok]);
+  }, [stage, status]);
 
   const startUpload = async () => {
     setError(null);

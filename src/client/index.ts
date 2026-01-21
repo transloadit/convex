@@ -1,10 +1,25 @@
-import type { AssemblyStatus } from "@transloadit/types/assemblyStatus";
-import type { AssemblyInstructionsInput } from "@transloadit/types/template";
+import type { AssemblyStatus } from "@transloadit/zod/v3/assemblyStatus";
+import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
 import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
 import { type Infer, v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.ts";
 import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.ts";
 
+export {
+  assemblyStatusErrCodeSchema,
+  assemblyStatusOkCodeSchema,
+  assemblyStatusResultsSchema,
+  assemblyStatusSchema,
+  isAssemblyBusy,
+  isAssemblyBusyStatus,
+  isAssemblyErrorStatus,
+  isAssemblyOkStatus,
+  isAssemblySysError,
+  isAssemblyTerminal,
+  isAssemblyTerminalError,
+  isAssemblyTerminalOk,
+  isAssemblyTerminalOkStatus,
+} from "@transloadit/zod/v3/assemblyStatus";
 export type {
   ParsedWebhookRequest,
   VerifiedWebhookRequest,

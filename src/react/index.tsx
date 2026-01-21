@@ -1,7 +1,9 @@
+import { isAssemblyTerminal } from "@transloadit/zod/v3/assemblyStatus";
 import { useAction, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload } from "tus-js-client";
+import { parseAssemblyStatus } from "../shared/assemblyUrls.ts";
 import { buildTusUploadConfig } from "../shared/tusUpload.ts";
 
 export type CreateAssemblyFn = FunctionReference<
@@ -627,14 +629,12 @@ export function useAssemblyStatusWithPolling(
     const isTerminal = () => {
       if (!options?.stopOnTerminal) return false;
       const current = statusRef.current;
-      if (!current || typeof current !== "object") return false;
-      const ok =
-        "ok" in current && typeof current.ok === "string" ? current.ok : "";
-      return (
-        ok === "ASSEMBLY_COMPLETED" ||
-        ok === "ASSEMBLY_FAILED" ||
-        ok === "ASSEMBLY_CANCELED"
-      );
+      const rawCandidate =
+        current && typeof current === "object"
+          ? ((current as { raw?: unknown }).raw ?? current)
+          : current;
+      const parsed = parseAssemblyStatus(rawCandidate);
+      return parsed ? isAssemblyTerminal(parsed) : false;
     };
 
     if (isTerminal()) return;

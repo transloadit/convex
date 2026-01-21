@@ -1253,8 +1253,7 @@ __metadata:
     "@playwright/test": "npm:^1.57.0"
     "@testing-library/dom": "npm:^10.4.1"
     "@testing-library/react": "npm:^16.3.0"
-    "@transloadit/types": "npm:^4.1.3"
-    "@transloadit/zod": "npm:^4.1.3"
+    "@transloadit/zod": "npm:^4.1.6"
     "@types/node": "npm:^25.0.8"
     "@types/react": "npm:^19.2.8"
     "@types/react-dom": "npm:^19"
@@ -1289,20 +1288,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@transloadit/types@npm:^4.1.3":
-  version: 4.1.3
-  resolution: "@transloadit/types@npm:4.1.3"
-  checksum: 10c0/f514796d21b3f6dadaeaa84786bd195b0b49f50b2355f8f67f7c70d627cf741bb86448a9517731a6100139b06361f127808240bcb2e98176ac4e6e72f6b67d74
-  languageName: node
-  linkType: hard
-
-"@transloadit/zod@npm:^4.1.3":
-  version: 4.1.3
-  resolution: "@transloadit/zod@npm:4.1.3"
+"@transloadit/zod@npm:^4.1.6":
+  version: 4.1.6
+  resolution: "@transloadit/zod@npm:4.1.6"
   dependencies:
     type-fest: "npm:^4.41.0"
     zod: "npm:^4.0.0"
-  checksum: 10c0/65846a6db9e951c3c62ee34b6381a036274a93fa54e3a54af22cb7be8f725b18d72fcc70a00ab9f65c5bdb696d282b405cbf317339dd00a7d3f89b40b44137ef
+  checksum: 10c0/a2556458dabab637a59f35dfce647d12975791eb3c8fa8de39c1133062e19b348ed8b0989caef10707dcebcd419db86770816e343b0244b2832fcc548716ed03
   languageName: node
   linkType: hard
 

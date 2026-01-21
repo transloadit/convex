@@ -1,4 +1,4 @@
-import type { AssemblyStatusResult } from "@transloadit/types/assemblyStatus";
+import type { AssemblyStatusResult } from "@transloadit/zod/v3/assemblyStatus";
 
 export type TransloaditResult = AssemblyStatusResult;
 

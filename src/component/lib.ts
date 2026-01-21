@@ -1,7 +1,8 @@
-import type { AssemblyStatus } from "@transloadit/types/assemblyStatus";
-import type { AssemblyInstructionsInput } from "@transloadit/types/template";
+import type { AssemblyStatus } from "@transloadit/zod/v3/assemblyStatus";
+import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
 import { anyApi, type FunctionReference } from "convex/server";
 import { type Infer, v } from "convex/values";
+import { parseAssemblyStatus } from "../shared/assemblyUrls.ts";
 import {
   action,
   internalAction,
@@ -106,6 +107,14 @@ const resolveAssemblyId = (payload: AssemblyStatus): string => {
   if (typeof payload.assembly_id === "string") return payload.assembly_id;
   if (typeof payload.assemblyId === "string") return payload.assemblyId;
   return "";
+};
+
+const parseAssemblyPayload = (payload: unknown): AssemblyStatus => {
+  const parsed = parseAssemblyStatus(payload);
+  if (!parsed) {
+    throw new Error("Invalid Transloadit payload");
+  }
+  return parsed;
 };
 
 const resolveWebhookRawBody = (args: {
@@ -468,7 +477,8 @@ export const processWebhook = internalAction({
       }
     }
 
-    return applyAssemblyStatus(ctx, args.payload as AssemblyStatus);
+    const parsed = parseAssemblyPayload(args.payload);
+    return applyAssemblyStatus(ctx, parsed);
   },
 });
 
@@ -512,12 +522,6 @@ export const queueWebhook = action({
     queued: v.boolean(),
   }),
   handler: async (ctx, args) => {
-    const payload = args.payload as AssemblyStatus;
-    const assemblyId = resolveAssemblyId(payload);
-    if (!assemblyId) {
-      throw new Error("Webhook payload missing assembly_id");
-    }
-
     const rawBody = resolveWebhookRawBody(args);
     const shouldVerify = true;
     const authSecret =
@@ -540,8 +544,14 @@ export const queueWebhook = action({
       }
     }
 
+    const parsed = parseAssemblyPayload(args.payload);
+    const assemblyId = resolveAssemblyId(parsed);
+    if (!assemblyId) {
+      throw new Error("Webhook payload missing assembly_id");
+    }
+
     await ctx.scheduler.runAfter(0, internal.lib.processWebhook, {
-      payload: args.payload,
+      payload: parsed,
       rawBody: args.rawBody,
       signature: args.signature,
       verifySignature: true,
@@ -579,7 +589,7 @@ export const refreshAssembly = action({
         : `${TRANSLOADIT_ASSEMBLY_URL}/${assemblyId}`;
 
     const response = await fetch(url);
-    const payload = (await response.json()) as AssemblyStatus;
+    const payload = parseAssemblyPayload(await response.json());
     if (!response.ok) {
       throw new Error(
         `Transloadit status error ${response.status}: ${JSON.stringify(payload)}`,

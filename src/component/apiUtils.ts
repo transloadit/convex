@@ -1,5 +1,5 @@
-import type { AssemblyStatusResults } from "@transloadit/types/assemblyStatus";
-import type { AssemblyInstructionsInput } from "@transloadit/types/template";
+import type { AssemblyStatusResults } from "@transloadit/zod/v3/assemblyStatus";
+import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
 
 export interface TransloaditAuthConfig {
   authKey: string;
