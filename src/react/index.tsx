@@ -186,6 +186,34 @@ export type UploadWithAssemblyResult<TAssembly> = {
   uploadResult: UppyUploadResult;
 };
 
+export type UseTransloaditUploadOptions = {
+  createAssembly: CreateAssemblyFn;
+  getStatus: GetAssemblyStatusFn;
+  listResults: ListResultsFn;
+  refreshAssembly: RefreshAssemblyFn;
+  pollIntervalMs?: number;
+  stopOnTerminal?: boolean;
+  shouldContinue?: () => boolean;
+  onError?: (error: Error) => void;
+};
+
+export type UseTransloaditUploadResult = {
+  upload: (
+    files: File | File[] | FileList,
+    options: MultiFileTusUploadOptions,
+  ) => Promise<MultiFileTusUploadResult>;
+  cancel: () => void;
+  reset: () => void;
+  isUploading: boolean;
+  progress: number;
+  error: Error | null;
+  assemblyId: string | null;
+  assemblyData: Record<string, unknown> | null;
+  assembly: unknown;
+  status: AssemblyStatus | null;
+  results: Array<unknown> | undefined;
+};
+
 export async function uploadWithAssembly<
   TArgs extends { fileCount: number },
   TAssembly extends { assemblyId: string; data: Record<string, unknown> },
@@ -710,6 +738,121 @@ export function uploadFilesWithTransloaditTus(
   })();
 
   return { promise, cancel };
+}
+
+export function useTransloaditUpload(
+  options: UseTransloaditUploadOptions,
+): UseTransloaditUploadResult {
+  const create = useAction(options.createAssembly);
+  const refresh = useAction(options.refreshAssembly);
+  const [state, setState] = useState<UploadState>({
+    isUploading: false,
+    progress: 0,
+    error: null,
+  });
+  const [assemblyId, setAssemblyId] = useState<string | null>(null);
+  const [assemblyData, setAssemblyData] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const cancelRef = useRef<(() => void) | null>(null);
+
+  const upload = useCallback(
+    async (
+      files: File | File[] | FileList,
+      uploadOptions: MultiFileTusUploadOptions,
+    ) => {
+      const resolved =
+        files instanceof FileList
+          ? Array.from(files)
+          : Array.isArray(files)
+            ? files
+            : [files];
+
+      const controller = uploadFilesWithTransloaditTus(create, resolved, {
+        ...uploadOptions,
+        onStateChange: setState,
+        onAssemblyCreated: (assembly) => {
+          setAssemblyId(assembly.assemblyId);
+          setAssemblyData(assembly.data);
+          uploadOptions.onAssemblyCreated?.(assembly);
+        },
+      });
+
+      cancelRef.current = controller.cancel;
+
+      try {
+        const result = await controller.promise;
+        setAssemblyId(result.assemblyId);
+        setAssemblyData(result.data);
+        return result;
+      } catch (error) {
+        const resolvedError =
+          error instanceof Error ? error : new Error("Upload failed");
+        setState({ isUploading: false, progress: 0, error: resolvedError });
+        throw error;
+      } finally {
+        cancelRef.current = null;
+      }
+    },
+    [create],
+  );
+
+  const cancel = useCallback(() => {
+    cancelRef.current?.();
+  }, []);
+
+  const reset = useCallback(() => {
+    cancelRef.current?.();
+    cancelRef.current = null;
+    setAssemblyId(null);
+    setAssemblyData(null);
+    setState({ isUploading: false, progress: 0, error: null });
+  }, []);
+
+  const assembly = useQuery(
+    options.getStatus,
+    assemblyId ? { assemblyId } : "skip",
+  );
+
+  const parsedStatus = useMemo(() => {
+    const candidate =
+      assembly && typeof assembly === "object"
+        ? ((assembly as { raw?: unknown }).raw ?? assembly)
+        : assembly;
+    return parseAssemblyStatus(candidate);
+  }, [assembly]);
+
+  const results = useQuery(
+    options.listResults,
+    assemblyId ? { assemblyId } : "skip",
+  );
+
+  useAssemblyPoller({
+    assemblyId,
+    status: parsedStatus,
+    refresh: async () => {
+      if (!assemblyId) return;
+      await refresh({ assemblyId });
+    },
+    intervalMs: options.pollIntervalMs ?? 5000,
+    shouldContinue: options.shouldContinue,
+    onError: options.onError,
+  });
+
+  return {
+    upload,
+    cancel,
+    reset,
+    isUploading: state.isUploading,
+    progress: state.progress,
+    error: state.error,
+    assemblyId,
+    assemblyData,
+    assembly,
+    status: parsedStatus,
+    results,
+  };
 }
 
 export function useAssemblyStatus(

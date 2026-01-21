@@ -276,6 +276,29 @@ console.log(result.files);
 import { uploadWithAssembly, useAssemblyPoller } from "@transloadit/convex/react";
 ```
 
+### Happy path upload hook
+
+```tsx
+import { useTransloaditUpload } from "@transloadit/convex/react";
+import { api } from "../convex/_generated/api";
+
+const { upload, status, results, isUploading, progress } =
+  useTransloaditUpload({
+    createAssembly: api.transloadit.createAssembly,
+    getStatus: api.transloadit.getAssemblyStatus,
+    listResults: api.transloadit.listResults,
+    refreshAssembly: api.transloadit.refreshAssembly,
+  });
+
+await upload(files, {
+  steps,
+  notifyUrl,
+  numExpectedUploadFiles: Array.from(files).length,
+});
+```
+
+Set `pollIntervalMs: 0` to disable polling (webhooks only).
+
 ### Reactive status/results
 
 ```tsx
