@@ -45,6 +45,7 @@ export {
   parseAssemblyStatus,
   parseAssemblyUrls,
 } from "../shared/assemblyUrls.ts";
+export { pollAssembly } from "../shared/pollAssembly.ts";
 export type {
   ImageResizeResult,
   ResultByRobot,

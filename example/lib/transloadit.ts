@@ -25,4 +25,11 @@ export {
   isAssemblyTerminalOkStatus,
   isAssemblyUploadingStatus,
   parseAssemblyStatus,
+  pollAssembly,
 } from "../../src/client/index.ts";
+
+export type { UppyUploadResult } from "../../src/react/index.tsx";
+export {
+  uploadWithAssembly,
+  useAssemblyPoller,
+} from "../../src/react/index.tsx";

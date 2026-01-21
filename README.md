@@ -275,6 +275,12 @@ const result = await controller.promise;
 console.log(result.files);
 ```
 
+### Uppy helper
+
+```tsx
+import { uploadWithAssembly, useAssemblyPoller } from "@transloadit/convex/react";
+```
+
 ### Reactive status/results
 
 ```tsx

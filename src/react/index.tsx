@@ -1,9 +1,13 @@
-import { isAssemblyTerminal } from "@transloadit/zod/v3/assemblyStatus";
+import {
+  type AssemblyStatus,
+  isAssemblyTerminal,
+} from "@transloadit/zod/v3/assemblyStatus";
 import { useAction, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload } from "tus-js-client";
 import { parseAssemblyStatus } from "../shared/assemblyUrls.ts";
+import { pollAssembly } from "../shared/pollAssembly.ts";
 import { buildTusUploadConfig } from "../shared/tusUpload.ts";
 
 export type CreateAssemblyFn = FunctionReference<
@@ -132,6 +136,109 @@ export type MultiFileTusUploadController = {
   promise: Promise<MultiFileTusUploadResult>;
   cancel: () => void;
 };
+
+export type UppyTusState = {
+  endpoint?: string;
+  addRequestId?: boolean;
+};
+
+export type UppyFile = {
+  id: string;
+  data: File;
+  tus?: UppyTusState;
+};
+
+export type UppyUploadResult = {
+  successful?: Array<{ id: string; name?: string }>;
+  failed?: Array<{ id: string; name?: string; error?: { message?: string } }>;
+};
+
+export type UppyLike = {
+  getFiles: () => UppyFile[];
+  setFileMeta: (fileId: string, metadata: Record<string, string>) => void;
+  setFileState: (fileId: string, state: { tus?: UppyTusState }) => void;
+  getPlugin: (name: string) =>
+    | {
+        setOptions?: (options: {
+          endpoint?: string;
+          addRequestId?: boolean;
+        }) => void;
+      }
+    | undefined
+    | null;
+  upload: () => Promise<UppyUploadResult>;
+};
+
+export type UploadWithAssemblyOptions<TArgs extends { fileCount: number }> = {
+  fileCount?: number;
+  fieldName?: string;
+  metadata?: Record<string, string>;
+  addRequestId?: boolean;
+  createAssemblyArgs?: Partial<TArgs>;
+  onAssemblyCreated?: (assembly: {
+    assemblyId: string;
+    data: Record<string, unknown>;
+  }) => void;
+};
+
+export type UploadWithAssemblyResult<TAssembly> = {
+  assembly: TAssembly;
+  uploadResult: UppyUploadResult;
+};
+
+export async function uploadWithAssembly<
+  TArgs extends { fileCount: number },
+  TAssembly extends { assemblyId: string; data: Record<string, unknown> },
+>(
+  createAssembly: (args: TArgs) => Promise<TAssembly>,
+  uppy: UppyLike,
+  options: UploadWithAssemblyOptions<TArgs>,
+): Promise<UploadWithAssemblyResult<TAssembly>> {
+  const files = uppy.getFiles();
+  if (files.length === 0) {
+    throw new Error("No files provided for upload");
+  }
+
+  const args = {
+    ...(options.createAssemblyArgs ?? {}),
+    fileCount: options.fileCount ?? files.length,
+  } as TArgs;
+  const assembly = await createAssembly(args);
+  options.onAssemblyCreated?.(assembly);
+
+  const tusPlugin = uppy.getPlugin("Tus");
+  let tusEndpoint: string | null = null;
+  const addRequestId = options.addRequestId ?? true;
+
+  for (const file of files) {
+    const { endpoint, metadata } = buildTusUploadConfig(
+      assembly.data,
+      file.data,
+      {
+        fieldName: options.fieldName,
+        metadata: options.metadata,
+      },
+    );
+    if (!tusEndpoint) {
+      tusEndpoint = endpoint;
+    }
+    uppy.setFileMeta(file.id, metadata);
+    uppy.setFileState(file.id, {
+      tus: {
+        ...(file.tus ?? {}),
+        endpoint,
+        addRequestId,
+      },
+    });
+  }
+
+  if (tusPlugin && "setOptions" in tusPlugin && tusEndpoint) {
+    tusPlugin.setOptions?.({ endpoint: tusEndpoint, addRequestId });
+  }
+
+  const uploadResult = await uppy.upload();
+  return { assembly, uploadResult };
+}
 
 export async function uploadWithTransloaditTus(
   createAssembly: CreateAssemblyHandler,
@@ -611,44 +718,67 @@ export function useAssemblyStatusWithPolling(
   getStatus: GetAssemblyStatusFn,
   refreshAssembly: RefreshAssemblyFn,
   assemblyId: string,
-  options?: { pollIntervalMs?: number; stopOnTerminal?: boolean },
+  options?: {
+    pollIntervalMs?: number;
+    stopOnTerminal?: boolean;
+    shouldContinue?: () => boolean;
+    onError?: (error: Error) => void;
+  },
 ) {
   const status = useQuery(getStatus, { assemblyId });
   const refresh = useAction(refreshAssembly);
   const statusRef = useRef(status);
+  const shouldContinueRef = useRef(options?.shouldContinue);
+  const onErrorRef = useRef(options?.onError);
 
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
 
   useEffect(() => {
+    shouldContinueRef.current = options?.shouldContinue;
+  }, [options?.shouldContinue]);
+
+  useEffect(() => {
+    onErrorRef.current = options?.onError;
+  }, [options?.onError]);
+
+  useEffect(() => {
     if (!assemblyId) return;
     const intervalMs = options?.pollIntervalMs ?? 5000;
     if (intervalMs <= 0) return;
 
-    const isTerminal = () => {
-      if (!options?.stopOnTerminal) return false;
+    const shouldKeepPolling = () => {
+      const shouldContinue = shouldContinueRef.current?.();
+      if (shouldContinue === false) return false;
+      if (!options?.stopOnTerminal) return true;
       const current = statusRef.current;
       const rawCandidate =
         current && typeof current === "object"
           ? ((current as { raw?: unknown }).raw ?? current)
           : current;
       const parsed = parseAssemblyStatus(rawCandidate);
-      return parsed ? isAssemblyTerminal(parsed) : false;
+      return !(parsed ? isAssemblyTerminal(parsed) : false);
     };
 
-    if (isTerminal()) return;
+    if (!shouldKeepPolling()) return;
 
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
     const tick = async () => {
       if (cancelled) return;
-      if (isTerminal()) {
+      if (!shouldKeepPolling()) {
         if (intervalId) clearInterval(intervalId);
         cancelled = true;
         return;
       }
-      await refresh({ assemblyId });
+      try {
+        await refresh({ assemblyId });
+      } catch (error) {
+        const resolved =
+          error instanceof Error ? error : new Error("Refresh failed");
+        onErrorRef.current?.(resolved);
+      }
     };
 
     intervalId = setInterval(() => {
@@ -663,6 +793,57 @@ export function useAssemblyStatusWithPolling(
   }, [assemblyId, options?.pollIntervalMs, options?.stopOnTerminal, refresh]);
 
   return status;
+}
+
+export function useAssemblyPoller(options: {
+  assemblyId: string | null;
+  status: AssemblyStatus | null | undefined;
+  refresh: () => Promise<void>;
+  intervalMs: number;
+  shouldContinue?: () => boolean;
+  onError?: (error: Error) => void;
+}) {
+  const refreshRef = useRef(options.refresh);
+  const onErrorRef = useRef(options.onError);
+  const shouldContinueRef = useRef(options.shouldContinue);
+  const statusRef = useRef(options.status);
+
+  useEffect(() => {
+    refreshRef.current = options.refresh;
+  }, [options.refresh]);
+
+  useEffect(() => {
+    onErrorRef.current = options.onError;
+  }, [options.onError]);
+
+  useEffect(() => {
+    shouldContinueRef.current = options.shouldContinue;
+  }, [options.shouldContinue]);
+
+  useEffect(() => {
+    statusRef.current = options.status;
+  }, [options.status]);
+
+  useEffect(() => {
+    if (!options.assemblyId) return;
+
+    const controller = pollAssembly({
+      intervalMs: options.intervalMs,
+      refresh: () => refreshRef.current(),
+      shouldContinue: () => shouldContinueRef.current?.() ?? false,
+      isTerminal: () => {
+        const current = statusRef.current;
+        return current ? isAssemblyTerminal(current) : false;
+      },
+      onError: (error) => {
+        onErrorRef.current?.(error);
+      },
+    });
+
+    return () => {
+      controller.stop();
+    };
+  }, [options.assemblyId, options.intervalMs]);
 }
 
 export function useTransloaditFiles(

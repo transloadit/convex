@@ -12,11 +12,12 @@ import {
   type AssemblyResponse,
   type AssemblyResultResponse,
   type AssemblyStatus,
-  buildTusUploadConfig,
   getAssemblyStage,
   getResultOriginalKey,
-  isAssemblyTerminal,
   parseAssemblyStatus,
+  type UppyUploadResult,
+  uploadWithAssembly,
+  useAssemblyPoller,
   weddingStepNames,
 } from "../lib/transloadit";
 import { Providers } from "./providers";
@@ -36,14 +37,7 @@ type Toast = {
   message: string;
 };
 
-type UploadResult = {
-  successful?: Array<{ id: string; name?: string }>;
-  failed?: Array<{
-    id: string;
-    name?: string;
-    error?: { message?: string };
-  }>;
-};
+type UploadResult = UppyUploadResult;
 
 type UploadStage =
   | "idle"
@@ -82,67 +76,6 @@ const stageRank: Record<UploadStage, number> = {
 
 const shouldAdvanceStage = (current: UploadStage, next: UploadStage) =>
   stageRank[next] >= stageRank[current];
-
-const useAssemblyPoller = ({
-  assemblyId,
-  status,
-  refresh,
-  intervalMs,
-  onError,
-  shouldContinue,
-}: {
-  assemblyId: string | null;
-  status: AssemblyStatus | null | undefined;
-  refresh: () => Promise<void>;
-  intervalMs: number;
-  onError?: (error: Error) => void;
-  shouldContinue?: () => boolean;
-}) => {
-  const refreshRef = useRef(refresh);
-  const onErrorRef = useRef(onError);
-  const shouldContinueRef = useRef(shouldContinue);
-
-  useEffect(() => {
-    refreshRef.current = refresh;
-  }, [refresh]);
-
-  useEffect(() => {
-    onErrorRef.current = onError;
-  }, [onError]);
-
-  useEffect(() => {
-    shouldContinueRef.current = shouldContinue;
-  }, [shouldContinue]);
-
-  useEffect(() => {
-    if (!assemblyId) return;
-    const shouldKeepPolling = () => {
-      if (!isAssemblyTerminal(status)) return true;
-      return shouldContinueRef.current?.() ?? false;
-    };
-    if (!shouldKeepPolling()) return;
-    let cancelled = false;
-    const poll = async () => {
-      if (cancelled) return;
-      if (!shouldKeepPolling()) return;
-      try {
-        await refreshRef.current();
-      } catch (error) {
-        if (!cancelled) {
-          const resolved =
-            error instanceof Error ? error : new Error("Refresh failed");
-          onErrorRef.current?.(resolved);
-        }
-      }
-    };
-    void poll();
-    const interval = setInterval(poll, intervalMs);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [assemblyId, intervalMs, status]);
-};
 
 const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
   const steps: Array<{ stage: UploadStage; label: string }> = [
@@ -408,48 +341,40 @@ const LocalWeddingUploads = () => {
 
     setIsUploading(true);
     try {
-      const response = await fetch("/api/assemblies", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
+      const { assembly, uploadResult } = await uploadWithAssembly(
+        async ({ fileCount, guestName: name, uploadCode: code }) => {
+          const response = await fetch("/api/assemblies", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              fileCount,
+              guestName: name,
+              uploadCode: code,
+            }),
+          });
+          if (!response.ok) {
+            throw new Error("Failed to create assembly");
+          }
+          return (await response.json()) as WeddingAssemblyResponse;
+        },
+        uppy,
+        {
           fileCount: files.length,
-          guestName,
-          uploadCode,
-        }),
-      });
-      if (!response.ok) {
-        throw new Error("Failed to create assembly");
-      }
-      const assembly = (await response.json()) as WeddingAssemblyResponse;
-      setAssemblyId(assembly.assemblyId);
-      setAssemblyParams(assembly.params ?? null);
-      setStage("uploading");
-
-      const tus = uppy.getPlugin("Tus");
-      let tusEndpoint: string | null = null;
-      for (const file of files) {
-        const { endpoint, metadata } = buildTusUploadConfig(
-          assembly.data,
-          file.data as File,
-          { fieldName: "file" },
-        );
-        if (!tusEndpoint) {
-          tusEndpoint = endpoint;
-        }
-        uppy.setFileMeta(file.id, metadata);
-        uppy.setFileState(file.id, {
-          tus: {
-            ...(file.tus ?? {}),
-            endpoint,
-            addRequestId: true,
+          createAssemblyArgs: {
+            guestName,
+            uploadCode,
           },
-        });
-      }
-      if (tus && "setOptions" in tus && tusEndpoint) {
-        tus.setOptions({ endpoint: tusEndpoint, addRequestId: true });
-      }
-
-      const result = (await uppy.upload()) as UploadResult;
+          fieldName: "file",
+          onAssemblyCreated: (created) => {
+            setAssemblyId(created.assemblyId);
+            setAssemblyParams(
+              (created as WeddingAssemblyResponse).params ?? null,
+            );
+            setStage("uploading");
+          },
+        },
+      );
+      const result = uploadResult as UploadResult;
       const failure = formatUploadFailure(result);
       if (failure) {
         throw new Error(failure);
@@ -599,40 +524,26 @@ const CloudWeddingUploads = () => {
 
     setIsUploading(true);
     try {
-      const assembly = await createWeddingAssembly({
-        fileCount: files.length,
-        guestName,
-        uploadCode,
-      });
-      setAssemblyId(assembly.assemblyId);
-      setAssemblyParams(assembly.params ?? null);
-      setStage("uploading");
-
-      const tus = uppy.getPlugin("Tus");
-      let tusEndpoint: string | null = null;
-      for (const file of files) {
-        const { endpoint, metadata } = buildTusUploadConfig(
-          assembly.data,
-          file.data as File,
-          { fieldName: "file" },
-        );
-        if (!tusEndpoint) {
-          tusEndpoint = endpoint;
-        }
-        uppy.setFileMeta(file.id, metadata);
-        uppy.setFileState(file.id, {
-          tus: {
-            ...(file.tus ?? {}),
-            endpoint,
-            addRequestId: true,
+      const { uploadResult } = await uploadWithAssembly(
+        createWeddingAssembly,
+        uppy,
+        {
+          fileCount: files.length,
+          createAssemblyArgs: {
+            guestName,
+            uploadCode,
           },
-        });
-      }
-      if (tus && "setOptions" in tus && tusEndpoint) {
-        tus.setOptions({ endpoint: tusEndpoint, addRequestId: true });
-      }
-
-      const result = (await uppy.upload()) as UploadResult;
+          fieldName: "file",
+          onAssemblyCreated: (created) => {
+            setAssemblyId(created.assemblyId);
+            setAssemblyParams(
+              (created as WeddingAssemblyResponse).params ?? null,
+            );
+            setStage("uploading");
+          },
+        },
+      );
+      const result = uploadResult as UploadResult;
       const failure = formatUploadFailure(result);
       if (failure) {
         throw new Error(failure);
