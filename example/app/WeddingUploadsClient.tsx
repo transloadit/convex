@@ -3,7 +3,7 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import Uppy from "@uppy/core";
 import Tus from "@uppy/tus";
-import { useAction, useConvexAuth, useQuery } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { makeFunctionReference } from "convex/server";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -18,6 +18,7 @@ import {
   type UppyUploadResult,
   uploadWithAssembly,
   useAssemblyPoller,
+  useTransloaditUppy,
   weddingStepNames,
 } from "../lib/transloadit";
 import { Providers } from "./providers";
@@ -437,30 +438,37 @@ const LocalWeddingUploads = () => {
 };
 
 const CloudWeddingUploads = () => {
-  const [assemblyId, setAssemblyId] = useState<string | null>(null);
   const [assemblyParams, setAssemblyParams] = useState<Record<
     string,
     unknown
   > | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [stage, setStage] = useState<UploadStage>("idle");
   const [guestName, setGuestName] = useState("Guest");
   const [uploadCode, setUploadCode] = useState("");
   const uppy = useWeddingUppy();
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading } = useConvexAuth();
-  const createWeddingAssembly = useAction(createWeddingAssemblyRef);
-  const refreshAssembly = useAction(refreshAssemblyRef);
-  const statusRecord = useQuery(
-    getAssemblyStatusRef,
-    assemblyId ? { assemblyId } : "skip",
-  );
-  const status = parseAssemblyStatus(statusRecord?.raw ?? null);
-  const results = useQuery(
-    listResultsRef,
-    assemblyId ? { assemblyId } : "skip",
-  );
+  const {
+    startUpload: startUppyUpload,
+    isUploading,
+    error: uploadError,
+    assemblyId,
+    status,
+    results,
+    stage: hookStage,
+  } = useTransloaditUppy({
+    uppy,
+    createAssembly: createWeddingAssemblyRef,
+    getStatus: getAssemblyStatusRef,
+    listResults: listResultsRef,
+    refreshAssembly: refreshAssemblyRef,
+    pollIntervalMs: 8000,
+    onAssemblyCreated: (created) => {
+      setAssemblyParams((created as WeddingAssemblyResponse).params ?? null);
+      setStage("uploading");
+    },
+  });
   const assemblies = useQuery(listAssembliesRef, {
     status: ASSEMBLY_STATUS_COMPLETED,
     limit: 12,
@@ -479,33 +487,19 @@ const CloudWeddingUploads = () => {
     };
   }, [isLoading, isAuthenticated, signIn]);
 
-  const refreshCloud = useCallback(async () => {
-    if (!assemblyId) return;
-    await refreshAssembly({ assemblyId });
-  }, [assemblyId, refreshAssembly]);
-  const shouldContinueCloud = useCallback(
-    () => (results?.length ?? 0) === 0,
-    [results?.length],
-  );
-
-  useAssemblyPoller({
-    assemblyId,
-    status,
-    intervalMs: 8000,
-    refresh: refreshCloud,
-    onError: (error) => {
-      console.warn("Refresh assembly failed", error);
-    },
-    shouldContinue: shouldContinueCloud,
-  });
+  useEffect(() => {
+    if (!hookStage) return;
+    if (shouldAdvanceStage(stage, hookStage)) {
+      setStage(hookStage);
+    }
+  }, [hookStage, stage]);
 
   useEffect(() => {
-    const nextStage = getAssemblyStage(status);
-    if (!nextStage) return;
-    if (shouldAdvanceStage(stage, nextStage)) {
-      setStage(nextStage);
+    if (uploadError) {
+      setError(uploadError.message);
+      setStage("error");
     }
-  }, [stage, status]);
+  }, [uploadError]);
 
   const startUpload = async () => {
     setError(null);
@@ -522,27 +516,15 @@ const CloudWeddingUploads = () => {
       return;
     }
 
-    setIsUploading(true);
     try {
-      const { uploadResult } = await uploadWithAssembly(
-        createWeddingAssembly,
-        uppy,
-        {
-          fileCount: files.length,
-          createAssemblyArgs: {
-            guestName,
-            uploadCode,
-          },
-          fieldName: "file",
-          onAssemblyCreated: (created) => {
-            setAssemblyId(created.assemblyId);
-            setAssemblyParams(
-              (created as WeddingAssemblyResponse).params ?? null,
-            );
-            setStage("uploading");
-          },
+      const { uploadResult } = await startUppyUpload({
+        fileCount: files.length,
+        fieldName: "file",
+        createAssemblyArgs: {
+          guestName,
+          uploadCode,
         },
-      );
+      });
       const result = uploadResult as UploadResult;
       const failure = formatUploadFailure(result);
       if (failure) {
@@ -553,8 +535,6 @@ const CloudWeddingUploads = () => {
       const message = err instanceof Error ? err.message : "Upload failed";
       setError(message);
       setStage("error");
-    } finally {
-      setIsUploading(false);
     }
   };
 
@@ -569,15 +549,15 @@ const CloudWeddingUploads = () => {
       onUpload={() => void startUpload()}
       error={error}
       assemblyId={assemblyId}
+      assemblyParams={assemblyParams}
       status={status?.ok ?? "pending"}
       stage={stage}
       toasts={toasts}
       authState={
         isLoading ? "loading" : isAuthenticated ? "authenticated" : "guest"
       }
-      assemblyParams={assemblyParams}
     >
-      <Gallery results={results ?? []} />
+      <Gallery results={(results ?? []) as AssemblyResultResponse[]} />
     </WeddingLayout>
   );
 };
