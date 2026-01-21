@@ -273,7 +273,20 @@ console.log(result.files);
 ### Uppy helper
 
 ```tsx
-import { uploadWithAssembly, useAssemblyPoller } from "@transloadit/convex/react";
+import { useTransloaditUppy } from "@transloadit/convex/react";
+import { api } from "../convex/_generated/api";
+
+const { startUpload, status, results, stage } = useTransloaditUppy({
+  uppy,
+  createAssembly: api.wedding.createWeddingAssembly,
+  getStatus: api.transloadit.getAssemblyStatus,
+  listResults: api.transloadit.listResults,
+  refreshAssembly: api.transloadit.refreshAssembly,
+});
+
+await startUpload({
+  createAssemblyArgs: { guestName, uploadCode },
+});
 ```
 
 ### Happy path upload hook

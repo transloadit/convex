@@ -2,6 +2,7 @@
 // @vitest-environment jsdom
 
 import { renderHook } from "@testing-library/react";
+import type { FunctionReference } from "convex/server";
 import { act } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type {
@@ -9,10 +10,12 @@ import type {
   GetAssemblyStatusFn,
   ListResultsFn,
   RefreshAssemblyFn,
+  UppyLike,
 } from "./index.tsx";
 import {
   useAssemblyStatusWithPolling,
   useTransloaditUpload,
+  useTransloaditUppy,
 } from "./index.tsx";
 
 (
@@ -167,6 +170,77 @@ describe("useTransloaditUpload", () => {
 
     expect(createAssembly).toHaveBeenCalled();
     expect(result.current.assemblyId).toBe("asm_123");
+    expect(result.current.results).toEqual(currentResults);
+    expect(result.current.status?.ok).toBe("ASSEMBLY_UPLOADING");
+  });
+});
+
+describe("useTransloaditUppy", () => {
+  afterEach(() => {
+    actionMock.mockClear();
+    queryMock.mockClear();
+    currentResults = null;
+    currentStatus = null;
+    queryHandler = () => currentStatus;
+    queryMock.mockImplementation((fn, args) => queryHandler(fn, args));
+  });
+
+  test("uploads via uppy and exposes status/results", async () => {
+    const createAssembly = vi.fn(async () => ({
+      assemblyId: "asm_uppy",
+      data: {
+        tus_url: "https://tus.example.com",
+        assembly_ssl_url: "https://api2.transloadit.com/assemblies/asm_uppy",
+      },
+    }));
+
+    const uppy = {
+      getFiles: () => [
+        {
+          id: "file-1",
+          data: new File(["hello"], "hello.jpg", { type: "image/jpeg" }),
+        },
+      ],
+      setFileMeta: vi.fn(),
+      setFileState: vi.fn(),
+      getPlugin: vi.fn(() => ({ setOptions: vi.fn() })),
+      upload: vi.fn(async () => ({ successful: [{ id: "file-1" }] })),
+    } as unknown as UppyLike;
+
+    const getStatus = {} as GetAssemblyStatusFn;
+    const listResults = {} as ListResultsFn;
+    const refreshAssembly = refreshMock as unknown as RefreshAssemblyFn;
+    currentStatus = { raw: { ok: "ASSEMBLY_UPLOADING" } };
+    currentResults = [{ stepName: "resize", raw: { ssl_url: "https://file" } }];
+    queryHandler = (fn) => {
+      if (fn === getStatus) return currentStatus;
+      if (fn === listResults) return currentResults;
+      return null;
+    };
+    queryMock.mockImplementation((fn, args) => queryHandler(fn, args));
+
+    const { result } = renderHook(() =>
+      useTransloaditUppy({
+        uppy,
+        createAssembly: createAssembly as unknown as FunctionReference<
+          "action",
+          "public",
+          { fileCount: number },
+          { assemblyId: string; data: Record<string, unknown> }
+        >,
+        getStatus,
+        listResults,
+        refreshAssembly,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.startUpload();
+    });
+
+    expect(createAssembly).toHaveBeenCalled();
+    expect(uppy.upload).toHaveBeenCalled();
+    expect(result.current.assemblyId).toBe("asm_uppy");
     expect(result.current.results).toEqual(currentResults);
     expect(result.current.status?.ok).toBe("ASSEMBLY_UPLOADING");
   });

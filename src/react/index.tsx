@@ -6,7 +6,11 @@ import { useAction, useQuery } from "convex/react";
 import type { FunctionReference } from "convex/server";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Upload } from "tus-js-client";
-import { parseAssemblyStatus } from "../shared/assemblyUrls.ts";
+import {
+  type AssemblyStage,
+  getAssemblyStage,
+  parseAssemblyStatus,
+} from "../shared/assemblyUrls.ts";
 import { pollAssembly } from "../shared/pollAssembly.ts";
 import { buildTusUploadConfig } from "../shared/tusUpload.ts";
 
@@ -212,6 +216,43 @@ export type UseTransloaditUploadResult = {
   assembly: unknown;
   status: AssemblyStatus | null;
   results: Array<unknown> | undefined;
+};
+
+export type UseTransloaditUppyOptions<
+  TArgs extends { fileCount: number },
+  TAssembly extends { assemblyId: string; data: Record<string, unknown> },
+> = {
+  uppy: UppyLike;
+  createAssembly: FunctionReference<"action", "public", TArgs, TAssembly>;
+  getStatus: GetAssemblyStatusFn;
+  listResults: ListResultsFn;
+  refreshAssembly: RefreshAssemblyFn;
+  pollIntervalMs?: number;
+  shouldContinue?: () => boolean;
+  onError?: (error: Error) => void;
+  createAssemblyArgs?: Partial<TArgs>;
+  fileCount?: number;
+  fieldName?: string;
+  metadata?: Record<string, string>;
+  addRequestId?: boolean;
+  onAssemblyCreated?: (assembly: TAssembly) => void;
+  onUploadResult?: (result: UppyUploadResult) => void;
+};
+
+export type UseTransloaditUppyResult<TAssembly> = {
+  startUpload: (
+    overrides?: Partial<UploadWithAssemblyOptions<{ fileCount: number }>>,
+  ) => Promise<UploadWithAssemblyResult<TAssembly>>;
+  reset: () => void;
+  isUploading: boolean;
+  error: Error | null;
+  assemblyId: string | null;
+  assemblyData: Record<string, unknown> | null;
+  assembly: unknown;
+  status: AssemblyStatus | null;
+  results: Array<unknown> | undefined;
+  stage: AssemblyStage | "uploading" | "error" | null;
+  uploadResult: UppyUploadResult | null;
 };
 
 export async function uploadWithAssembly<
@@ -852,6 +893,147 @@ export function useTransloaditUpload(
     assembly,
     status: parsedStatus,
     results,
+  };
+}
+
+export function useTransloaditUppy<
+  TArgs extends { fileCount: number },
+  TAssembly extends { assemblyId: string; data: Record<string, unknown> },
+>(
+  options: UseTransloaditUppyOptions<TArgs, TAssembly>,
+): UseTransloaditUppyResult<TAssembly> {
+  const create = useAction(options.createAssembly) as unknown as (
+    args: TArgs,
+  ) => Promise<TAssembly>;
+  const refresh = useAction(options.refreshAssembly);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [assemblyId, setAssemblyId] = useState<string | null>(null);
+  const [assemblyData, setAssemblyData] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const [uploadResult, setUploadResult] = useState<UppyUploadResult | null>(
+    null,
+  );
+
+  const assembly = useQuery(
+    options.getStatus,
+    assemblyId ? { assemblyId } : "skip",
+  );
+  const results = useQuery(
+    options.listResults,
+    assemblyId ? { assemblyId } : "skip",
+  );
+  const parsedStatus = useMemo(() => {
+    const candidate =
+      assembly && typeof assembly === "object"
+        ? ((assembly as { raw?: unknown }).raw ?? assembly)
+        : assembly;
+    return parseAssemblyStatus(candidate);
+  }, [assembly]);
+
+  useAssemblyPoller({
+    assemblyId,
+    status: parsedStatus,
+    refresh: async () => {
+      if (!assemblyId) return;
+      await refresh({ assemblyId });
+    },
+    intervalMs: options.pollIntervalMs ?? 5000,
+    shouldContinue: options.shouldContinue,
+    onError: options.onError,
+  });
+
+  const startUpload = useCallback(
+    async (
+      overrides?: Partial<UploadWithAssemblyOptions<{ fileCount: number }>>,
+    ) => {
+      setError(null);
+      setIsUploading(true);
+
+      try {
+        const files = options.uppy.getFiles();
+        if (files.length === 0) {
+          throw new Error("No files provided for upload");
+        }
+
+        const createAssemblyArgs = {
+          ...(options.createAssemblyArgs ?? {}),
+          ...(overrides?.createAssemblyArgs ?? {}),
+        } as TArgs;
+
+        const { assembly, uploadResult: result } = await uploadWithAssembly<
+          TArgs,
+          TAssembly
+        >(create, options.uppy, {
+          fileCount: overrides?.fileCount ?? options.fileCount ?? files.length,
+          fieldName: overrides?.fieldName ?? options.fieldName,
+          metadata: overrides?.metadata ?? options.metadata,
+          addRequestId: overrides?.addRequestId ?? options.addRequestId,
+          createAssemblyArgs,
+          onAssemblyCreated: (created) => {
+            const typed = created as TAssembly;
+            setAssemblyId(typed.assemblyId);
+            setAssemblyData(typed.data);
+            options.onAssemblyCreated?.(typed);
+            overrides?.onAssemblyCreated?.(created);
+          },
+        });
+
+        setAssemblyId(assembly.assemblyId);
+        setAssemblyData(assembly.data);
+        setUploadResult(result);
+        options.onUploadResult?.(result);
+        setIsUploading(false);
+        return { assembly, uploadResult: result };
+      } catch (err) {
+        const resolved =
+          err instanceof Error ? err : new Error("Upload failed");
+        setError(resolved);
+        setIsUploading(false);
+        throw resolved;
+      }
+    },
+    [
+      create,
+      options.addRequestId,
+      options.createAssemblyArgs,
+      options.fieldName,
+      options.fileCount,
+      options.metadata,
+      options.onAssemblyCreated,
+      options.onUploadResult,
+      options.uppy,
+    ],
+  );
+
+  const reset = useCallback(() => {
+    setIsUploading(false);
+    setError(null);
+    setAssemblyId(null);
+    setAssemblyData(null);
+    setUploadResult(null);
+  }, []);
+
+  const stage = useMemo(() => {
+    if (error) return "error";
+    if (isUploading) return "uploading";
+    return parsedStatus ? getAssemblyStage(parsedStatus) : null;
+  }, [error, isUploading, parsedStatus]);
+
+  return {
+    startUpload,
+    reset,
+    isUploading,
+    error,
+    assemblyId,
+    assemblyData,
+    assembly,
+    status: parsedStatus,
+    results,
+    stage,
+    uploadResult,
   };
 }
 
