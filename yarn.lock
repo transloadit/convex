@@ -1254,7 +1254,7 @@ __metadata:
     "@testing-library/dom": "npm:^10.4.1"
     "@testing-library/react": "npm:^16.3.0"
     "@transloadit/utils": "npm:^4.1.7"
-    "@transloadit/zod": "npm:^4.1.7"
+    "@transloadit/zod": "npm:^4.1.8"
     "@types/node": "npm:^25.0.8"
     "@types/react": "npm:^19.2.8"
     "@types/react-dom": "npm:^19"
@@ -1296,13 +1296,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@transloadit/zod@npm:^4.1.7":
-  version: 4.1.7
-  resolution: "@transloadit/zod@npm:4.1.7"
+"@transloadit/zod@npm:^4.1.8":
+  version: 4.1.8
+  resolution: "@transloadit/zod@npm:4.1.8"
   dependencies:
     type-fest: "npm:^4.41.0"
     zod: "npm:^4.0.0"
-  checksum: 10c0/c37e242f4c45e9008a928ed50cfa24ffa86a8b8bd43b7730741e97c12179bf65a71bc977b256a0326d55eeff3d75b10afe330c9c7aec35377638c9ca8cc5a782
+  checksum: 10c0/b169dafd67d08403dc3449bc66de5d2d881bf120ba5ddc294b548b29e5ff6c0c3941d1effb1fe2a1e6b3f01bef6962ec0bf4137c4dcb33457168f64f89521d79
   languageName: node
   linkType: hard
 

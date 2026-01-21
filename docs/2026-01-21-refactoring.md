@@ -75,7 +75,7 @@ Transloadit SDK packages should own:
 - [x] Update README to show a single webhook handler example using `handleWebhookRequest`.
 - [x] Add a `useTransloaditUpload` hook that returns `{ upload, status, results }` and covers the 80% flow.
 - [x] Add a `useTransloaditUppy` helper (wraps `uploadWithAssembly` + polling) as the blessed Uppy path.
-- [ ] Move URL normalization + `getAssemblyStage` to `@transloadit/utils` or `@transloadit/zod` and re‑export from convex.
+- [x] Move URL normalization + `getAssemblyStage` to `@transloadit/utils` or `@transloadit/zod` and re‑export from convex.
 - [ ] Replace example app’s bespoke wiring with the new hooks/helpers.
 - [ ] Update QA/test harness to use the new helpers (no duplicated logic).
 - [ ] Add unit tests for `handleWebhookRequest` and the new hooks.
