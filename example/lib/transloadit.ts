@@ -12,6 +12,8 @@ export type {
 
 export {
   buildTusUploadConfig,
+  getResultOriginalKey,
+  getResultUrl,
   isAssemblyBusyStatus,
   isAssemblyTerminal,
   isAssemblyTerminalError,

@@ -12,6 +12,7 @@ import {
   type AssemblyResultResponse,
   type AssemblyStatus,
   buildTusUploadConfig,
+  getResultOriginalKey,
   isAssemblyBusyStatus,
   isAssemblyTerminal,
   isAssemblyTerminalError,
@@ -93,20 +94,6 @@ const deriveStageFromStatus = (status: AssemblyStatus | null | undefined) => {
   if (isAssemblyTerminalOk(status)) return "error";
   return null;
 };
-
-const getRawString = (result: AssemblyResultResponse, key: string) => {
-  if (!result.raw) return null;
-  const value = (result.raw as Record<string, unknown>)[key];
-  return typeof value === "string" ? value : null;
-};
-
-const getOriginalKey = (result: AssemblyResultResponse) =>
-  getRawString(result, "original_id") ??
-  getRawString(result, "original_basename") ??
-  result.name ??
-  result.resultId ??
-  result._id ??
-  null;
 
 const useAssemblyPoller = ({
   assemblyId,
@@ -329,7 +316,7 @@ const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
   for (const result of visibleResults) {
     if (result.stepName !== thumbStep) continue;
     if (!result.sslUrl) continue;
-    const key = getOriginalKey(result);
+    const key = getResultOriginalKey(result);
     if (!key) continue;
     thumbByOriginal.set(key, result.sslUrl);
   }
@@ -353,7 +340,7 @@ const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
           `${item.assemblyId ?? "assembly"}-${item.stepName ?? "step"}-${item.createdAt ?? 0}`;
         const mime = item.mime ?? "";
         const isVideo = mime.startsWith("video");
-        const originalKey = getOriginalKey(item);
+        const originalKey = getResultOriginalKey(item);
         const posterUrl =
           isVideo && originalKey ? thumbByOriginal.get(originalKey) : null;
         const badge = isVideo ? "Encoded video" : "Resized image";

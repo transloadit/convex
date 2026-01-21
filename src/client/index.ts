@@ -49,6 +49,10 @@ export type {
   VideoEncodeResult,
   VideoThumbsResult,
 } from "../shared/resultTypes.ts";
+export {
+  getResultOriginalKey,
+  getResultUrl,
+} from "../shared/resultUtils.ts";
 export type {
   TusMetadataOptions,
   TusUploadConfig,

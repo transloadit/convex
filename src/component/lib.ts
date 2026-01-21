@@ -3,6 +3,7 @@ import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
 import { anyApi, type FunctionReference } from "convex/server";
 import { type Infer, v } from "convex/values";
 import { parseAssemblyStatus } from "../shared/assemblyUrls.ts";
+import { getResultUrl } from "../shared/resultUtils.ts";
 import {
   action,
   internalAction,
@@ -18,58 +19,6 @@ import {
 } from "./apiUtils.ts";
 
 const TRANSLOADIT_ASSEMBLY_URL = "https://api2.transloadit.com/assemblies";
-
-const extractUrlFromContainer = (container: Record<string, unknown>) => {
-  const candidates = [
-    container.ssl_url,
-    container.sslUrl,
-    container.url,
-    container.cdn_url,
-    container.cdnUrl,
-    container.storage_url,
-    container.storageUrl,
-    container.result_url,
-    container.resultUrl,
-    container.signed_url,
-    container.signedUrl,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.length > 0) {
-      return candidate;
-    }
-  }
-  return undefined;
-};
-
-const extractResultUrl = (raw: Record<string, unknown>) => {
-  const direct = extractUrlFromContainer(raw);
-  if (direct) return direct;
-
-  const nestedKeys = ["meta", "metadata", "result", "results", "file", "data"];
-  for (const key of nestedKeys) {
-    const value = raw[key];
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      const nested = extractUrlFromContainer(value as Record<string, unknown>);
-      if (nested) return nested;
-    }
-  }
-
-  const urlsValue = raw.urls;
-  if (urlsValue && typeof urlsValue === "object" && !Array.isArray(urlsValue)) {
-    const nested = extractUrlFromContainer(
-      urlsValue as Record<string, unknown>,
-    );
-    if (nested) return nested;
-  }
-
-  const urlValue = raw.url;
-  if (urlValue && typeof urlValue === "object" && !Array.isArray(urlValue)) {
-    const nested = extractUrlFromContainer(urlValue as Record<string, unknown>);
-    if (nested) return nested;
-  }
-
-  return undefined;
-};
 
 type ProcessWebhookResult = {
   assemblyId: string;
@@ -334,7 +283,7 @@ export const replaceResultsForAssembly = internalMutation({
     const now = Date.now();
     for (const entry of args.results) {
       const raw = entry.result as Record<string, unknown>;
-      const sslUrl = extractResultUrl(raw);
+      const sslUrl = getResultUrl(entry.result);
       await ctx.db.insert("results", {
         assemblyId: args.assemblyId,
         stepName: entry.stepName,
