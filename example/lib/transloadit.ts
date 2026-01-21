@@ -8,7 +8,7 @@ export type {
   AssemblyResponse,
   AssemblyResultResponse,
   AssemblyStatus,
-} from "../../src/client/index.ts";
+} from "@transloadit/convex";
 
 export {
   ASSEMBLY_STATUS_COMPLETED,
@@ -26,10 +26,10 @@ export {
   isAssemblyUploadingStatus,
   parseAssemblyStatus,
   pollAssembly,
-} from "../../src/client/index.ts";
+} from "@transloadit/convex";
 
-export type { UppyUploadResult } from "../../src/react/index.tsx";
+export type { UppyUploadResult } from "@transloadit/convex/react";
 export {
   uploadWithAssembly,
   useAssemblyPoller,
-} from "../../src/react/index.tsx";
+} from "@transloadit/convex/react";

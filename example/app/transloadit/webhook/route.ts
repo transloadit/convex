@@ -1,4 +1,4 @@
-import { handleWebhookRequest } from "../../../../src/component/apiUtils.ts";
+import { handleWebhookRequest } from "@transloadit/convex";
 import { runAction } from "../../../lib/convex";
 
 export async function POST(request: Request) {
