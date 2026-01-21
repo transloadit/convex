@@ -207,6 +207,11 @@ export async function uploadWithAssembly<
   options.onAssemblyCreated?.(assembly);
 
   const tusPlugin = uppy.getPlugin("Tus");
+  if (!tusPlugin) {
+    throw new Error(
+      'Uppy Tus plugin is required. Call uppy.use(Tus, { endpoint: "" }) before uploadWithAssembly.',
+    );
+  }
   let tusEndpoint: string | null = null;
   const addRequestId = options.addRequestId ?? true;
 
