@@ -158,7 +158,9 @@ const transloadit = new Transloadit(components.transloadit, {
 
 ## Typed helpers
 
-When working with raw assembly payloads, use the helpers to avoid stringly-typed access:
+When working with raw assembly payloads, use the helpers to avoid stringly-typed access. These are
+validated with the canonical `@transloadit/zod/v3` schemas and re-export the most useful guards
+directly from `@transloadit/convex`.
 
 ```ts
 import {
@@ -175,6 +177,12 @@ const normalized = normalizeAssemblyUploadUrls(assembly.data);
 const status = parseAssemblyStatus(assembly.data);
 const fields = parseAssemblyFields(assembly.data);
 const results = parseAssemblyResults(assembly.data);
+```
+
+You can also access the assembly status guards directly:
+
+```ts
+import { isAssemblyTerminal, isAssemblyTerminalError } from "@transloadit/convex";
 ```
 
 For common robots, you can reference typed results by robot name:
