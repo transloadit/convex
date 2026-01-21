@@ -104,7 +104,7 @@ Transloadit sends webhooks as `multipart/form-data` with `transloadit` (JSON) an
 ```ts
 // convex/http.ts
 import { httpRouter } from "convex/server";
-import { buildWebhookQueueArgs } from "@transloadit/convex";
+import { handleWebhookRequest } from "@transloadit/convex";
 import { api } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 
@@ -113,34 +113,28 @@ const http = httpRouter();
 http.route({
   path: "/transloadit/webhook",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const args = await buildWebhookQueueArgs(request, {
-      authSecret: process.env.TRANSLOADIT_SECRET!,
-      requireSignature: false,
-    });
-
-    await ctx.runAction(api.transloadit.queueWebhook, args);
-
-    return new Response(null, { status: 202 });
-  }),
+  handler: httpAction((ctx, request) =>
+    handleWebhookRequest(request, {
+      mode: "queue",
+      runAction: (args) => ctx.runAction(api.transloadit.queueWebhook, args),
+    }),
+  ),
 });
 
 export default http;
 ```
 
-Note: `buildWebhookQueueArgs` verifies by default. When calling `queueWebhook`, you can set
-`requireSignature: false` to avoid double verification (the action will verify anyway). If you want to
-short‑circuit invalid signatures before queueing, keep `requireSignature: true`.
+Note: `handleWebhookRequest` skips pre‑verification by default to avoid double verification
+(the action verifies). If you want to short‑circuit invalid signatures before queueing, pass
+`requireSignature: true` and `authSecret`.
 
 If you want to handle webhooks synchronously (no queue), use `handleWebhook` and return HTTP 204:
 
 ```ts
-import { parseTransloaditWebhook } from "@transloadit/convex";
-
-const { payload, rawBody, signature } = await parseTransloaditWebhook(request);
-await ctx.runAction(api.transloadit.handleWebhook, { payload, rawBody, signature });
-
-return new Response(null, { status: 204 });
+return handleWebhookRequest(request, {
+  mode: "sync",
+  runAction: (args) => ctx.runAction(api.transloadit.handleWebhook, args),
+});
 ```
 
 ## Client wrapper

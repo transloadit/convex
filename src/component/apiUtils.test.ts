@@ -1,8 +1,9 @@
 import { createHmac } from "node:crypto";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   buildTransloaditParams,
   buildWebhookQueueArgs,
+  handleWebhookRequest,
   parseAndVerifyTransloaditWebhook,
   parseTransloaditWebhook,
   signTransloaditParams,
@@ -155,5 +156,60 @@ describe("apiUtils", () => {
     expect(args.payload).toEqual(payload);
     expect(args.rawBody).toBe(rawBody);
     expect(args.signature).toBeUndefined();
+  });
+
+  test("handleWebhookRequest queues webhook by default", async () => {
+    const payload = { ok: "ASSEMBLY_COMPLETED", assembly_id: "asm_123" };
+    const rawBody = JSON.stringify(payload);
+    const formData = new FormData();
+    formData.append("transloadit", rawBody);
+    formData.append("signature", "sha384:abc");
+
+    const request = new Request("http://localhost", {
+      method: "POST",
+      body: formData,
+    });
+    const runAction = vi.fn().mockResolvedValue(null);
+
+    const response = await handleWebhookRequest(request, {
+      runAction,
+    });
+
+    expect(runAction).toHaveBeenCalledWith({
+      payload,
+      rawBody,
+      signature: "sha384:abc",
+    });
+    expect(response.status).toBe(202);
+  });
+
+  test("handleWebhookRequest supports sync mode with verification", async () => {
+    const payload = { ok: "ASSEMBLY_COMPLETED", assembly_id: "asm_123" };
+    const rawBody = JSON.stringify(payload);
+    const secret = "webhook-secret";
+    const digest = createHmac("sha384", secret).update(rawBody).digest("hex");
+    const formData = new FormData();
+    formData.append("transloadit", rawBody);
+    formData.append("signature", `sha384:${digest}`);
+
+    const request = new Request("http://localhost", {
+      method: "POST",
+      body: formData,
+    });
+    const runAction = vi.fn().mockResolvedValue(null);
+
+    const response = await handleWebhookRequest(request, {
+      mode: "sync",
+      runAction,
+      requireSignature: true,
+      authSecret: secret,
+    });
+
+    expect(runAction).toHaveBeenCalledWith({
+      payload,
+      rawBody,
+      signature: `sha384:${digest}`,
+    });
+    expect(response.status).toBe(204);
   });
 });

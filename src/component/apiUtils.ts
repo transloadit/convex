@@ -144,6 +144,42 @@ export async function buildWebhookQueueArgs(
   };
 }
 
+export type WebhookActionArgs = {
+  payload: unknown;
+  rawBody?: string;
+  signature?: string;
+};
+
+export async function handleWebhookRequest(
+  request: Request,
+  options: {
+    mode?: "queue" | "sync";
+    runAction: (args: WebhookActionArgs) => Promise<unknown>;
+    requireSignature?: boolean;
+    authSecret?: string;
+    responseStatus?: number;
+  },
+): Promise<Response> {
+  const mode = options.mode ?? "queue";
+  const requireSignature = options.requireSignature ?? false;
+
+  const parsed = requireSignature
+    ? await parseAndVerifyTransloaditWebhook(request, {
+        authSecret: options.authSecret ?? "",
+        requireSignature: true,
+      })
+    : await parseTransloaditWebhook(request);
+
+  await options.runAction({
+    payload: parsed.payload,
+    rawBody: parsed.rawBody,
+    signature: parsed.signature,
+  });
+
+  const status = options.responseStatus ?? (mode === "sync" ? 204 : 202);
+  return new Response(null, { status });
+}
+
 export { verifyWebhookSignature };
 
 export type AssemblyResult = AssemblyStatusResults[string][number];

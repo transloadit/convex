@@ -23,9 +23,11 @@ export {
 export type {
   ParsedWebhookRequest,
   VerifiedWebhookRequest,
+  WebhookActionArgs,
 } from "../component/apiUtils.ts";
 export {
   buildWebhookQueueArgs,
+  handleWebhookRequest,
   parseAndVerifyTransloaditWebhook,
   parseTransloaditWebhook,
 } from "../component/apiUtils.ts";
