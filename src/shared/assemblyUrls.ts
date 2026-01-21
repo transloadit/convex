@@ -6,6 +6,19 @@ import {
 
 export type TransloaditAssembly = AssemblyStatus;
 
+export const ASSEMBLY_STATUS_COMPLETED = "ASSEMBLY_COMPLETED" as const;
+export const ASSEMBLY_STATUS_UPLOADING = "ASSEMBLY_UPLOADING" as const;
+
+export const isAssemblyCompletedStatus = (
+  status: string | null | undefined,
+): status is typeof ASSEMBLY_STATUS_COMPLETED =>
+  status === ASSEMBLY_STATUS_COMPLETED;
+
+export const isAssemblyUploadingStatus = (
+  status: string | null | undefined,
+): status is typeof ASSEMBLY_STATUS_UPLOADING =>
+  status === ASSEMBLY_STATUS_UPLOADING;
+
 export type AssemblyUrlFields = {
   tus_url?: string;
   tusUrl?: string;

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  ASSEMBLY_STATUS_COMPLETED,
+  ASSEMBLY_STATUS_UPLOADING,
+  isAssemblyCompletedStatus,
+  isAssemblyUploadingStatus,
   parseAssemblyFields,
   parseAssemblyResults,
   parseAssemblyStatus,
@@ -53,5 +57,11 @@ describe("assembly helpers", () => {
     expect(parseAssemblyStatus("nope")).toBeNull();
     expect(parseAssemblyFields("nope")).toEqual({});
     expect(parseAssemblyResults("nope")).toEqual({});
+  });
+
+  it("exposes canonical status helpers", () => {
+    expect(isAssemblyCompletedStatus(ASSEMBLY_STATUS_COMPLETED)).toBe(true);
+    expect(isAssemblyCompletedStatus(ASSEMBLY_STATUS_UPLOADING)).toBe(false);
+    expect(isAssemblyUploadingStatus(ASSEMBLY_STATUS_UPLOADING)).toBe(true);
   });
 });

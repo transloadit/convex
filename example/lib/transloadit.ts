@@ -11,13 +11,17 @@ export type {
 } from "../../src/client/index.ts";
 
 export {
+  ASSEMBLY_STATUS_COMPLETED,
+  ASSEMBLY_STATUS_UPLOADING,
   buildTusUploadConfig,
   getResultOriginalKey,
   getResultUrl,
   isAssemblyBusyStatus,
+  isAssemblyCompletedStatus,
   isAssemblyTerminal,
   isAssemblyTerminalError,
   isAssemblyTerminalOk,
   isAssemblyTerminalOkStatus,
+  isAssemblyUploadingStatus,
   parseAssemblyStatus,
 } from "../../src/client/index.ts";

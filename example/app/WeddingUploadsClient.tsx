@@ -8,15 +8,18 @@ import { makeFunctionReference } from "convex/server";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ASSEMBLY_STATUS_COMPLETED,
   type AssemblyResponse,
   type AssemblyResultResponse,
   type AssemblyStatus,
   buildTusUploadConfig,
   getResultOriginalKey,
   isAssemblyBusyStatus,
+  isAssemblyCompletedStatus,
   isAssemblyTerminal,
   isAssemblyTerminalError,
   isAssemblyTerminalOk,
+  isAssemblyUploadingStatus,
   parseAssemblyStatus,
   weddingStepNames,
 } from "../lib/transloadit";
@@ -86,9 +89,11 @@ const shouldAdvanceStage = (current: UploadStage, next: UploadStage) =>
 
 const deriveStageFromStatus = (status: AssemblyStatus | null | undefined) => {
   if (!status) return null;
-  if (status.ok === "ASSEMBLY_COMPLETED") return "complete";
+  if (isAssemblyCompletedStatus(status.ok ?? null)) return "complete";
   if (isAssemblyBusyStatus(status.ok ?? null)) {
-    return status.ok === "ASSEMBLY_UPLOADING" ? "uploading" : "processing";
+    return isAssemblyUploadingStatus(status.ok ?? null)
+      ? "uploading"
+      : "processing";
   }
   if (isAssemblyTerminalError(status)) return "error";
   if (isAssemblyTerminalOk(status)) return "error";
@@ -549,7 +554,7 @@ const CloudWeddingUploads = () => {
     assemblyId ? { assemblyId } : "skip",
   );
   const assemblies = useQuery(listAssembliesRef, {
-    status: "ASSEMBLY_COMPLETED",
+    status: ASSEMBLY_STATUS_COMPLETED,
     limit: 12,
   });
   const toasts = useUploadToasts(assemblies ?? undefined);

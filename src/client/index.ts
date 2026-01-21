@@ -34,6 +34,10 @@ export type {
   TransloaditAssembly,
 } from "../shared/assemblyUrls.ts";
 export {
+  ASSEMBLY_STATUS_COMPLETED,
+  ASSEMBLY_STATUS_UPLOADING,
+  isAssemblyCompletedStatus,
+  isAssemblyUploadingStatus,
   normalizeAssemblyUploadUrls,
   parseAssemblyFields,
   parseAssemblyResults,
