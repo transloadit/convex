@@ -128,18 +128,19 @@ http.route({
 export default http;
 ```
 
-Note: `queueWebhook` already verifies the signature. If you want to verify before queueing, set `requireSignature: true`.
+Note: `buildWebhookQueueArgs` verifies by default. When calling `queueWebhook`, you can set
+`requireSignature: false` to avoid double verification (the action will verify anyway). If you want to
+short‑circuit invalid signatures before queueing, keep `requireSignature: true`.
 
 If you want to handle webhooks synchronously (no queue), use `handleWebhook` and return HTTP 204:
 
 ```ts
-await ctx.runAction(api.transloadit.queueWebhook, {
-  payload,
-  rawBody,
-  signature,
-});
+import { parseTransloaditWebhook } from "@transloadit/convex";
 
-return new Response(null, { status: 202 });
+const { payload, rawBody, signature } = await parseTransloaditWebhook(request);
+await ctx.runAction(api.transloadit.handleWebhook, { payload, rawBody, signature });
+
+return new Response(null, { status: 204 });
 ```
 
 ## Client wrapper
@@ -347,7 +348,7 @@ export CONVEX_ADMIN_KEY=...
 
 The example exposes `POST /transloadit/webhook` and forwards webhooks into Convex via `queueWebhook`.
 Realtime “new upload” toasts use a Convex subscription on recent assemblies.
-The demo also applies a simple per-user upload limit in the Convex backend (see `wedding.ts` in the QA template).
+The demo also applies a simple per-user upload limit in the Convex backend (see `example/convex/wedding.ts`).
 
 ### Storage (required R2 persistence)
 
@@ -423,7 +424,7 @@ Additional commands:
 Notes:
 - `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
-- `yarn verify:local` needs `TRANSLOADIT_KEY`, `TRANSLOADIT_SECRET`, and R2 credentials.
+- `yarn verify:local` needs `TRANSLOADIT_KEY`, `TRANSLOADIT_SECRET`, `TRANSLOADIT_NOTIFY_URL`, and R2 credentials.
 - `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`.
 
 ## Component test helpers
