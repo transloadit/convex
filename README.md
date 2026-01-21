@@ -21,6 +21,18 @@ A Convex component for creating Transloadit Assemblies, handling resumable uploa
 yarn add @transloadit/convex
 ```
 
+## Recommended paths (blessed API)
+
+- Server API wrapper: `makeTransloaditAPI`
+- Webhook handler: `handleWebhookRequest`
+- Client upload (no Uppy): `useTransloaditUpload`
+- Client upload (Uppy): `useTransloaditUppy`
+- Status/results (reactive): `useAssemblyStatus` + `useTransloaditFiles`
+- Polling fallback: `useAssemblyStatusWithPolling`
+
+Low-level tus helpers (`uploadWithTransloaditTus`, `useTransloaditTusUpload`) and the legacy
+`useAssemblyPoller` are still available but intended for advanced use only.
+
 ## Setup
 
 ### 1) Register the component
@@ -56,7 +68,7 @@ The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`, creates or up
 ## Golden path (secure by default)
 
 1. **Server-only create**: a Convex action creates the Assembly (auth secret stays server-side).
-2. **Client upload**: use `tus_url` + `assembly_ssl_url` for resumable uploads.
+2. **Client upload**: use `useTransloaditUpload` (or `useTransloaditUppy`) for resumable uploads.
 3. **Webhook ingestion**: verify the signature and `queueWebhook` for durable processing.
 4. **Realtime UI**: query status/results and render the gallery.
 
