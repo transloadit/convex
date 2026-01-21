@@ -352,6 +352,7 @@ const status = useAssemblyStatusWithPolling(
 
 The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on the client and Convex Auth (anonymous sign-in) to create assemblies securely. If you do not set `NEXT_PUBLIC_CONVEX_URL`, the example falls back to the in-process Convex test harness.
 Uploads are stored via Transloadit directly into Cloudflare R2.
+The client wiring uses the `useTransloaditUppy` hook from `@transloadit/convex/react` to keep Uppy + polling in sync.
 
 Quick start (local):
 
