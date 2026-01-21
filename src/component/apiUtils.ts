@@ -1,6 +1,7 @@
 import { signParams, verifyWebhookSignature } from "@transloadit/utils";
 import type { AssemblyStatusResults } from "@transloadit/zod/v3/assemblyStatus";
 import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
+import { transloaditError } from "../shared/errors.ts";
 
 export interface TransloaditAuthConfig {
   authKey: string;
@@ -27,7 +28,10 @@ export function buildTransloaditParams(
   options: BuildParamsOptions,
 ): BuildParamsResult {
   if (!options.templateId && !options.steps) {
-    throw new Error("Provide either templateId or steps to create an Assembly");
+    throw transloaditError(
+      "createAssembly",
+      "Provide either templateId or steps to create an Assembly",
+    );
   }
 
   const auth: Record<string, string> = {
@@ -88,7 +92,7 @@ export async function parseTransloaditWebhook(
   const signature = formData.get("signature");
 
   if (typeof rawPayload !== "string") {
-    throw new Error("Missing transloadit payload");
+    throw transloaditError("webhook", "Missing transloadit payload");
   }
 
   return {
@@ -108,7 +112,10 @@ export async function parseAndVerifyTransloaditWebhook(
   const parsed = await parseTransloaditWebhook(request);
   const authSecret = options.authSecret;
   if (!authSecret) {
-    throw new Error("Missing authSecret for webhook verification");
+    throw transloaditError(
+      "webhook",
+      "Missing authSecret for webhook verification",
+    );
   }
   const verified = await verifyWebhookSignature({
     rawBody: parsed.rawBody,
@@ -118,7 +125,10 @@ export async function parseAndVerifyTransloaditWebhook(
 
   if (options.requireSignature ?? true) {
     if (!verified) {
-      throw new Error("Invalid Transloadit webhook signature");
+      throw transloaditError(
+        "webhook",
+        "Invalid Transloadit webhook signature",
+      );
     }
   }
 

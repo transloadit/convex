@@ -85,5 +85,5 @@ Transloadit SDK packages should own:
 
 - [x] Audit public exports to reduce overlap (single blessed path per use case).
 - [ ] Add integration tests that exercise only public entrypoints (no internal imports).
-- [ ] Tighten error surfaces for create/upload/poll/webhook with consistent messages.
+- [x] Tighten error surfaces for create/upload/poll/webhook with consistent messages.
 - [ ] Update docs to clearly highlight the blessed path per use case.

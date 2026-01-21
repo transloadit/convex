@@ -3,6 +3,7 @@ import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
 import { anyApi, type FunctionReference } from "convex/server";
 import { type Infer, v } from "convex/values";
 import { parseAssemblyStatus } from "../shared/assemblyUrls.ts";
+import { transloaditError } from "../shared/errors.ts";
 import { getResultUrl } from "../shared/resultUtils.ts";
 import {
   action,
@@ -61,7 +62,7 @@ const resolveAssemblyId = (payload: AssemblyStatus): string => {
 const parseAssemblyPayload = (payload: unknown): AssemblyStatus => {
   const parsed = parseAssemblyStatus(payload);
   if (!parsed) {
-    throw new Error("Invalid Transloadit payload");
+    throw transloaditError("payload", "Invalid Transloadit payload");
   }
   return parsed;
 };
@@ -102,7 +103,7 @@ const applyAssemblyStatus = async (
 ) => {
   const assemblyId = resolveAssemblyId(payload);
   if (!assemblyId) {
-    throw new Error("Webhook payload missing assembly_id");
+    throw transloaditError("webhook", "Webhook payload missing assembly_id");
   }
 
   const results = flattenResults(payload.results ?? undefined);
@@ -346,8 +347,9 @@ export const createAssembly = action({
 
     const data = (await response.json()) as Record<string, unknown>;
     if (!response.ok) {
-      throw new Error(
-        `Transloadit error ${response.status}: ${JSON.stringify(data)}`,
+      throw transloaditError(
+        "createAssembly",
+        `HTTP ${response.status}: ${JSON.stringify(data)}`,
       );
     }
 
@@ -359,7 +361,10 @@ export const createAssembly = action({
           : "";
 
     if (!assemblyId) {
-      throw new Error("Transloadit response missing assembly_id");
+      throw transloaditError(
+        "createAssembly",
+        "Transloadit response missing assembly_id",
+      );
     }
 
     await ctx.runMutation(internal.lib.upsertAssembly, {
@@ -411,10 +416,16 @@ export const processWebhook = internalAction({
 
     if (shouldVerify) {
       if (!rawBody) {
-        throw new Error("Missing rawBody for webhook verification");
+        throw transloaditError(
+          "webhook",
+          "Missing rawBody for webhook verification",
+        );
       }
       if (!authSecret) {
-        throw new Error("Missing TRANSLOADIT_SECRET for webhook validation");
+        throw transloaditError(
+          "webhook",
+          "Missing TRANSLOADIT_SECRET for webhook validation",
+        );
       }
       const verified = await verifyWebhookSignature({
         rawBody,
@@ -422,7 +433,10 @@ export const processWebhook = internalAction({
         authSecret,
       });
       if (!verified) {
-        throw new Error("Invalid Transloadit webhook signature");
+        throw transloaditError(
+          "webhook",
+          "Invalid Transloadit webhook signature",
+        );
       }
     }
 
@@ -478,10 +492,16 @@ export const queueWebhook = action({
 
     if (shouldVerify) {
       if (!rawBody) {
-        throw new Error("Missing rawBody for webhook verification");
+        throw transloaditError(
+          "webhook",
+          "Missing rawBody for webhook verification",
+        );
       }
       if (!authSecret) {
-        throw new Error("Missing TRANSLOADIT_SECRET for webhook validation");
+        throw transloaditError(
+          "webhook",
+          "Missing TRANSLOADIT_SECRET for webhook validation",
+        );
       }
       const verified = await verifyWebhookSignature({
         rawBody,
@@ -489,14 +509,17 @@ export const queueWebhook = action({
         authSecret,
       });
       if (!verified) {
-        throw new Error("Invalid Transloadit webhook signature");
+        throw transloaditError(
+          "webhook",
+          "Invalid Transloadit webhook signature",
+        );
       }
     }
 
     const parsed = parseAssemblyPayload(args.payload);
     const assemblyId = resolveAssemblyId(parsed);
     if (!assemblyId) {
-      throw new Error("Webhook payload missing assembly_id");
+      throw transloaditError("webhook", "Webhook payload missing assembly_id");
     }
 
     await ctx.scheduler.runAfter(0, internal.lib.processWebhook, {
@@ -540,8 +563,9 @@ export const refreshAssembly = action({
     const response = await fetch(url);
     const payload = parseAssemblyPayload(await response.json());
     if (!response.ok) {
-      throw new Error(
-        `Transloadit status error ${response.status}: ${JSON.stringify(payload)}`,
+      throw transloaditError(
+        "status",
+        `HTTP ${response.status}: ${JSON.stringify(payload)}`,
       );
     }
 

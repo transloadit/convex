@@ -1,4 +1,5 @@
 import { parseAssemblyUrls } from "./assemblyUrls.ts";
+import { transloaditError } from "./errors.ts";
 
 export type TusUploadConfig = {
   endpoint: string;
@@ -21,13 +22,15 @@ export const buildTusUploadConfig = (
   const { tusUrl, assemblyUrl } = parseAssemblyUrls(assemblyData);
 
   if (!tusUrl) {
-    throw new Error(
+    throw transloaditError(
+      "upload",
       "Transloadit response missing tus_url for resumable upload",
     );
   }
 
   if (!assemblyUrl) {
-    throw new Error(
+    throw transloaditError(
+      "upload",
       "Transloadit response missing assembly_url for resumable upload",
     );
   }

@@ -1,3 +1,5 @@
+import { transloaditError } from "./errors.ts";
+
 export type PollAssemblyOptions = {
   intervalMs: number;
   refresh: () => Promise<void>;
@@ -42,7 +44,9 @@ export const pollAssembly = (
       await options.refresh();
     } catch (error) {
       const resolved =
-        error instanceof Error ? error : new Error("Refresh failed");
+        error instanceof Error
+          ? error
+          : transloaditError("polling", "Refresh failed");
       options.onError?.(resolved);
     }
   };

@@ -11,6 +11,7 @@ import {
   getAssemblyStage,
   parseAssemblyStatus,
 } from "../shared/assemblyUrls.ts";
+import { transloaditError } from "../shared/errors.ts";
 import { pollAssembly } from "../shared/pollAssembly.ts";
 import { buildTusUploadConfig } from "../shared/tusUpload.ts";
 
@@ -265,7 +266,7 @@ export async function uploadWithAssembly<
 ): Promise<UploadWithAssemblyResult<TAssembly>> {
   const files = uppy.getFiles();
   if (files.length === 0) {
-    throw new Error("No files provided for upload");
+    throw transloaditError("upload", "No files provided for upload");
   }
 
   const args = {
@@ -277,7 +278,8 @@ export async function uploadWithAssembly<
 
   const tusPlugin = uppy.getPlugin("Tus");
   if (!tusPlugin) {
-    throw new Error(
+    throw transloaditError(
+      "upload",
       'Uppy Tus plugin is required. Call uppy.use(Tus, { endpoint: "" }) before uploadWithAssembly.',
     );
   }
@@ -456,7 +458,10 @@ export async function uploadWithTransloaditTus(
     emitState({ isUploading: false, progress: 100, error: null });
     return assembly;
   } catch (error) {
-    const err = error instanceof Error ? error : new Error("Upload failed");
+    const err =
+      error instanceof Error
+        ? error
+        : transloaditError("upload", "Upload failed");
     emitState({ isUploading: false, progress: 0, error: err });
     throw err;
   }
@@ -549,7 +554,7 @@ export function uploadFilesWithTransloaditTus(
 
   const promise = (async () => {
     if (files.length === 0) {
-      throw new Error("No files provided for upload");
+      throw transloaditError("upload", "No files provided for upload");
     }
 
     emitState({ ...state });
@@ -631,11 +636,11 @@ export function uploadFilesWithTransloaditTus(
       const runUpload = () =>
         new Promise<void>((resolve, reject) => {
           if (cancelled) {
-            reject(new Error("Upload canceled"));
+            reject(transloaditError("upload", "Upload canceled"));
             return;
           }
           const onAbort = () => {
-            reject(new Error("Upload canceled"));
+            reject(transloaditError("upload", "Upload canceled"));
           };
           abortController.signal.addEventListener("abort", onAbort, {
             once: true,
@@ -744,7 +749,9 @@ export function uploadFilesWithTransloaditTus(
             return;
           }
           const err =
-            error instanceof Error ? error : new Error("Upload failed");
+            error instanceof Error
+              ? error
+              : transloaditError("upload", "Upload failed");
           results[index] = { file, status: "error", error: err };
           errors.push(err);
           options.onFileError?.(file, err);
@@ -761,7 +768,7 @@ export function uploadFilesWithTransloaditTus(
     );
 
     if (cancelled) {
-      const error = new Error("Upload canceled");
+      const error = transloaditError("upload", "Upload canceled");
       (error as Error & { results?: MultiFileTusUploadResult }).results = {
         assemblyId: assembly.assemblyId,
         data: assembly.data,
@@ -778,7 +785,8 @@ export function uploadFilesWithTransloaditTus(
     };
 
     if (hasErrors) {
-      const error = new Error(
+      const error = transloaditError(
+        "upload",
         `Failed to upload ${errors.length} file${errors.length === 1 ? "" : "s"}`,
       );
       (error as Error & { results?: MultiFileTusUploadResult }).results =
@@ -841,7 +849,9 @@ export function useTransloaditUpload(
         return result;
       } catch (error) {
         const resolvedError =
-          error instanceof Error ? error : new Error("Upload failed");
+          error instanceof Error
+            ? error
+            : transloaditError("upload", "Upload failed");
         setState({ isUploading: false, progress: 0, error: resolvedError });
         throw error;
       } finally {
@@ -967,7 +977,7 @@ export function useTransloaditUppy<
       try {
         const files = options.uppy.getFiles();
         if (files.length === 0) {
-          throw new Error("No files provided for upload");
+          throw transloaditError("upload", "No files provided for upload");
         }
 
         const createAssemblyArgs = {
@@ -1001,7 +1011,9 @@ export function useTransloaditUppy<
         return { assembly, uploadResult: result };
       } catch (err) {
         const resolved =
-          err instanceof Error ? err : new Error("Upload failed");
+          err instanceof Error
+            ? err
+            : transloaditError("upload", "Upload failed");
         setError(resolved);
         setIsUploading(false);
         throw resolved;
@@ -1118,7 +1130,9 @@ export function useAssemblyStatusWithPolling(
         await refresh({ assemblyId });
       } catch (error) {
         const resolved =
-          error instanceof Error ? error : new Error("Refresh failed");
+          error instanceof Error
+            ? error
+            : transloaditError("polling", "Refresh failed");
         onErrorRef.current?.(resolved);
       }
     };
