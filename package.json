@@ -83,7 +83,8 @@
     }
   },
   "dependencies": {
-    "@transloadit/zod": "^4.1.6",
+    "@transloadit/utils": "^4.1.7",
+    "@transloadit/zod": "^4.1.7",
     "tus-js-client": "^4.3.1"
   },
   "devDependencies": {
