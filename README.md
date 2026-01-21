@@ -426,6 +426,7 @@ Notes:
 - CI should run non-mutating checks; local `yarn check` may format/fix.
 - `yarn verify:local` needs `TRANSLOADIT_KEY`, `TRANSLOADIT_SECRET`, `TRANSLOADIT_NOTIFY_URL`, and R2 credentials.
 - `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`.
+- Set `TRANSLOADIT_DEBUG=1` to enable verbose verify logs.
 
 ## Component test helpers
 

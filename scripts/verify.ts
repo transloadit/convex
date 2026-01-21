@@ -1,3 +1,4 @@
+import { createDebugLogger } from "../src/debug/index.ts";
 import { loadEnv } from "./env.ts";
 import { run } from "./qa/run.ts";
 
@@ -19,6 +20,8 @@ const parseArgs = (args: string[]) => {
   return { mode };
 };
 
+const logger = createDebugLogger({ namespace: "verify" });
+
 const runBrowser = async (options: {
   mode: Mode;
   remote?: {
@@ -29,9 +32,11 @@ const runBrowser = async (options: {
   const skipInstall = process.env.PLAYWRIGHT_SKIP_INSTALL === "1";
 
   if (!skipInstall) {
+    logger.event("playwright-install", { browser: "chromium" });
     run("yarn", ["exec", "playwright", "install", "chromium"]);
   }
 
+  logger.event("build");
   run("yarn", ["build"]);
 
   const testEnv: NodeJS.ProcessEnv = {
@@ -80,8 +85,13 @@ const resolvedMode: Mode =
     ? "cloud"
     : "local";
 const runMain = async () => {
+  logger.event("start", { mode: resolvedMode });
   if (resolvedMode === "cloud") {
     const remote = resolveCloudConfig();
+    logger.event("remote", {
+      appUrl: remote.appUrl,
+      convexUrl: remote.convexUrl,
+    });
     await runBrowser({
       mode: "cloud",
       remote,

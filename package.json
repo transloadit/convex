@@ -71,6 +71,10 @@
       "@convex-dev/component-source": "./src/component/convex.config.ts",
       "types": "./dist/component/convex.config.d.ts",
       "default": "./dist/component/convex.config.js"
+    },
+    "./debug": {
+      "types": "./dist/debug/index.d.ts",
+      "default": "./dist/debug/index.js"
     }
   },
   "peerDependencies": {
