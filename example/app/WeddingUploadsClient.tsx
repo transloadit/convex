@@ -601,9 +601,9 @@ const CloudWeddingUploads = () => {
     };
   }, [isLoading, isAuthenticated, signIn]);
 
-  const refreshCloud = useCallback(() => {
-    if (!assemblyId) return Promise.resolve();
-    return refreshAssembly({ assemblyId });
+  const refreshCloud = useCallback(async () => {
+    if (!assemblyId) return;
+    await refreshAssembly({ assemblyId });
   }, [assemblyId, refreshAssembly]);
   const shouldContinueCloud = useCallback(
     () => (results?.length ?? 0) === 0,
