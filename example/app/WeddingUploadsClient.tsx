@@ -83,10 +83,6 @@ const stageRank: Record<UploadStage, number> = {
 const shouldAdvanceStage = (current: UploadStage, next: UploadStage) =>
   stageRank[next] >= stageRank[current];
 
-const deriveStageFromStatus = (status: AssemblyStatus | null | undefined) => {
-  return getAssemblyStage(status);
-};
-
 const useAssemblyPoller = ({
   assemblyId,
   status,
@@ -470,7 +466,7 @@ const LocalWeddingUploads = () => {
   };
 
   useEffect(() => {
-    const nextStage = deriveStageFromStatus(assemblyStatus);
+    const nextStage = getAssemblyStage(assemblyStatus);
     if (!nextStage) return;
     if (shouldAdvanceStage(stage, nextStage)) {
       setStage(nextStage);
@@ -579,7 +575,7 @@ const CloudWeddingUploads = () => {
   });
 
   useEffect(() => {
-    const nextStage = deriveStageFromStatus(status);
+    const nextStage = getAssemblyStage(status);
     if (!nextStage) return;
     if (shouldAdvanceStage(stage, nextStage)) {
       setStage(nextStage);
