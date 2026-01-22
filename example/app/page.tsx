@@ -5,9 +5,9 @@ export const dynamic = "force-dynamic";
 export default async function WeddingUploadsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ convexUrl?: string }> | { convexUrl?: string };
+  searchParams?: Promise<{ convexUrl?: string }>;
 }) {
-  const resolvedSearchParams = await Promise.resolve(searchParams);
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const convexUrl =
     resolvedSearchParams?.convexUrl ??
     process.env.NEXT_PUBLIC_CONVEX_URL ??

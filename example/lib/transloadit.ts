@@ -32,4 +32,5 @@ export type { UppyUploadResult } from "@transloadit/convex/react";
 export {
   uploadWithAssembly,
   useAssemblyPoller,
+  useTransloaditUppy,
 } from "@transloadit/convex/react";

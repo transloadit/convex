@@ -67,6 +67,38 @@ const waitForReady = async (
   throw new Error(`Next example did not start in time.\n${logs.join("\n")}`);
 };
 
+const runCommand = async (
+  command: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+  label: string,
+) => {
+  const child = spawn(command, args, {
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const logs: string[] = [];
+  const onData = (chunk: Buffer) => {
+    const text = chunk.toString();
+    text
+      .split("\n")
+      .filter(Boolean)
+      .forEach((line) => {
+        logs.push(line);
+        if (logs.length > 200) logs.shift();
+      });
+  };
+  child.stdout?.on("data", onData);
+  child.stderr?.on("data", onData);
+
+  const exitCode: number = await new Promise((resolveExit) => {
+    child.once("exit", (code) => resolveExit(code ?? 1));
+  });
+  if (exitCode !== 0) {
+    throw new Error(`${label} failed (${exitCode}).\n${logs.join("\n")}`);
+  }
+};
+
 export const startExampleApp = async ({
   env,
 }: ExampleAppOptions): Promise<ExampleApp> => {
@@ -75,17 +107,35 @@ export const startExampleApp = async ({
   const notifyUrl =
     tunnel.info.notifyUrl ?? `${tunnel.info.url}/transloadit/webhook`;
 
+  const nextEnv = {
+    ...process.env,
+    NEXT_TELEMETRY_DISABLED: "1",
+    TRANSLOADIT_NOTIFY_URL: notifyUrl,
+    ...env,
+  };
+
+  await runCommand("yarn", ["build"], nextEnv, "Package build");
+
   const nextCli = resolve("node_modules/next/dist/bin/next");
+  await runCommand(
+    "node",
+    [nextCli, "build", "example", "--webpack"],
+    nextEnv,
+    "Next build",
+  );
   const child = spawn(
     "node",
-    [nextCli, "dev", "example", "--hostname", "127.0.0.1", "--port", `${port}`],
+    [
+      nextCli,
+      "start",
+      "example",
+      "--hostname",
+      "127.0.0.1",
+      "--port",
+      `${port}`,
+    ],
     {
-      env: {
-        ...process.env,
-        NEXT_TELEMETRY_DISABLED: "1",
-        TRANSLOADIT_NOTIFY_URL: notifyUrl,
-        ...env,
-      },
+      env: nextEnv,
       stdio: ["ignore", "pipe", "pipe"],
     },
   );

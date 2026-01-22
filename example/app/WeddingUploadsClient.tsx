@@ -27,6 +27,8 @@ const Dashboard = dynamic(() => import("@uppy/react/dashboard"), {
   ssr: false,
 });
 
+type WeddingUppy = Uppy<Record<string, unknown>, Record<string, unknown>>;
+
 type WeddingAssemblyResponse = {
   assemblyId: string;
   data: Record<string, unknown>;
@@ -109,9 +111,9 @@ const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
   );
 };
 
-const useWeddingUppy = () => {
+const useWeddingUppy = (): WeddingUppy => {
   const [uppy] = useState(() =>
-    new Uppy({
+    new Uppy<Record<string, unknown>, Record<string, unknown>>({
       autoProceed: false,
       restrictions: {
         allowedFileTypes: ["image/*", "video/*"],
@@ -122,7 +124,7 @@ const useWeddingUppy = () => {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      (window as { __uppy?: Uppy }).__uppy = uppy;
+      (window as { __uppy?: WeddingUppy }).__uppy = uppy;
     }
     return () => {
       // Avoid StrictMode dev cleanup nuking plugins on the shared instance.
@@ -195,16 +197,25 @@ const formatUploadFailure = (result: UploadResult) => {
   const summary = failed
     .map((file) => {
       const name = file.name ?? file.id;
-      const message = file.error?.message ?? "Unknown error";
+      const message =
+        typeof file.error === "string"
+          ? file.error
+          : (file.error?.message ?? "Unknown error");
       return `${name}: ${message}`;
     })
     .join("; ");
   return `Upload failed (${failed.length} file${failed.length === 1 ? "" : "s"}). ${summary}`;
 };
 
+type WeddingAssemblyArgs = {
+  fileCount: number;
+  guestName?: string;
+  uploadCode?: string;
+};
+
 const createWeddingAssemblyRef = makeFunctionReference<
   "action",
-  { fileCount: number; guestName?: string; uploadCode?: string },
+  WeddingAssemblyArgs,
   WeddingAssemblyResponse
 >("wedding:createWeddingAssembly");
 const listAssembliesRef = makeFunctionReference<
@@ -239,7 +250,7 @@ const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
     if (result.stepName !== thumbStep) continue;
     if (!result.sslUrl) continue;
     const key = getResultOriginalKey(result);
-    if (!key) continue;
+    if (typeof key !== "string") continue;
     thumbByOriginal.set(key, result.sslUrl);
   }
 
@@ -264,7 +275,9 @@ const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
         const isVideo = mime.startsWith("video");
         const originalKey = getResultOriginalKey(item);
         const posterUrl =
-          isVideo && originalKey ? thumbByOriginal.get(originalKey) : null;
+          isVideo && typeof originalKey === "string"
+            ? thumbByOriginal.get(originalKey)
+            : null;
         const badge = isVideo ? "Encoded video" : "Resized image";
 
         return (
@@ -326,7 +339,11 @@ const LocalWeddingUploads = () => {
     };
     const parsedStatus = parseAssemblyStatus(data.status?.raw ?? null);
     setAssemblyStatus(parsedStatus);
-    setStatus(parsedStatus?.ok ?? "pending");
+    const ok =
+      parsedStatus && typeof parsedStatus.ok === "string"
+        ? parsedStatus.ok
+        : "pending";
+    setStatus(ok);
     setResults(data.results ?? []);
   }, []);
 
@@ -342,7 +359,10 @@ const LocalWeddingUploads = () => {
 
     setIsUploading(true);
     try {
-      const { assembly, uploadResult } = await uploadWithAssembly(
+      const { assembly, uploadResult } = await uploadWithAssembly<
+        WeddingAssemblyArgs,
+        WeddingAssemblyResponse
+      >(
         async ({ fileCount, guestName: name, uploadCode: code }) => {
           const response = await fetch("/api/assemblies", {
             method: "POST",
@@ -501,6 +521,8 @@ const CloudWeddingUploads = () => {
     }
   }, [uploadError]);
 
+  const statusOk = typeof status?.ok === "string" ? status.ok : "pending";
+
   const startUpload = async () => {
     setError(null);
     setStage("creating");
@@ -550,7 +572,7 @@ const CloudWeddingUploads = () => {
       error={error}
       assemblyId={assemblyId}
       assemblyParams={assemblyParams}
-      status={status?.ok ?? "pending"}
+      status={statusOk}
       stage={stage}
       toasts={toasts}
       authState={
@@ -579,7 +601,7 @@ const WeddingLayout = ({
   authState,
   children,
 }: {
-  uppy: Uppy;
+  uppy: WeddingUppy;
   guestName: string;
   onGuestNameChange: (value: string) => void;
   uploadCode: string;

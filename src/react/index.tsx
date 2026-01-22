@@ -149,13 +149,17 @@ export type UppyTusState = {
 
 export type UppyFile = {
   id: string;
-  data: File;
+  data?: unknown;
+  name?: string;
+  type?: string;
   tus?: UppyTusState;
 };
 
+export type UppyUploadError = { message?: string } | string | null | undefined;
+
 export type UppyUploadResult = {
   successful?: Array<{ id: string; name?: string }>;
-  failed?: Array<{ id: string; name?: string; error?: { message?: string } }>;
+  failed?: Array<{ id: string; name?: string; error?: UppyUploadError }>;
 };
 
 export type UppyLike = {
@@ -171,7 +175,7 @@ export type UppyLike = {
       }
     | undefined
     | null;
-  upload: () => Promise<UppyUploadResult>;
+  upload: () => Promise<UppyUploadResult | undefined>;
 };
 
 export type UploadWithAssemblyOptions<TArgs extends { fileCount: number }> = {
@@ -240,9 +244,12 @@ export type UseTransloaditUppyOptions<
   onUploadResult?: (result: UppyUploadResult) => void;
 };
 
-export type UseTransloaditUppyResult<TAssembly> = {
+export type UseTransloaditUppyResult<
+  TArgs extends { fileCount: number },
+  TAssembly,
+> = {
   startUpload: (
-    overrides?: Partial<UploadWithAssemblyOptions<{ fileCount: number }>>,
+    overrides?: Partial<UploadWithAssemblyOptions<TArgs>>,
   ) => Promise<UploadWithAssemblyResult<TAssembly>>;
   reset: () => void;
   isUploading: boolean;
@@ -287,9 +294,25 @@ export async function uploadWithAssembly<
   const addRequestId = options.addRequestId ?? true;
 
   for (const file of files) {
+    if (
+      !file.data ||
+      typeof Blob === "undefined" ||
+      !(file.data instanceof Blob)
+    ) {
+      throw transloaditError(
+        "upload",
+        "Uppy file is missing binary data for upload",
+      );
+    }
+    const uploadFile =
+      file.data instanceof File
+        ? file.data
+        : new File([file.data], file.name ?? "file", {
+            type: file.data.type || file.type,
+          });
     const { endpoint, metadata } = buildTusUploadConfig(
       assembly.data,
-      file.data,
+      uploadFile,
       {
         fieldName: options.fieldName,
         metadata: options.metadata,
@@ -313,6 +336,9 @@ export async function uploadWithAssembly<
   }
 
   const uploadResult = await uppy.upload();
+  if (!uploadResult) {
+    throw transloaditError("upload", "Uppy upload did not return a result");
+  }
   return { assembly, uploadResult };
 }
 
@@ -923,7 +949,7 @@ export function useTransloaditUppy<
   TAssembly extends { assemblyId: string; data: Record<string, unknown> },
 >(
   options: UseTransloaditUppyOptions<TArgs, TAssembly>,
-): UseTransloaditUppyResult<TAssembly> {
+): UseTransloaditUppyResult<TArgs, TAssembly> {
   const create = useAction(options.createAssembly) as unknown as (
     args: TArgs,
   ) => Promise<TAssembly>;
@@ -968,9 +994,7 @@ export function useTransloaditUppy<
   });
 
   const startUpload = useCallback(
-    async (
-      overrides?: Partial<UploadWithAssemblyOptions<{ fileCount: number }>>,
-    ) => {
+    async (overrides?: Partial<UploadWithAssemblyOptions<TArgs>>) => {
       setError(null);
       setIsUploading(true);
 
