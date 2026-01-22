@@ -4,7 +4,7 @@ A Convex component for creating Transloadit Assemblies, handling resumable uploa
 
 ## Features
 
-- Create Assemblies with templates or inline steps.
+- Create Assemblies with Templates or inline Steps.
 - Resumable uploads via tus (client-side hook; form/XHR uploads are intentionally not supported).
 - Webhook ingestion with signature verification (direct or queued).
 - Persist Assembly status + results in Convex tables.
@@ -55,7 +55,7 @@ npx convex env set TRANSLOADIT_KEY <your_auth_key>
 npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
 ```
 
-### 3) (Optional) Create a demo template (idempotent)
+### 3) (Optional) Create a demo Template (idempotent)
 
 We use the Transloadit CLI under the hood for the best DX and to avoid hand-rolling API calls.
 
@@ -63,7 +63,7 @@ We use the Transloadit CLI under the hood for the best DX and to avoid hand-roll
 yarn template:ensure
 ```
 
-The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`, creates or updates the template `convex-demo`, and prints the template id. The wedding example uses inline steps, so a template is optional.
+The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`, creates or updates the template `convex-demo`, and prints the Template id. The wedding example uses inline steps, so a template is optional.
 
 ## Golden path (secure by default)
 
@@ -520,13 +520,3 @@ git push origin vX.Y.Z
    - create a draft GitHub release,
    - publish the tarball to npm with provenance.
 
-## Roadmap (condensed)
-
-- Completed: tus-only uploads, webhook handling, polling fallback, typed API wrappers, React hooks, browser QA.
-- Possible next steps: richer typed step/result validators, automated webhook retries with backoff, additional templates/recipes.
-
-## References
-
-- Convex components authoring guide
-- Convex official components (e.g. Resend, Aggregate)
-- Transloadit API docs (assembly status + resumable uploads)
