@@ -21,18 +21,6 @@ A Convex component for creating Transloadit Assemblies, handling resumable uploa
 yarn add @transloadit/convex
 ```
 
-## Recommended paths (blessed API)
-
-- Server API wrapper: `makeTransloaditAPI`
-- Webhook handler: `handleWebhookRequest`
-- Client upload (no Uppy): `useTransloaditUpload`
-- Client upload (Uppy): `useTransloaditUppy`
-- Status/results (reactive): `useAssemblyStatus` + `useTransloaditFiles`
-- Polling fallback: `useAssemblyStatusWithPolling`
-
-Low-level tus helpers (`uploadWithTransloaditTus`, `useTransloaditTusUpload`) and the legacy
-`useAssemblyPoller` are still available but intended for advanced use only.
-
 ## Setup
 
 ### 1) Register the component
@@ -55,20 +43,10 @@ npx convex env set TRANSLOADIT_KEY <your_auth_key>
 npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
 ```
 
-### 3) (Optional) Create a demo Template (idempotent)
-
-We use the Transloadit CLI under the hood for the best DX and to avoid hand-rolling API calls.
-
-```bash
-yarn template:ensure
-```
-
-The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env`, creates or updates the template `convex-demo`, and prints the Template id. The wedding example uses inline steps, so a template is optional.
-
 ## Golden path (secure by default)
 
 1. **Server-only create**: a Convex action creates the Assembly (auth secret stays server-side).
-2. **Client upload**: use `useTransloaditUpload` (or `useTransloaditUppy`) for resumable uploads.
+2. **Client upload**: use `useTransloaditUppy` for resumable uploads.
 3. **Webhook ingestion**: verify the signature and `queueWebhook` for durable processing.
 4. **Realtime UI**: query status/results and render the gallery.
 
@@ -91,7 +69,7 @@ export const {
 } = makeTransloaditAPI(components.transloadit);
 ```
 
-Note: if you don’t supply `expires`, the component defaults it to 1 hour from now.
+Note: pass `expires` in `createAssembly` when you need a custom expiry; otherwise the component defaults to 1 hour from now.
 
 ## Data model
 
@@ -102,7 +80,7 @@ assemblies 1 ──── * results
 ```
 
 - `assemblies`: one row per Transloadit Assembly (status/ok, notify URL, uploads, raw payload, etc).
-- `results`: one row per output file, keyed by `assemblyId` + `stepName` with the raw result payload.
+- `results`: one row per output file, keyed by `assemblyId` + `stepName`, plus normalized fields (name/size/mime/url) and the raw Transloadit output object.
 
 Lifecycle:
 1. `createAssembly` inserts the initial `assemblies` row.
@@ -136,19 +114,6 @@ http.route({
 export default http;
 ```
 
-Note: `handleWebhookRequest` skips pre‑verification by default to avoid double verification
-(the action verifies). If you want to short‑circuit invalid signatures before queueing, pass
-`requireSignature: true` and `authSecret`.
-
-If you want to handle webhooks synchronously (no queue), use `handleWebhook` and return HTTP 204:
-
-```ts
-return handleWebhookRequest(request, {
-  mode: "sync",
-  runAction: (args) => ctx.runAction(api.transloadit.handleWebhook, args),
-});
-```
-
 ## Client wrapper (optional)
 
 Most integrations should use `makeTransloaditAPI` (above). If you prefer a class-based API
@@ -164,84 +129,7 @@ const transloadit = new Transloadit(components.transloadit, {
 });
 ```
 
-## Typed helpers
-
-When working with raw assembly payloads, use the helpers to avoid stringly-typed access. These are
-validated with the canonical `@transloadit/zod/v3` schemas and re-export the most useful guards
-directly from `@transloadit/convex`.
-
-```ts
-import {
-  normalizeAssemblyUploadUrls,
-  parseAssemblyFields,
-  parseAssemblyResults,
-  parseAssemblyStatus,
-  parseAssemblyUrls,
-} from "@transloadit/convex";
-
-const assembly = await createAssembly(...);
-const { tusUrl, assemblyUrl } = parseAssemblyUrls(assembly.data);
-const normalized = normalizeAssemblyUploadUrls(assembly.data);
-const status = parseAssemblyStatus(assembly.data);
-const fields = parseAssemblyFields(assembly.data);
-const results = parseAssemblyResults(assembly.data);
-```
-
-You can also access the assembly status guards directly:
-
-```ts
-import { isAssemblyTerminal, isAssemblyTerminalError } from "@transloadit/convex";
-
-// Or map a raw status into a human-friendly stage string:
-import { getAssemblyStage } from "@transloadit/convex";
-const stage = getAssemblyStage(status); // "uploading" | "processing" | "complete" | "error" | null
-```
-
-For common robots, you can reference typed results by robot name:
-
-```ts
-import type { ResultForRobot } from "@transloadit/convex";
-
-type ResizeResult = ResultForRobot<"/image/resize">;
-type EncodeResult = ResultForRobot<"/video/encode">;
-```
-
-For Uppy/Tus wiring, you can build the metadata + endpoint in one go:
-
-```ts
-import { buildTusUploadConfig } from "@transloadit/convex";
-
-const { endpoint, metadata } = buildTusUploadConfig(assembly.data, file, {
-  fieldName: "file",
-});
-```
-
-## React usage
-
-### Happy path upload hook (recommended)
-
-```tsx
-import { useTransloaditUpload } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-const { upload, status, results, isUploading, progress } =
-  useTransloaditUpload({
-    createAssembly: api.transloadit.createAssembly,
-    getStatus: api.transloadit.getAssemblyStatus,
-    listResults: api.transloadit.listResults,
-    refreshAssembly: api.transloadit.refreshAssembly,
-  });
-
-await upload(files, {
-  steps,
-  notifyUrl,
-  numExpectedUploadFiles: Array.from(files).length,
-});
-```
-
-Set `pollIntervalMs: 0` to disable polling (webhooks only).
-
-### Uppy helper (recommended for Uppy)
+## React usage (Uppy)
 
 ```tsx
 import { useTransloaditUppy } from "@transloadit/convex/react";
@@ -259,107 +147,7 @@ await startUpload({
   createAssemblyArgs: { guestName, uploadCode },
 });
 ```
-
-### Low-level tus helpers (advanced)
-
-```tsx
-import {
-  uploadWithTransloaditTus,
-  useTransloaditTusUpload,
-} from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-function TusUpload() {
-  const { upload, isUploading, progress } = useTransloaditTusUpload(
-    api.transloadit.createAssembly,
-  );
-
-  const handleUpload = async (file: File) => {
-    await upload(file, {
-      templateId: "template_id_here",
-      onAssemblyCreated: (assembly) => console.log(assembly.assemblyId),
-    });
-  };
-
-  return (
-    <div>
-      <input type="file" onChange={(e) => handleUpload(e.target.files![0])} />
-      {isUploading && <p>Uploading: {progress}%</p>}
-    </div>
-  );
-}
-```
-
-Note: Transloadit expects tus metadata `fieldname`. The hook sets it to `file` by default; override via `fieldName` or `metadata.fieldname`. You can also use `onAssemblyCreated` to access the assembly id before the upload finishes. `useTransloaditTusUpload` is deprecated; prefer `useTransloaditUpload` for new code.
-
-If you want an imperative helper (e.g. in a custom uploader), use `uploadWithTransloaditTus`:
-
-```tsx
-import { useAction } from "convex/react";
-
-const createAssembly = useAction(api.transloadit.createAssembly);
-
-await uploadWithTransloaditTus(
-  createAssembly,
-  file,
-  { templateId: "template_id_here" },
-  { onStateChange: (state) => console.log(state) },
-);
-```
-
-For multi-file uploads with concurrency + cancellation:
-
-```tsx
-import { uploadFilesWithTransloaditTus } from "@transloadit/convex/react";
-
-const controller = uploadFilesWithTransloaditTus(createAssembly, files, {
-  concurrency: 3,
-  onFileProgress: (file, progress) => console.log(file.name, progress),
-  onOverallProgress: (progress) => console.log("overall", progress),
-});
-
-// Optional: cancel in-flight uploads
-// controller.cancel();
-
-const result = await controller.promise;
-console.log(result.files);
-```
-
-### Reactive status/results
-
-```tsx
-import { useAssemblyStatus, useTransloaditFiles } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-function AssemblyStatus({ assemblyId }: { assemblyId: string }) {
-  const status = useAssemblyStatus(api.transloadit.getAssemblyStatus, assemblyId);
-  const results = useTransloaditFiles(api.transloadit.listResults, {
-    assemblyId,
-  });
-
-  if (!status) return null;
-  return (
-    <div>
-      <p>Status: {status.ok}</p>
-      <p>Results: {results?.length ?? 0}</p>
-    </div>
-  );
-}
-```
-
-### Polling fallback (no webhooks)
-
-```tsx
-import { useAssemblyStatusWithPolling } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-const status = useAssemblyStatusWithPolling(
-  api.transloadit.getAssemblyStatus,
-  api.transloadit.refreshAssembly,
-  assemblyId,
-  { pollIntervalMs: 5000, stopOnTerminal: true },
-);
-```
+For advanced/legacy helpers (raw parsing, low-level tus uploads, polling utilities), see `docs/advanced.md`.
 
 ## Example app (Next.js + Uppy wedding gallery)
 
@@ -466,7 +254,7 @@ Additional commands:
 - `yarn build` (tsc build + emit package json)
 
 Notes:
-- `yarn template:ensure` and `yarn tunnel` are support tools, not verification.
+- `yarn tunnel` is a support tool, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
 - `yarn verify:local` needs `TRANSLOADIT_KEY`, `TRANSLOADIT_SECRET`, `TRANSLOADIT_NOTIFY_URL`, and R2 credentials.
 - `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`.
@@ -519,4 +307,3 @@ git push origin vX.Y.Z
    - build and pack a `.tgz` artifact,
    - create a draft GitHub release,
    - publish the tarball to npm with provenance.
-
