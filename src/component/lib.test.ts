@@ -186,6 +186,33 @@ describe("Transloadit component lib", () => {
     ).rejects.toThrow("Missing rawBody for webhook verification");
   });
 
+  test("handleWebhook can skip verification when configured", async () => {
+    const t = convexTest(schema, modules);
+    const payload = {
+      assembly_id: "asm_skip",
+      ok: "ASSEMBLY_COMPLETED",
+      results: {
+        resized: [
+          {
+            id: "file_skip",
+            ssl_url: "https://example.com/skip.jpg",
+            name: "skip.jpg",
+            size: 123,
+            mime: "image/jpeg",
+          },
+        ],
+      },
+    };
+
+    const result = await t.action(api.lib.handleWebhook, {
+      payload,
+      verifySignature: false,
+    });
+
+    expect(result.assemblyId).toBe("asm_skip");
+    expect(result.resultCount).toBe(1);
+  });
+
   test("queueWebhook rejects invalid signature", async () => {
     const t = convexTest(schema, modules);
     const payload = { assembly_id: "asm_bad" };

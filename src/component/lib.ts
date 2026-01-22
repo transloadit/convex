@@ -272,6 +272,8 @@ export const replaceResultsForAssembly = internalMutation({
   handler: async (ctx, args) => {
     // We store raw result payloads for fidelity. For very large assemblies,
     // consider trimming or externalizing these fields to avoid size limits.
+    // This mutation replaces all results in one transaction; extremely large
+    // result sets may need batching or external storage to avoid Convex limits.
     const existingResults = await ctx.db
       .query("results")
       .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
@@ -399,6 +401,7 @@ const vPublicWebhookArgs = {
   payload: v.any(),
   rawBody: v.optional(v.string()),
   signature: v.optional(v.string()),
+  verifySignature: v.optional(v.boolean()),
 };
 
 export const processWebhook = internalAction({
@@ -411,7 +414,7 @@ export const processWebhook = internalAction({
   }),
   handler: async (ctx, args) => {
     const rawBody = resolveWebhookRawBody(args);
-    const shouldVerify = true;
+    const shouldVerify = args.verifySignature ?? true;
     const authSecret = args.authSecret ?? process.env.TRANSLOADIT_SECRET;
 
     if (shouldVerify) {
@@ -461,11 +464,12 @@ export const handleWebhook = action({
     status: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
+    const verifySignature = args.verifySignature ?? true;
     return ctx.runAction(internal.lib.processWebhook, {
       payload: args.payload,
       rawBody: args.rawBody,
       signature: args.signature,
-      verifySignature: true,
+      verifySignature,
       authSecret: args.config?.authSecret,
     });
   },
@@ -486,7 +490,7 @@ export const queueWebhook = action({
   }),
   handler: async (ctx, args) => {
     const rawBody = resolveWebhookRawBody(args);
-    const shouldVerify = true;
+    const shouldVerify = args.verifySignature ?? true;
     const authSecret =
       args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
 

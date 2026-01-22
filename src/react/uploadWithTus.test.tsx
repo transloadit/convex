@@ -146,6 +146,23 @@ describe("uploadFilesWithTransloaditTus", () => {
     );
   });
 
+  it("does not reach 100% before all files start", async () => {
+    const files = [
+      new File(["slow"], "slow.txt", { type: "text/plain" }),
+      new File(["two"], "two.txt", { type: "text/plain" }),
+    ];
+    const overall: number[] = [];
+
+    const controller = uploadFilesWithTransloaditTus(createAssembly, files, {
+      numExpectedUploadFiles: files.length,
+      concurrency: 1,
+      onOverallProgress: (progress) => overall.push(progress),
+    });
+    await controller.promise;
+
+    expect(overall[0]).toBeLessThan(100);
+  });
+
   it("returns results on partial failure when failFast is false", async () => {
     const files = [
       new File(["ok"], "ok.txt", { type: "text/plain" }),

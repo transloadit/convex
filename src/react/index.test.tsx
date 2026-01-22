@@ -119,6 +119,51 @@ describe("useAssemblyStatusWithPolling", () => {
 
     unmount();
   });
+
+  test("does not overlap refresh calls", async () => {
+    vi.useFakeTimers();
+    currentStatus = { ok: "ASSEMBLY_UPLOADING" };
+    let resolveRefresh: (() => void) | null = null;
+    refreshMock.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+
+    const { unmount } = renderHook(() =>
+      useAssemblyStatusWithPolling(noopGetStatus, noopRefresh, "asm_overlap", {
+        pollIntervalMs: 1000,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000);
+      await Promise.resolve();
+    });
+
+    expect(refreshMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveRefresh?.();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      vi.advanceTimersByTime(1000);
+      await Promise.resolve();
+    });
+
+    expect(refreshMock).toHaveBeenCalledTimes(2);
+
+    unmount();
+  });
 });
 
 describe("useTransloaditUpload", () => {

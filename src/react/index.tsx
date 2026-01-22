@@ -626,6 +626,9 @@ export function uploadFilesWithTransloaditTus(
     };
 
     const perFileBytes = new Map<number, { uploaded: number; total: number }>();
+    files.forEach((file, index) => {
+      perFileBytes.set(index, { uploaded: 0, total: file.size });
+    });
     const updateOverallProgress = () => {
       let totalUploaded = 0;
       let totalBytes = 0;
@@ -1143,6 +1146,7 @@ export function useAssemblyStatusWithPolling(
 
     let cancelled = false;
     let intervalId: ReturnType<typeof setInterval> | null = null;
+    let inFlight = false;
     const tick = async () => {
       if (cancelled) return;
       if (!shouldKeepPolling()) {
@@ -1150,6 +1154,8 @@ export function useAssemblyStatusWithPolling(
         cancelled = true;
         return;
       }
+      if (inFlight) return;
+      inFlight = true;
       try {
         await refresh({ assemblyId });
       } catch (error) {
@@ -1158,6 +1164,8 @@ export function useAssemblyStatusWithPolling(
             ? error
             : transloaditError("polling", "Refresh failed");
         onErrorRef.current?.(resolved);
+      } finally {
+        inFlight = false;
       }
     };
 

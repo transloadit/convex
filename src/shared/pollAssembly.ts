@@ -18,6 +18,7 @@ export const pollAssembly = (
   const intervalMs = Math.max(0, options.intervalMs);
   let cancelled = false;
   let intervalId: ReturnType<typeof setInterval> | null = null;
+  let inFlight = false;
 
   const shouldKeepPolling = () => {
     if (!options.isTerminal?.()) return true;
@@ -40,6 +41,8 @@ export const pollAssembly = (
       stop();
       return;
     }
+    if (inFlight) return;
+    inFlight = true;
     try {
       await options.refresh();
     } catch (error) {
@@ -48,6 +51,8 @@ export const pollAssembly = (
           ? error
           : transloaditError("polling", "Refresh failed");
       options.onError?.(resolved);
+    } finally {
+      inFlight = false;
     }
   };
 
