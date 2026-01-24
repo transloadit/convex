@@ -277,7 +277,7 @@ const t = createTransloaditTest();
 
 ## Release process
 
-Releases are automated via GitHub Actions and published to npm using OIDC (Trusted Publisher).
+Releases are automated via Changesets + GitHub Actions and published to npm using OIDC (Trusted Publisher).
 
 1. Ensure CI is green on `main`.
 2. Run local checks:
@@ -292,23 +292,7 @@ yarn check
 yarn changeset
 ```
 
-4. Apply the changeset version bump and commit:
+4. Push the changeset to `main`. The Changesets workflow will open a “Version Packages” PR.
+5. Merge the “Version Packages” PR. This will publish to npm and tag the release.
 
-```bash
-yarn changeset:version
-git add package.json
-git commit -m "Release vX.Y.Z"
-git push
-```
-
-5. Tag and push the release:
-
-```bash
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
-
-6. The `Publish to npm` workflow will:
-   - build and pack a `.tgz` artifact,
-   - create a draft GitHub release,
-   - publish the tarball to npm with provenance.
+Note: This package is 0.x, so breaking changes are allowed. Use changesets to document them clearly.
