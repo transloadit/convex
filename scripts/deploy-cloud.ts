@@ -51,18 +51,20 @@ const deployCloud = async () => {
     });
 
     log("Deploying Convex app...");
-    const deployOutput = run(
-      "npx",
-      ["convex", "deploy", "--typecheck", "disable", "--yes"],
-      {
-        cwd: projectDir,
-        env: {
-          ...process.env,
-          CONVEX_DEPLOY_KEY: requireEnv("CONVEX_DEPLOY_KEY"),
-        },
-        stdio: "pipe",
+    const previewName = process.env.CONVEX_PREVIEW_NAME;
+    const deployArgs = ["convex", "deploy", "--typecheck", "disable", "--yes"];
+    if (previewName) {
+      deployArgs.push("--preview-create", previewName);
+    }
+
+    const deployOutput = run("npx", deployArgs, {
+      cwd: projectDir,
+      env: {
+        ...process.env,
+        CONVEX_DEPLOY_KEY: requireEnv("CONVEX_DEPLOY_KEY"),
       },
-    );
+      stdio: "pipe",
+    });
 
     const { deploymentName, deploymentUrl } = parseDeployOutput(deployOutput);
     const siteUrl = `https://${deploymentName}.convex.site`;
