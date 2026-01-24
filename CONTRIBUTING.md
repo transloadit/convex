@@ -45,5 +45,5 @@ CONVEX_DEPLOY_KEY=... yarn deploy:cloud
    - GitHub Actions secret: `E2E_REMOTE_CONVEX_URL`
    - Vercel env var: `NEXT_PUBLIC_CONVEX_URL`
 
-3. The stable demo URL is the Vercel production URL (e.g. `https://convex-bay.vercel.app`) and
+3. The stable demo URL is the Vercel production URL (e.g. `https://convex-demo.transload.it`) and
    should be stored in the GitHub Actions secret `E2E_REMOTE_APP_URL`.

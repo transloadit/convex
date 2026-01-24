@@ -24,6 +24,8 @@ export default defineSchema({
     .index("by_userId", ["userId"]),
   results: defineTable({
     assemblyId: v.string(),
+    album: v.optional(v.string()),
+    userId: v.optional(v.string()),
     stepName: v.string(),
     resultId: v.optional(v.string()),
     sslUrl: v.optional(v.string()),
@@ -34,5 +36,6 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_assemblyId", ["assemblyId"])
-    .index("by_assemblyId_and_step", ["assemblyId", "stepName"]),
+    .index("by_assemblyId_and_step", ["assemblyId", "stepName"])
+    .index("by_album", ["album"]),
 });
