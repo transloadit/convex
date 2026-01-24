@@ -2,8 +2,10 @@ import { buildWebhookQueueArgs } from "@transloadit/convex";
 import { httpRouter } from "convex/server";
 import { api } from "./_generated/api";
 import { httpAction } from "./_generated/server";
+import { auth } from "./auth";
 
 const http = httpRouter();
+auth.addHttpRoutes(http);
 
 const requireEnv = (name: string) => {
   const value = process.env[name];
