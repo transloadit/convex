@@ -227,6 +227,7 @@ yarn deploy:cloud
 ```
 
 Once deployed, use the Vercel URL as `E2E_REMOTE_APP_URL` for `yarn verify:cloud`.
+CI expects a stable Vercel production URL in the `E2E_REMOTE_APP_URL` secret on `main`.
 
 ## Verification and QA
 
@@ -285,25 +286,29 @@ Releases are automated via GitHub Actions and published to npm using OIDC (Trust
 yarn check
 ```
 
-3. Update `package.json` version and commit it:
+3. Add a changeset describing the release:
 
 ```bash
-git checkout main
-git pull
-# edit package.json version, then:
+yarn changeset
+```
+
+4. Apply the changeset version bump and commit:
+
+```bash
+yarn changeset:version
 git add package.json
 git commit -m "Release vX.Y.Z"
 git push
 ```
 
-4. Tag and push the release:
+5. Tag and push the release:
 
 ```bash
 git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-5. The `Publish to npm` workflow will:
+6. The `Publish to npm` workflow will:
    - build and pack a `.tgz` artifact,
    - create a draft GitHub release,
    - publish the tarball to npm with provenance.

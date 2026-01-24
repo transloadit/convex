@@ -152,7 +152,18 @@ jobs:
           R2_HOST: ${{ secrets.R2_HOST }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+      - name: Set stable demo URL (main)
+        if: github.ref == 'refs/heads/main'
+        run: |
+          if [ -z "${E2E_REMOTE_APP_URL}" ]; then
+            echo "E2E_REMOTE_APP_URL missing" >&2
+            exit 1
+          fi
+          echo "E2E_REMOTE_APP_URL=${E2E_REMOTE_APP_URL}" >> "$GITHUB_ENV"
+        env:
+          E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
       - name: Resolve Vercel preview URL
+        if: env.E2E_REMOTE_APP_URL == ''
         run: |
           echo "E2E_REMOTE_APP_URL=$(node scripts/resolve-vercel-preview.ts)" >> "$GITHUB_ENV"
         env:
