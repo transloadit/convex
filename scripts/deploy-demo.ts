@@ -20,6 +20,16 @@ const rootDir = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const exampleDir = join(rootDir, "example");
 const binDir = join(rootDir, "node_modules", ".bin");
 
+const resolveDeployment = () => {
+  if (process.env.CONVEX_DEPLOYMENT) {
+    return process.env.CONVEX_DEPLOYMENT;
+  }
+  const url = process.env.E2E_REMOTE_CONVEX_URL ?? process.env.CONVEX_URL;
+  if (!url) return null;
+  const match = /https?:\/\/([a-z0-9-]+)\.convex\.cloud/i.exec(url);
+  return match?.[1] ?? null;
+};
+
 const sleep = (ms: number) =>
   new Promise((resolvePromise) => {
     setTimeout(resolvePromise, ms);
@@ -30,10 +40,12 @@ const deployDemo = async () => {
   requireEnv("TRANSLOADIT_SECRET");
   requireEnv("CONVEX_DEPLOY_KEY");
 
+  const targetDeployment = resolveDeployment();
   const baseEnv: NodeJS.ProcessEnv = {
     ...process.env,
     PATH: `${binDir}:${process.env.PATH ?? ""}`,
     CONVEX_DEPLOY_KEY: requireEnv("CONVEX_DEPLOY_KEY"),
+    ...(targetDeployment ? { CONVEX_DEPLOYMENT: targetDeployment } : {}),
   };
 
   log("Building @transloadit/convex...");
