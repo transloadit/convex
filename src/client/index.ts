@@ -258,10 +258,10 @@ export function makeTransloaditAPI(
   component: TransloaditComponent,
   config?: Partial<TransloaditConfig>,
 ) {
-  const resolvedConfig: TransloaditConfig = {
+  const resolveConfig = (): TransloaditConfig => ({
     authKey: config?.authKey ?? requireEnv(["TRANSLOADIT_KEY"]),
     authSecret: config?.authSecret ?? requireEnv(["TRANSLOADIT_SECRET"]),
-  };
+  });
 
   return {
     createAssembly: actionGeneric({
@@ -271,6 +271,7 @@ export function makeTransloaditAPI(
         data: v.any(),
       }),
       handler: async (ctx, args) => {
+        const resolvedConfig = resolveConfig();
         return ctx.runAction(component.lib.createAssembly, {
           ...args,
           config: resolvedConfig,
@@ -290,6 +291,7 @@ export function makeTransloaditAPI(
         status: v.optional(v.string()),
       }),
       handler: async (ctx, args) => {
+        const resolvedConfig = resolveConfig();
         return ctx.runAction(component.lib.handleWebhook, {
           ...args,
           config: { authSecret: resolvedConfig.authSecret },
@@ -307,6 +309,7 @@ export function makeTransloaditAPI(
         queued: v.boolean(),
       }),
       handler: async (ctx, args) => {
+        const resolvedConfig = resolveConfig();
         return ctx.runAction(component.lib.queueWebhook, {
           ...args,
           config: { authSecret: resolvedConfig.authSecret },
@@ -322,6 +325,7 @@ export function makeTransloaditAPI(
         status: v.optional(v.string()),
       }),
       handler: async (ctx, args) => {
+        const resolvedConfig = resolveConfig();
         return ctx.runAction(component.lib.refreshAssembly, {
           ...args,
           config: resolvedConfig,
