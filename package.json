@@ -1,10 +1,13 @@
 {
   "name": "@transloadit/convex",
   "description": "Transloadit component for Convex",
-  "version": "0.0.0",
+  "version": "0.0.3",
   "type": "module",
   "packageManager": "yarn@4.5.0",
-  "repository": "github:transloadit/convex",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/transloadit/convex.git"
+  },
   "license": "Apache-2.0",
   "author": "Transloadit",
   "keywords": [
@@ -19,18 +22,32 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json && node scripts/emit-package-json.ts",
     "build:watch": "tsc -p tsconfig.build.json --watch",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --typecheck",
     "test:watch": "vitest --typecheck",
+    "verify": "yarn check && yarn verify:local",
+    "verify:local": "node scripts/verify.ts --mode local",
+    "verify:cloud": "node scripts/verify.ts --mode cloud",
+    "verify:real": "yarn verify:cloud",
+    "verify:browser": "yarn verify:local",
+    "verify:convex": "yarn verify:cloud",
+    "deploy:cloud": "node scripts/deploy-cloud.ts",
+    "example:dev": "yarn build && node ./node_modules/next/dist/bin/next dev example",
+    "example:build": "yarn build && node ./node_modules/next/dist/bin/next build example",
+    "example:start": "yarn build && node ./node_modules/next/dist/bin/next start example",
     "lint": "biome check .",
     "format": "biome format . --write",
-    "smoke": "dotenv -q -- node scripts/smoke-test.ts",
-    "template:ensure": "dotenv -q -- node scripts/ensure-template.ts",
-    "tunnel": "node scripts/start-webhook-tunnel.ts",
-    "qa:full": "dotenv -q -- node scripts/qa-full.ts",
-    "qa:full:verbose": "dotenv -q -- node scripts/qa-full.ts --verbose"
+    "check": "yarn format && yarn lint && yarn typecheck && yarn test",
+    "prepack": "yarn build",
+    "template:ensure": "node scripts/ensure-template.ts",
+    "tunnel": "node scripts/start-webhook-tunnel.ts"
   },
-  "files": ["dist", "src"],
+  "files": [
+    "dist",
+    "src"
+  ],
   "exports": {
     "./package.json": "./package.json",
     ".": {
@@ -48,10 +65,18 @@
       "types": "./dist/component/lib.d.ts",
       "default": "./dist/component/lib.js"
     },
+    "./test": {
+      "types": "./dist/test/index.d.ts",
+      "default": "./dist/test/index.js"
+    },
     "./convex.config": {
       "@convex-dev/component-source": "./src/component/convex.config.ts",
       "types": "./dist/component/convex.config.d.ts",
       "default": "./dist/component/convex.config.js"
+    },
+    "./debug": {
+      "types": "./dist/debug/index.d.ts",
+      "default": "./dist/debug/index.js"
     }
   },
   "peerDependencies": {
@@ -64,18 +89,39 @@
     }
   },
   "dependencies": {
-    "tus-js-client": "^4.1.0"
+    "@transloadit/utils": "^4.1.9",
+    "@transloadit/zod": "^4.1.9",
+    "tus-js-client": "^4.3.1"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@auth/core": "^0.37.0",
+    "@biomejs/biome": "^2.3.11",
+    "@changesets/cli": "^2.27.12",
+    "@convex-dev/auth": "^0.0.90",
     "@edge-runtime/vm": "^5.0.0",
-    "@types/node": "^20.19.0",
-    "@types/react": "^19.1.10",
-    "convex": "^1.24.8",
-    "convex-test": "0.0.37",
-    "dotenv-cli": "^8.0.0",
+    "@playwright/test": "^1.57.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.0",
+    "@types/node": "^25.0.8",
+    "@types/react": "^19.2.8",
+    "@types/react-dom": "^19",
+    "@uppy/core": "^5.2.0",
+    "@uppy/dashboard": "^5.1.0",
+    "@uppy/react": "^5.1.1",
+    "@uppy/tus": "^5.1.0",
+    "convex": "^1.31.4",
+    "convex-test": "^0.0.41",
+    "dotenv": "^17.2.3",
+    "esbuild": "^0.27.2",
+    "jsdom": "^26.1.0",
+    "next": "^16.1.3",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "typescript": "^5.9.3",
-    "vitest": "3.2.4"
+    "vitest": "^4.0.17"
+  },
+  "resolutions": {
+    "preact": "10.28.2"
   },
   "types": "./dist/client/index.d.ts",
   "module": "./dist/client/index.js"

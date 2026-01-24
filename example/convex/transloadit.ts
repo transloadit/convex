@@ -3,8 +3,9 @@ import { components } from "./_generated/api";
 
 export const {
   createAssembly,
-  generateUploadParams,
   handleWebhook,
+  queueWebhook,
+  refreshAssembly,
   getAssemblyStatus,
   listAssemblies,
   listResults,

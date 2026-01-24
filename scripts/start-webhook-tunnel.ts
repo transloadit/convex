@@ -1,11 +1,14 @@
 import { spawn } from "node:child_process";
 import { chmodSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { loadEnv } from "./env.ts";
+
+loadEnv();
 
 const isWindows = process.platform === "win32";
 const binaryName = isWindows ? "cloudflared.exe" : "cloudflared";
 
-function isExecutable(path) {
+function isExecutable(path: string) {
   try {
     const stats = statSync(path);
     if (!stats.isFile()) return false;
@@ -16,7 +19,7 @@ function isExecutable(path) {
   }
 }
 
-function findOnPath(name) {
+function findOnPath(name: string) {
   const pathEntries = (process.env.PATH || "").split(
     process.platform === "win32" ? ";" : ":",
   );
@@ -99,7 +102,16 @@ if (Number.isNaN(port)) {
 const cloudflared = await ensureCloudflared();
 const tunnel = spawn(
   cloudflared,
-  ["tunnel", "--url", `http://localhost:${port}`],
+  [
+    "tunnel",
+    "--url",
+    `http://localhost:${port}`,
+    "--protocol",
+    "http2",
+    "--no-autoupdate",
+    "--retries",
+    "20",
+  ],
   {
     stdio: ["ignore", "pipe", "pipe"],
   },
@@ -108,7 +120,7 @@ const tunnel = spawn(
 let printed = false;
 const urlPattern = /(https:\/\/[-\w]+\.trycloudflare\.com)/i;
 
-function handleOutput(chunk) {
+function handleOutput(chunk: Buffer) {
   const text = chunk.toString();
   const match = text.match(urlPattern);
   if (match?.[1] && !printed) {

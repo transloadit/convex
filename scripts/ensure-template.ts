@@ -1,6 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { loadEnv } from "./env.ts";
+
+loadEnv();
 
 const templateName = process.env.TRANSLOADIT_TEMPLATE_NAME ?? "convex-demo";
 const templateFile = resolve("templates/convex-demo.json");
@@ -10,20 +13,12 @@ if (!existsSync(templateFile)) {
 }
 
 const env = { ...process.env };
-if (!env.TRANSLOADIT_KEY && env.TRANSLOADIT_AUTH_KEY) {
-  env.TRANSLOADIT_KEY = env.TRANSLOADIT_AUTH_KEY;
-}
-if (!env.TRANSLOADIT_SECRET && env.TRANSLOADIT_AUTH_SECRET) {
-  env.TRANSLOADIT_SECRET = env.TRANSLOADIT_AUTH_SECRET;
-}
 
 if (!env.TRANSLOADIT_KEY || !env.TRANSLOADIT_SECRET) {
-  throw new Error(
-    "Missing TRANSLOADIT_KEY/TRANSLOADIT_SECRET (or TRANSLOADIT_AUTH_KEY/TRANSLOADIT_AUTH_SECRET)",
-  );
+  throw new Error("Missing TRANSLOADIT_KEY/TRANSLOADIT_SECRET");
 }
 
-function run(args) {
+function run(args: string[]) {
   const result = spawnSync("npx", ["--yes", "transloadit", ...args], {
     env,
     encoding: "utf8",
@@ -35,13 +30,33 @@ function run(args) {
   return result.stdout.trim();
 }
 
-function parseJsonLines(output) {
-  if (!output) return [];
-  return output
+type TemplateRecord = {
+  id?: string;
+  name?: string;
+  template_id?: string;
+};
+
+function parseJsonLines(output: string): TemplateRecord[] {
+  const trimmed = output.trim();
+  if (!trimmed) return [];
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed as TemplateRecord[];
+    }
+    if (parsed && typeof parsed === "object") {
+      return [parsed as TemplateRecord];
+    }
+  } catch {
+    // fall back to line-delimited JSON
+  }
+
+  return trimmed
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => JSON.parse(line));
+    .map((line) => JSON.parse(line) as TemplateRecord);
 }
 
 const listOutput = run(["templates", "list", "-j", "--fields", "id,name"]);
@@ -57,7 +72,11 @@ if (existing?.id) {
     existing.id,
     templateFile,
   ]);
-  const modifyPayload = parseJsonLines(modifyOutput).at(-1);
+  const modifyPayloads = parseJsonLines(modifyOutput);
+  const modifyPayload =
+    modifyPayloads.length > 0
+      ? modifyPayloads[modifyPayloads.length - 1]
+      : undefined;
   templateId = modifyPayload?.id ?? existing.id;
 } else {
   const createOutput = run([
@@ -67,7 +86,11 @@ if (existing?.id) {
     templateName,
     templateFile,
   ]);
-  const createPayload = parseJsonLines(createOutput).at(-1);
+  const createPayloads = parseJsonLines(createOutput);
+  const createPayload =
+    createPayloads.length > 0
+      ? createPayloads[createPayloads.length - 1]
+      : undefined;
   templateId = createPayload?.id ?? createPayload?.template_id ?? "";
 }
 

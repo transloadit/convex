@@ -2,6 +2,8 @@
   "resize": {
     "use": ":original",
     "robot": "/image/resize",
+    "format": "png",
+    "sepia": 1,
     "width": 800,
     "height": 800,
     "resize_strategy": "fit",

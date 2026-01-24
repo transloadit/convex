@@ -1,0 +1,1 @@
+Agents must always run `yarn check` after any change that touches code, config, scripts, CI, or docs, and must not mark work complete until it passes; if it fails, fix and re-run or report the exact failure.

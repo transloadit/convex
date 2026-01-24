@@ -1,15 +1,19 @@
 # Transloadit Convex Component
 
-A Convex component for creating Transloadit Assemblies, tracking their status/results, and supporting both form uploads and resumable tus uploads.
+A Convex component for creating Transloadit Assemblies, handling resumable uploads with tus, and persisting status/results in Convex.
 
 ## Features
 
-- Create Assemblies with templates or inline steps.
-- Generate signed upload params for browser form uploads.
-- Resumable uploads via tus (client-side hook).
-- Webhook ingestion with signature verification.
-- Persist Assembly status + results in Convex.
+- Create Assemblies with Templates or inline Steps.
+- Resumable uploads via tus (client-side hook; form/XHR uploads are intentionally not supported).
+- Webhook ingestion with signature verification (direct or queued).
+- Persist Assembly status + results in Convex tables.
 - Typed API wrappers and React hooks.
+
+## Requirements
+
+- Node.js 24+
+- Yarn 4 (Corepack)
 
 ## Install
 
@@ -34,31 +38,17 @@ export default app;
 
 ### 2) Set environment variables
 
-Preferred names:
-
-```bash
-npx convex env set TRANSLOADIT_AUTH_KEY <your_auth_key>
-npx convex env set TRANSLOADIT_AUTH_SECRET <your_auth_secret>
-```
-
-Aliases also supported:
-
 ```bash
 npx convex env set TRANSLOADIT_KEY <your_auth_key>
 npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
 ```
 
-### 3) Create a demo template (idempotent)
+## Golden path (secure by default)
 
-We use the Transloadit CLI under the hood for the best DX and to avoid hand-rolling API calls.
-
-```bash
-yarn template:ensure
-```
-
-The script reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` (or `TRANSLOADIT_AUTH_KEY/TRANSLOADIT_AUTH_SECRET`) from `.env`,
-creates or updates the template `convex-demo`, and prints the template id.
-Use that id as `VITE_TRANSLOADIT_TEMPLATE_ID` in `example/.env` when running the demo app.
+1. **Server-only create**: a Convex action creates the Assembly (auth secret stays server-side).
+2. **Client upload**: use `useTransloaditUppy` for resumable uploads.
+3. **Webhook ingestion**: verify the signature and `queueWebhook` for durable processing.
+4. **Realtime UI**: query status/results and render the gallery.
 
 ## Backend API
 
@@ -69,8 +59,9 @@ import { components } from "./_generated/api";
 
 export const {
   createAssembly,
-  generateUploadParams,
   handleWebhook,
+  queueWebhook,
+  refreshAssembly,
   getAssemblyStatus,
   listAssemblies,
   listResults,
@@ -78,7 +69,23 @@ export const {
 } = makeTransloaditAPI(components.transloadit);
 ```
 
-Note: if you don’t supply `expires`, the component defaults it to 1 hour from now.
+Note: pass `expires` in `createAssembly` when you need a custom expiry; otherwise the component defaults to 1 hour from now.
+
+## Data model
+
+The component stores Transloadit metadata in two tables:
+
+```
+assemblies 1 ──── * results
+```
+
+- `assemblies`: one row per Transloadit Assembly (status/ok, notify URL, uploads, raw payload, etc).
+- `results`: one row per output file, keyed by `assemblyId` + `stepName`, plus normalized fields (name/size/mime/url) and the raw Transloadit output object.
+
+Lifecycle:
+1. `createAssembly` inserts the initial `assemblies` row.
+2. `handleWebhook`, `queueWebhook`, or `refreshAssembly` upserts the assembly + replaces results.
+3. `listResults` returns flattened step outputs for use in UIs.
 
 ## Webhook route
 
@@ -86,150 +93,222 @@ Transloadit sends webhooks as `multipart/form-data` with `transloadit` (JSON) an
 
 ```ts
 // convex/http.ts
-import { httpAction, httpRouter } from "convex/server";
+import { httpRouter } from "convex/server";
+import { handleWebhookRequest } from "@transloadit/convex";
 import { api } from "./_generated/api";
+import { httpAction } from "./_generated/server";
 
 const http = httpRouter();
 
 http.route({
   path: "/transloadit/webhook",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const formData = await request.formData();
-    const rawPayload = formData.get("transloadit");
-    const signature = formData.get("signature");
-
-    if (typeof rawPayload !== "string") {
-      return new Response("Missing payload", { status: 400 });
-    }
-
-    const payload = JSON.parse(rawPayload);
-
-    await ctx.runAction(api.transloadit.handleWebhook, {
-      payload,
-      rawBody: rawPayload,
-      signature: typeof signature === "string" ? signature : undefined,
-    });
-
-    return new Response(null, { status: 204 });
-  }),
+  handler: httpAction((ctx, request) =>
+    handleWebhookRequest(request, {
+      mode: "queue",
+      runAction: (args) => ctx.runAction(api.transloadit.queueWebhook, args),
+    }),
+  ),
 });
 
 export default http;
 ```
 
-### Local webhook testing with cloudflared
+## Client wrapper (optional)
 
-If you want to test webhooks locally, tunnel your Convex dev HTTP endpoint:
+Most integrations should use `makeTransloaditAPI` (above). If you prefer a class-based API
+(similar to other Convex components), use `Transloadit`:
 
-```bash
-yarn tunnel
+```ts
+import { Transloadit } from "@transloadit/convex";
+import { components } from "./_generated/api";
+
+const transloadit = new Transloadit(components.transloadit, {
+  authKey: process.env.TRANSLOADIT_KEY!,
+  authSecret: process.env.TRANSLOADIT_SECRET!,
+});
 ```
 
-Use the generated public URL as `notifyUrl` when creating Assemblies or set
-`VITE_TRANSLOADIT_NOTIFY_URL` for the example app.
-
-You can also run `yarn tunnel --once` to print the URL and exit.
-
-### Full QA flow (template + tunnel + webhook)
-
-This runs an end-to-end webhook QA flow against Transloadit using a local webhook server
-and cloudflared (auto-downloaded if missing):
-
-```bash
-yarn qa:full
-```
-
-It prints a JSON summary including the assembly id, webhook status, and number of stored results.
-
-## React usage
-
-### Form upload
+## React usage (Uppy)
 
 ```tsx
-import { useTransloaditUpload } from "@transloadit/convex/react";
+import { useTransloaditUppy } from "@transloadit/convex/react";
 import { api } from "../convex/_generated/api";
 
-function UploadButton() {
-  const { upload, isUploading, progress, error } = useTransloaditUpload(
-    api.transloadit.generateUploadParams,
-  );
+const { startUpload, status, results, stage } = useTransloaditUppy({
+  uppy,
+  createAssembly: api.wedding.createWeddingAssembly,
+  getStatus: api.transloadit.getAssemblyStatus,
+  listResults: api.transloadit.listResults,
+  refreshAssembly: api.transloadit.refreshAssembly,
+});
 
-  const handleUpload = async (file: File) => {
-    await upload(file, {
-      templateId: "template_id_here",
-      onProgress: (percent) => console.log(percent),
-    });
-  };
-
-  return (
-    <div>
-      <input type="file" onChange={(e) => handleUpload(e.target.files![0])} />
-      {isUploading && <p>Uploading: {progress}%</p>}
-      {error && <p>{error.message}</p>}
-    </div>
-  );
-}
+await startUpload({
+  createAssemblyArgs: { guestName, uploadCode },
+});
 ```
+For advanced/legacy helpers (raw parsing, low-level tus uploads, polling utilities), see `docs/advanced.md`.
 
-### Resumable tus upload
+## Example app (Next.js + Uppy wedding gallery)
 
-```tsx
-import { useTransloaditTusUpload } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
+The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on the client and Convex Auth (anonymous sign-in) to create assemblies securely. If you do not set `NEXT_PUBLIC_CONVEX_URL`, the example falls back to the in-process Convex test harness.
+Uploads are stored via Transloadit directly into Cloudflare R2.
+The client wiring uses the `useTransloaditUppy` hook from `@transloadit/convex/react` to keep Uppy + polling in sync.
 
-function TusUpload() {
-  const { upload, isUploading, progress } = useTransloaditTusUpload(
-    api.transloadit.createAssembly,
-  );
-
-  const handleUpload = async (file: File) => {
-    await upload(file, {
-      templateId: "template_id_here",
-    });
-  };
-
-  return (
-    <div>
-      <input type="file" onChange={(e) => handleUpload(e.target.files![0])} />
-      {isUploading && <p>Uploading: {progress}%</p>}
-    </div>
-  );
-}
-```
-
-### Reactive status/results
-
-```tsx
-import { useAssemblyStatus, useTransloaditFiles } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-function AssemblyStatus({ assemblyId }: { assemblyId: string }) {
-  const status = useAssemblyStatus(api.transloadit.getAssemblyStatus, assemblyId);
-  const results = useTransloaditFiles(api.transloadit.listResults, {
-    assemblyId,
-  });
-
-  if (!status) return null;
-  return (
-    <div>
-      <p>Status: {status.ok}</p>
-      <p>Results: {results?.length ?? 0}</p>
-    </div>
-  );
-}
-```
-
-## Smoke test
-
-Create a `.env` file in the repo root and run:
+Quick start (local):
 
 ```bash
-yarn smoke
+# In repo root
+export TRANSLOADIT_KEY=...
+export TRANSLOADIT_SECRET=...
+export TRANSLOADIT_R2_CREDENTIALS=...
+
+# Get a public webhook URL (cloudflared is auto-downloaded if needed)
+yarn tunnel --once
+# Set TRANSLOADIT_NOTIFY_URL to the printed notifyUrl
+export TRANSLOADIT_NOTIFY_URL=...
+
+yarn example:dev
 ```
 
-Expected output: a JSON blob containing `assemblyId` and (when available) `tusUrl`.
+If you want the API routes to talk to an existing Convex deployment (bypassing Convex Auth), set:
 
-## Example app
+```bash
+export CONVEX_URL=...
+export CONVEX_ADMIN_KEY=...
+```
 
-See `example/README.md` for setup and usage.
+The example exposes `POST /transloadit/webhook` and forwards webhooks into Convex via `queueWebhook`.
+Realtime “new upload” toasts use a Convex subscription on recent assemblies.
+The demo also applies a simple per-user upload limit in the Convex backend (see `example/convex/wedding.ts`).
+
+### Storage (required R2 persistence)
+
+The example uses the `/cloudflare/store` robot to write processed files into Cloudflare R2. Configure one of these:
+
+```bash
+# Option A: Transloadit template credentials (recommended)
+export TRANSLOADIT_R2_CREDENTIALS=...
+
+# Option B: supply R2 details directly
+export R2_BUCKET=...
+export R2_ACCESS_KEY_ID=...
+export R2_SECRET_ACCESS_KEY=...
+export R2_ACCOUNT_ID=...   # or R2_HOST
+export R2_PUBLIC_URL=...   # optional public URL prefix
+```
+
+The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default: 24) to discourage spam/abuse.
+If you set `WEDDING_UPLOAD_CODE` on the Convex deployment, guests must enter the passcode before uploads can start.
+
+### Deploy the example (Vercel + stable Convex)
+
+For a public demo, deploy the `example/` app and point it at a stable Convex deployment.
+
+1. Deploy a Convex app that includes this component (stable/prod deployment).
+2. Set Vercel environment variables for the project:
+   - `NEXT_PUBLIC_CONVEX_URL` (point to the stable Convex deployment)
+   - `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (optional)
+3. Set Convex environment variables on the deployment:
+   - `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`
+   - `TRANSLOADIT_NOTIFY_URL` (set to `https://<deployment>.convex.site/transloadit/webhook`)
+   - R2 credentials (see above)
+   - `WEDDING_UPLOAD_CODE` (optional passcode for uploads)
+4. Trigger the Vercel deploy hook (or deploy manually).
+
+To deploy a stable Convex backend for the demo (once per environment), run:
+
+```bash
+export CONVEX_DEPLOY_KEY=...
+export TRANSLOADIT_KEY=...
+export TRANSLOADIT_SECRET=...
+
+yarn deploy:cloud
+```
+
+Once deployed, use the Vercel URL as `E2E_REMOTE_APP_URL` for `yarn verify:cloud`.
+CI expects a stable Vercel production URL in the `E2E_REMOTE_APP_URL` secret on `main`.
+
+## Verification and QA
+
+Fast checks:
+
+```bash
+yarn check
+```
+
+This runs format, lint, typecheck, and unit tests. For a full verification run:
+
+```bash
+yarn verify
+```
+
+Additional commands:
+
+- `yarn lint` (Biome)
+- `yarn format` (Biome write)
+- `yarn typecheck` (tsc)
+- `yarn test` (Vitest unit tests)
+- `yarn verify:local` (runs the Next.js wedding example + uploads an image + video)
+- `yarn verify:cloud` (runs the browser flow against a deployed Next.js app)
+- `yarn deploy:cloud` (deploys a stable Convex backend for the demo app)
+- `yarn build` (tsc build + emit package json)
+
+Notes:
+- `yarn tunnel` is a support tool, not verification.
+- CI should run non-mutating checks; local `yarn check` may format/fix.
+- `yarn verify:local` needs `TRANSLOADIT_KEY`, `TRANSLOADIT_SECRET`, `TRANSLOADIT_NOTIFY_URL`, and R2 credentials.
+- `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`.
+- Set `TRANSLOADIT_DEBUG=1` to enable verbose verify logs.
+
+## Component test helpers
+
+For `convex-test`, you can use the built-in helper:
+
+```ts
+import { createTransloaditTest } from "@transloadit/convex/test";
+
+const t = createTransloaditTest();
+```
+
+## Generated files
+
+`src/component/_generated` is Convex codegen output. It is checked in so tests and component consumers have stable API references. If you change component functions or schemas, regenerate with Convex codegen (for example via `npx convex dev` or `npx convex codegen`) and commit the updated files.
+
+## Release process
+
+Releases are automated via GitHub Actions and published to npm using OIDC (Trusted Publisher).
+
+1. Ensure CI is green on `main`.
+2. Run local checks:
+
+```bash
+yarn check
+```
+
+3. Add a changeset describing the release:
+
+```bash
+yarn changeset
+```
+
+4. Apply the changeset version bump and commit:
+
+```bash
+yarn changeset:version
+git add package.json
+git commit -m "Release vX.Y.Z"
+git push
+```
+
+5. Tag and push the release:
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+6. The `Publish to npm` workflow will:
+   - build and pack a `.tgz` artifact,
+   - create a draft GitHub release,
+   - publish the tarball to npm with provenance.

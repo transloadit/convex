@@ -1,14 +1,39 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "target": "ES2021",
+    "lib": ["DOM", "DOM.Iterable", "ES2021"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "noEmit": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "strict": true,
-    "jsx": "react-jsx",
+    "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
-    "skipLibCheck": true
+    "jsx": "react-jsx",
+    "incremental": true,
+    "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@transloadit/convex": ["../src/client/index.ts"],
+      "@transloadit/convex/react": ["../src/react/index.tsx"],
+      "@transloadit/convex/lib": ["../src/component/lib.ts"],
+      "@transloadit/convex/test": ["../src/test/index.ts"],
+      "@transloadit/convex/convex.config": ["../src/component/convex.config.ts"]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
-  "include": ["src"]
+  "include": [
+    "next-env.d.ts",
+    "app",
+    "lib",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
 }

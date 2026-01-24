@@ -1,3 +1,8 @@
+import { signParams, verifyWebhookSignature } from "@transloadit/utils";
+import type { AssemblyStatusResults } from "@transloadit/zod/v3/assemblyStatus";
+import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
+import { transloaditError } from "../shared/errors.ts";
+
 export interface TransloaditAuthConfig {
   authKey: string;
   authSecret: string;
@@ -6,8 +11,8 @@ export interface TransloaditAuthConfig {
 export interface BuildParamsOptions {
   authKey: string;
   templateId?: string;
-  steps?: Record<string, unknown>;
-  fields?: Record<string, unknown>;
+  steps?: AssemblyInstructionsInput["steps"];
+  fields?: AssemblyInstructionsInput["fields"];
   notifyUrl?: string;
   numExpectedUploadFiles?: number;
   expires?: string;
@@ -23,7 +28,10 @@ export function buildTransloaditParams(
   options: BuildParamsOptions,
 ): BuildParamsResult {
   if (!options.templateId && !options.steps) {
-    throw new Error("Provide either templateId or steps to create an Assembly");
+    throw transloaditError(
+      "createAssembly",
+      "Provide either templateId or steps to create an Assembly",
+    );
   }
 
   const auth: Record<string, string> = {
@@ -59,90 +67,140 @@ export function buildTransloaditParams(
   };
 }
 
-async function hmacHex(
-  algorithm: "SHA-384" | "SHA-1",
-  key: string,
-  data: string,
-): Promise<string> {
-  if (globalThis.crypto?.subtle) {
-    const encoder = new TextEncoder();
-    const cryptoKey = await globalThis.crypto.subtle.importKey(
-      "raw",
-      encoder.encode(key),
-      { name: "HMAC", hash: { name: algorithm } },
-      false,
-      ["sign"],
-    );
-    const signature = await globalThis.crypto.subtle.sign(
-      "HMAC",
-      cryptoKey,
-      encoder.encode(data),
-    );
-    const bytes = new Uint8Array(signature);
-    return Array.from(bytes)
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-  }
-
-  const { createHmac } = await import("node:crypto");
-  return createHmac(algorithm.replace("-", "").toLowerCase(), key)
-    .update(data)
-    .digest("hex");
-}
-
 export async function signTransloaditParams(
   paramsString: string,
   authSecret: string,
 ): Promise<string> {
-  const signature = await hmacHex("SHA-384", authSecret, paramsString);
-  return `sha384:${signature}`;
+  return signParams(paramsString, authSecret, "sha384");
 }
 
-function safeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i += 1) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return mismatch === 0;
-}
-
-export async function verifyWebhookSignature(options: {
+export type ParsedWebhookRequest = {
+  payload: unknown;
   rawBody: string;
-  signatureHeader?: string;
-  authSecret: string;
-}): Promise<boolean> {
-  if (!options.signatureHeader) return false;
+  signature?: string;
+};
 
-  const signatureHeader = options.signatureHeader.trim();
-  if (!signatureHeader) return false;
+export type VerifiedWebhookRequest = ParsedWebhookRequest & {
+  verified: boolean;
+};
 
-  const [prefix, sig] = signatureHeader.includes(":")
-    ? (signatureHeader.split(":") as [string, string])
-    : ["sha1", signatureHeader];
+export async function parseTransloaditWebhook(
+  request: Request,
+): Promise<ParsedWebhookRequest> {
+  const formData = await request.formData();
+  const rawPayload = formData.get("transloadit");
+  const signature = formData.get("signature");
 
-  const normalized = prefix.toLowerCase();
-  const algorithm = normalized === "sha384" ? "SHA-384" : "SHA-1";
-
-  if (normalized !== "sha384" && normalized !== "sha1") {
-    return false;
+  if (typeof rawPayload !== "string") {
+    throw transloaditError("webhook", "Missing transloadit payload");
   }
 
-  const expected = await hmacHex(
-    algorithm,
-    options.authSecret,
-    options.rawBody,
-  );
-  return safeCompare(expected, sig);
+  return {
+    payload: JSON.parse(rawPayload),
+    rawBody: rawPayload,
+    signature: typeof signature === "string" ? signature : undefined,
+  };
 }
+
+export async function parseAndVerifyTransloaditWebhook(
+  request: Request,
+  options: {
+    authSecret: string;
+    requireSignature?: boolean;
+  },
+): Promise<VerifiedWebhookRequest> {
+  const parsed = await parseTransloaditWebhook(request);
+  const authSecret = options.authSecret;
+  if (!authSecret) {
+    throw transloaditError(
+      "webhook",
+      "Missing authSecret for webhook verification",
+    );
+  }
+  const verified = await verifyWebhookSignature({
+    rawBody: parsed.rawBody,
+    signatureHeader: parsed.signature,
+    authSecret,
+  });
+
+  if (options.requireSignature ?? true) {
+    if (!verified) {
+      throw transloaditError(
+        "webhook",
+        "Invalid Transloadit webhook signature",
+      );
+    }
+  }
+
+  return { ...parsed, verified };
+}
+
+export async function buildWebhookQueueArgs(
+  request: Request,
+  options: {
+    authSecret: string;
+    requireSignature?: boolean;
+  },
+): Promise<ParsedWebhookRequest> {
+  if (options.requireSignature === false) {
+    return parseTransloaditWebhook(request);
+  }
+
+  const parsed = await parseAndVerifyTransloaditWebhook(request, options);
+  return {
+    payload: parsed.payload,
+    rawBody: parsed.rawBody,
+    signature: parsed.signature,
+  };
+}
+
+export type WebhookActionArgs = {
+  payload: unknown;
+  rawBody?: string;
+  signature?: string;
+};
+
+export async function handleWebhookRequest(
+  request: Request,
+  options: {
+    mode?: "queue" | "sync";
+    runAction: (args: WebhookActionArgs) => Promise<unknown>;
+    requireSignature?: boolean;
+    authSecret?: string;
+    responseStatus?: number;
+  },
+): Promise<Response> {
+  const mode = options.mode ?? "queue";
+  const requireSignature = options.requireSignature ?? false;
+
+  const parsed = requireSignature
+    ? await parseAndVerifyTransloaditWebhook(request, {
+        authSecret: options.authSecret ?? "",
+        requireSignature: true,
+      })
+    : await parseTransloaditWebhook(request);
+
+  await options.runAction({
+    payload: parsed.payload,
+    rawBody: parsed.rawBody,
+    signature: parsed.signature,
+  });
+
+  const status = options.responseStatus ?? (mode === "sync" ? 204 : 202);
+  return new Response(null, { status });
+}
+
+export { verifyWebhookSignature };
+
+export type AssemblyResult = AssemblyStatusResults[string][number];
 
 export type AssemblyResultRecord = {
   stepName: string;
-  result: Record<string, unknown>;
+  result: AssemblyResult;
 };
 
 export function flattenResults(
-  results: Record<string, Array<Record<string, unknown>>> | undefined,
+  results: AssemblyStatusResults | undefined,
 ): AssemblyResultRecord[] {
   if (!results) return [];
   const output: AssemblyResultRecord[] = [];

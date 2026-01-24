@@ -1,7 +1,72 @@
+import type { AssemblyStatus } from "@transloadit/zod/v3/assemblyStatus";
+import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
 import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
 import { type Infer, v } from "convex/values";
-import type { ComponentApi } from "../component/_generated/component.js";
-import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.js";
+import type { ComponentApi } from "../component/_generated/component.ts";
+import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.ts";
+
+export {
+  assemblyStatusErrCodeSchema,
+  assemblyStatusOkCodeSchema,
+  assemblyStatusResultsSchema,
+  assemblyStatusSchema,
+  isAssemblyBusy,
+  isAssemblyBusyStatus,
+  isAssemblyErrorStatus,
+  isAssemblyOkStatus,
+  isAssemblySysError,
+  isAssemblyTerminal,
+  isAssemblyTerminalError,
+  isAssemblyTerminalOk,
+  isAssemblyTerminalOkStatus,
+} from "@transloadit/zod/v3/assemblyStatus";
+export type {
+  ParsedWebhookRequest,
+  VerifiedWebhookRequest,
+  WebhookActionArgs,
+} from "../component/apiUtils.ts";
+export {
+  buildWebhookQueueArgs,
+  handleWebhookRequest,
+  parseAndVerifyTransloaditWebhook,
+  parseTransloaditWebhook,
+} from "../component/apiUtils.ts";
+export type {
+  NormalizedAssemblyUrls,
+  TransloaditAssembly,
+} from "../shared/assemblyUrls.ts";
+export {
+  ASSEMBLY_STATUS_COMPLETED,
+  ASSEMBLY_STATUS_UPLOADING,
+  getAssemblyStage,
+  isAssemblyCompletedStatus,
+  isAssemblyUploadingStatus,
+  normalizeAssemblyUploadUrls,
+  parseAssemblyFields,
+  parseAssemblyResults,
+  parseAssemblyStatus,
+  parseAssemblyUrls,
+} from "../shared/assemblyUrls.ts";
+export { pollAssembly } from "../shared/pollAssembly.ts";
+export type {
+  ImageResizeResult,
+  ResultByRobot,
+  ResultForRobot,
+  StoreResult,
+  TransloaditResult,
+  VideoEncodeResult,
+  VideoThumbsResult,
+} from "../shared/resultTypes.ts";
+export {
+  getResultOriginalKey,
+  getResultUrl,
+} from "../shared/resultUtils.ts";
+export type {
+  TusMetadataOptions,
+  TusUploadConfig,
+} from "../shared/tusUpload.ts";
+export { buildTusUploadConfig } from "../shared/tusUpload.ts";
+export type { AssemblyStatus, AssemblyInstructionsInput };
 
 export interface TransloaditConfig {
   authKey: string;
@@ -30,9 +95,9 @@ export const vAssemblyResponse = v.object({
   templateId: v.optional(v.string()),
   notifyUrl: v.optional(v.string()),
   numExpectedUploadFiles: v.optional(v.number()),
-  fields: v.optional(v.any()),
-  uploads: v.optional(v.any()),
-  results: v.optional(v.any()),
+  fields: v.optional(v.record(v.string(), v.any())),
+  uploads: v.optional(v.array(v.any())),
+  results: v.optional(v.record(v.string(), v.array(v.any()))),
   error: v.optional(v.any()),
   raw: v.optional(v.any()),
   createdAt: v.number(),
@@ -60,15 +125,18 @@ export type AssemblyResultResponse = Infer<typeof vAssemblyResultResponse>;
 
 export const vCreateAssemblyArgs = v.object({
   templateId: v.optional(v.string()),
-  steps: v.optional(v.any()),
-  fields: v.optional(v.any()),
+  steps: v.optional(v.record(v.string(), v.any())),
+  fields: v.optional(v.record(v.string(), v.any())),
   notifyUrl: v.optional(v.string()),
   numExpectedUploadFiles: v.optional(v.number()),
   expires: v.optional(v.string()),
-  additionalParams: v.optional(v.any()),
+  additionalParams: v.optional(v.record(v.string(), v.any())),
   userId: v.optional(v.string()),
 });
 
+/**
+ * @deprecated Prefer `makeTransloaditAPI` or `Transloadit` for new code.
+ */
 export class TransloaditClient {
   declare component: TransloaditComponent;
   declare config: TransloaditConfig;
@@ -79,12 +147,8 @@ export class TransloaditClient {
   ) {
     this.component = component;
     this.config = {
-      authKey:
-        config?.authKey ??
-        requireEnv(["TRANSLOADIT_AUTH_KEY", "TRANSLOADIT_KEY"]),
-      authSecret:
-        config?.authSecret ??
-        requireEnv(["TRANSLOADIT_AUTH_SECRET", "TRANSLOADIT_SECRET"]),
+      authKey: config?.authKey ?? requireEnv(["TRANSLOADIT_KEY"]),
+      authSecret: config?.authSecret ?? requireEnv(["TRANSLOADIT_SECRET"]),
     };
   }
 
@@ -102,16 +166,6 @@ export class TransloaditClient {
     });
   }
 
-  async generateUploadParams(
-    ctx: RunActionCtx,
-    args: Infer<typeof vCreateAssemblyArgs>,
-  ) {
-    return ctx.runAction(this.component.lib.generateUploadParams, {
-      ...args,
-      config: this.config,
-    });
-  }
-
   async handleWebhook(
     ctx: RunActionCtx,
     args: {
@@ -124,6 +178,28 @@ export class TransloaditClient {
     return ctx.runAction(this.component.lib.handleWebhook, {
       ...args,
       config: { authSecret: this.config.authSecret },
+    });
+  }
+
+  async queueWebhook(
+    ctx: RunActionCtx,
+    args: {
+      payload: unknown;
+      rawBody?: string;
+      signature?: string;
+      verifySignature?: boolean;
+    },
+  ) {
+    return ctx.runAction(this.component.lib.queueWebhook, {
+      ...args,
+      config: { authSecret: this.config.authSecret },
+    });
+  }
+
+  async refreshAssembly(ctx: RunActionCtx, assemblyId: string) {
+    return ctx.runAction(this.component.lib.refreshAssembly, {
+      assemblyId,
+      config: this.config,
     });
   }
 
@@ -157,17 +233,25 @@ export class TransloaditClient {
   }
 }
 
+export class Transloadit extends TransloaditClient {}
+
+/**
+ * @deprecated Prefer `new Transloadit(...)` or `makeTransloaditAPI(...)`.
+ */
+export function createTransloadit(
+  component: TransloaditComponent,
+  config?: Partial<TransloaditConfig>,
+) {
+  return new Transloadit(component, config);
+}
+
 export function makeTransloaditAPI(
   component: TransloaditComponent,
   config?: Partial<TransloaditConfig>,
 ) {
   const resolvedConfig: TransloaditConfig = {
-    authKey:
-      config?.authKey ??
-      requireEnv(["TRANSLOADIT_AUTH_KEY", "TRANSLOADIT_KEY"]),
-    authSecret:
-      config?.authSecret ??
-      requireEnv(["TRANSLOADIT_AUTH_SECRET", "TRANSLOADIT_SECRET"]),
+    authKey: config?.authKey ?? requireEnv(["TRANSLOADIT_KEY"]),
+    authSecret: config?.authSecret ?? requireEnv(["TRANSLOADIT_SECRET"]),
   };
 
   return {
@@ -184,35 +268,54 @@ export function makeTransloaditAPI(
         });
       },
     }),
-    generateUploadParams: actionGeneric({
-      args: vCreateAssemblyArgs,
-      returns: v.object({
-        params: v.string(),
-        signature: v.string(),
-        url: v.string(),
-      }),
-      handler: async (ctx, args) => {
-        return ctx.runAction(component.lib.generateUploadParams, {
-          ...args,
-          config: resolvedConfig,
-        });
-      },
-    }),
     handleWebhook: actionGeneric({
       args: {
         payload: v.any(),
         rawBody: v.optional(v.string()),
         signature: v.optional(v.string()),
-        verifySignature: v.optional(v.boolean()),
       },
       returns: v.object({
         assemblyId: v.string(),
         resultCount: v.number(),
+        ok: v.optional(v.string()),
+        status: v.optional(v.string()),
       }),
       handler: async (ctx, args) => {
         return ctx.runAction(component.lib.handleWebhook, {
           ...args,
           config: { authSecret: resolvedConfig.authSecret },
+        });
+      },
+    }),
+    queueWebhook: actionGeneric({
+      args: {
+        payload: v.any(),
+        rawBody: v.optional(v.string()),
+        signature: v.optional(v.string()),
+      },
+      returns: v.object({
+        assemblyId: v.string(),
+        queued: v.boolean(),
+      }),
+      handler: async (ctx, args) => {
+        return ctx.runAction(component.lib.queueWebhook, {
+          ...args,
+          config: { authSecret: resolvedConfig.authSecret },
+        });
+      },
+    }),
+    refreshAssembly: actionGeneric({
+      args: { assemblyId: v.string() },
+      returns: v.object({
+        assemblyId: v.string(),
+        resultCount: v.number(),
+        ok: v.optional(v.string()),
+        status: v.optional(v.string()),
+      }),
+      handler: async (ctx, args) => {
+        return ctx.runAction(component.lib.refreshAssembly, {
+          ...args,
+          config: resolvedConfig,
         });
       },
     }),
@@ -249,7 +352,7 @@ export function makeTransloaditAPI(
       args: {
         assemblyId: v.string(),
         userId: v.optional(v.string()),
-        fields: v.optional(v.any()),
+        fields: v.optional(v.record(v.string(), v.any())),
       },
       returns: v.union(vAssemblyResponse, v.null()),
       handler: async (ctx, args) => {
