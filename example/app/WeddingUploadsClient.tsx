@@ -686,7 +686,7 @@ const WeddingLayout = ({
             width="100%"
             proudlyDisplayPoweredByUppy={false}
             hideUploadButton
-            note={`Add photos/videos. Gallery shows ${retentionLabel} to limit spam.`}
+            note={`Add photos/videos. Gallery shows ${retentionLabel} to limit spam. Preview deploys reset data.`}
           />
         </div>
         <div className="cta">
@@ -743,7 +743,8 @@ const WeddingLayout = ({
         <p className="status">
           Gallery shows the most recent uploads (retention {retentionLabel},
           configured via NEXT_PUBLIC_GALLERY_RETENTION_HOURS). Files are
-          persisted in R2 via Transloadit’s Cloudflare store robot. Built with{" "}
+          persisted in R2 via Transloadit’s Cloudflare store robot. Preview
+          deployments reset data. Built with{" "}
           <a href="https://github.com/transloadit/convex">
             @transloadit/convex
           </a>{" "}

@@ -199,6 +199,9 @@ export R2_PUBLIC_URL=...   # optional public URL prefix
 ```
 
 The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default: 24) to discourage spam/abuse.
+Preview deployments reset data on each deploy. The demo is built with
+[`@transloadit/convex`](https://github.com/transloadit/convex) and
+[Transloadit](https://transloadit.com/).
 If you set `WEDDING_UPLOAD_CODE` on the Convex deployment, guests must enter the passcode before uploads can start.
 
 ### Deploy the example (Vercel + stable Convex)
