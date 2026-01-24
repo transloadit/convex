@@ -221,6 +221,13 @@ export class TransloaditClient {
     return ctx.runQuery(this.component.lib.listResults, args);
   }
 
+  async listAlbumResults(
+    ctx: RunQueryCtx,
+    args: { album: string; limit?: number },
+  ) {
+    return ctx.runQuery(this.component.lib.listAlbumResults, args);
+  }
+
   async storeAssemblyMetadata(
     ctx: RunMutationCtx,
     args: { assemblyId: string; userId?: string; fields?: unknown },
@@ -346,6 +353,16 @@ export function makeTransloaditAPI(
       returns: v.array(vAssemblyResultResponse),
       handler: async (ctx, args) => {
         return ctx.runQuery(component.lib.listResults, args);
+      },
+    }),
+    listAlbumResults: queryGeneric({
+      args: {
+        album: v.string(),
+        limit: v.optional(v.number()),
+      },
+      returns: v.array(vAssemblyResultResponse),
+      handler: async (ctx, args) => {
+        return ctx.runQuery(component.lib.listAlbumResults, args);
       },
     }),
     storeAssemblyMetadata: mutationGeneric({

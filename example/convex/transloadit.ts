@@ -8,6 +8,7 @@ export const {
   refreshAssembly,
   getAssemblyStatus,
   listAssemblies,
+  listAlbumResults,
   listResults,
   storeAssemblyMetadata,
 } = makeTransloaditAPI(components.transloadit);

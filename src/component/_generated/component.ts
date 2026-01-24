@@ -142,6 +142,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       Array<any>,
       Name
     >;
+    listAlbumResults: FunctionReference<
+      "query",
+      "internal",
+      { album: string; limit?: number },
+      Array<any>,
+      Name
+    >;
     storeAssemblyMetadata: FunctionReference<
       "mutation",
       "internal",

@@ -50,6 +50,7 @@ type UploadStage =
   | "complete"
   | "error";
 
+const galleryAlbum = "wedding-gallery";
 const retentionHours = Number.parseFloat(
   process.env.NEXT_PUBLIC_GALLERY_RETENTION_HOURS ?? "24",
 );
@@ -228,6 +229,11 @@ const listResultsRef = makeFunctionReference<
   { assemblyId: string; stepName?: string; limit?: number },
   AssemblyResultResponse[]
 >("transloadit:listResults");
+const listAlbumResultsRef = makeFunctionReference<
+  "query",
+  { album: string; limit?: number },
+  AssemblyResultResponse[]
+>("transloadit:listAlbumResults");
 const getAssemblyStatusRef = makeFunctionReference<
   "query",
   { assemblyId: string },
@@ -489,6 +495,10 @@ const CloudWeddingUploads = () => {
       setStage("uploading");
     },
   });
+  const albumResults = useQuery(listAlbumResultsRef, {
+    album: galleryAlbum,
+    limit: 80,
+  });
   const assemblies = useQuery(listAssembliesRef, {
     status: ASSEMBLY_STATUS_COMPLETED,
     limit: 12,
@@ -522,6 +532,9 @@ const CloudWeddingUploads = () => {
   }, [uploadError]);
 
   const statusOk = typeof status?.ok === "string" ? status.ok : "pending";
+  const galleryResults = filterResults(
+    (albumResults ?? results ?? []) as AssemblyResultResponse[],
+  );
 
   const startUpload = async () => {
     setError(null);
@@ -579,7 +592,7 @@ const CloudWeddingUploads = () => {
         isLoading ? "loading" : isAuthenticated ? "authenticated" : "guest"
       }
     >
-      <Gallery results={(results ?? []) as AssemblyResultResponse[]} />
+      <Gallery results={galleryResults} />
     </WeddingLayout>
   );
 };
@@ -728,9 +741,13 @@ const WeddingLayout = ({
         </p>
         {children}
         <p className="status">
-          Gallery shows the most recent uploads (set
-          NEXT_PUBLIC_GALLERY_RETENTION_HOURS). Files are persisted in R2 via
-          Transloadit’s Cloudflare store robot.
+          Gallery shows the most recent uploads (retention {retentionLabel},
+          configured via NEXT_PUBLIC_GALLERY_RETENTION_HOURS). Files are
+          persisted in R2 via Transloadit’s Cloudflare store robot. Built with{" "}
+          <a href="https://github.com/transloadit/convex">
+            @transloadit/convex
+          </a>{" "}
+          and <a href="https://transloadit.com/">Transloadit</a>.
         </p>
       </section>
       {toasts && toasts.length > 0 && (

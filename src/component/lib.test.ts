@@ -60,6 +60,49 @@ describe("Transloadit component lib", () => {
     expect(results[0]?.stepName).toBe("resized");
   });
 
+  test("listAlbumResults returns album-scoped results", async () => {
+    const t = convexTest(schema, modules);
+
+    const payload = {
+      assembly_id: "asm_album",
+      ok: "ASSEMBLY_COMPLETED",
+      fields: {
+        album: "wedding-gallery",
+        userId: "user_123",
+      },
+      results: {
+        resized: [
+          {
+            id: "file_album",
+            ssl_url: "https://example.com/album.jpg",
+            name: "album.jpg",
+            size: 100,
+            mime: "image/jpeg",
+          },
+        ],
+      },
+    };
+
+    const rawBody = JSON.stringify(payload);
+    const signature = createHmac("sha1", "test-secret")
+      .update(rawBody)
+      .digest("hex");
+
+    await t.action(api.lib.handleWebhook, {
+      payload,
+      rawBody,
+      signature: `sha1:${signature}`,
+    });
+
+    const results = await t.query(api.lib.listAlbumResults, {
+      album: "wedding-gallery",
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.album).toBe("wedding-gallery");
+    expect(results[0]?.userId).toBe("user_123");
+  });
+
   test("handleWebhook stores url when ssl_url missing", async () => {
     const t = convexTest(schema, modules);
 

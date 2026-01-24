@@ -59,6 +59,12 @@ const resolveAssemblyId = (payload: AssemblyStatus): string => {
   return "";
 };
 
+const getFieldString = (fields: unknown, key: string): string | undefined => {
+  if (!fields || typeof fields !== "object") return undefined;
+  const value = (fields as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : undefined;
+};
+
 const parseAssemblyPayload = (payload: unknown): AssemblyStatus => {
   const parsed = parseAssemblyStatus(payload);
   if (!parsed) {
@@ -117,10 +123,15 @@ const applyAssemblyStatus = async (
       typeof payload.template_id === "string" ? payload.template_id : undefined,
     notifyUrl:
       typeof payload.notify_url === "string" ? payload.notify_url : undefined,
+    fields: payload.fields,
     uploads: payload.uploads,
     results: payload.results,
     error: payload.error,
     raw: payload,
+    userId:
+      typeof payload.user_id === "string"
+        ? payload.user_id
+        : getFieldString(payload.fields, "userId"),
   });
 
   await ctx.runMutation(internal.lib.replaceResultsForAssembly, {
@@ -162,6 +173,8 @@ export const vAssemblyResult = v.object({
   _id: v.id("results"),
   _creationTime: v.number(),
   assemblyId: v.string(),
+  album: v.optional(v.string()),
+  userId: v.optional(v.string()),
   stepName: v.string(),
   resultId: v.optional(v.string()),
   sslUrl: v.optional(v.string()),
@@ -283,12 +296,24 @@ export const replaceResultsForAssembly = internalMutation({
       await ctx.db.delete(existing._id);
     }
 
+    const assembly = await ctx.db
+      .query("assemblies")
+      .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
+      .unique();
+    const album = getFieldString(assembly?.fields, "album");
+    const userId =
+      typeof assembly?.userId === "string"
+        ? assembly.userId
+        : getFieldString(assembly?.fields, "userId");
+
     const now = Date.now();
     for (const entry of args.results) {
       const raw = entry.result as Record<string, unknown>;
       const sslUrl = getResultUrl(entry.result);
       await ctx.db.insert("results", {
         assemblyId: args.assemblyId,
+        album,
+        userId,
         stepName: entry.stepName,
         resultId: typeof raw.id === "string" ? raw.id : undefined,
         sslUrl,
@@ -640,6 +665,21 @@ export const listResults = query({
     return ctx.db
       .query("results")
       .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
+      .order("desc")
+      .take(args.limit ?? 200);
+  },
+});
+
+export const listAlbumResults = query({
+  args: {
+    album: v.string(),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(vAssemblyResult),
+  handler: async (ctx, args) => {
+    return ctx.db
+      .query("results")
+      .withIndex("by_album", (q) => q.eq("album", args.album))
       .order("desc")
       .take(args.limit ?? 200);
   },
