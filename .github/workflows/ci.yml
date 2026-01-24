@@ -239,6 +239,26 @@ jobs:
       - browser
       - convex-qa
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: yarn install --immutable
+      - name: Deploy demo Convex backend
+        run: node scripts/deploy-demo.ts
+        env:
+          CI_OUTPUT: "1"
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
+          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
+          TRANSLOADIT_R2_CREDENTIALS: ${{ secrets.TRANSLOADIT_R2_CREDENTIALS }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_HOST: ${{ secrets.R2_HOST }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
       - name: Trigger Vercel deploy hook
         run: |
           if [ -z "${VERCEL_DEPLOY_HOOK}" ]; then
