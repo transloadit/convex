@@ -111,6 +111,8 @@ export const vAssemblyResultResponse = v.object({
   _id: v.string(),
   _creationTime: v.number(),
   assemblyId: v.string(),
+  album: v.optional(v.string()),
+  userId: v.optional(v.string()),
   stepName: v.string(),
   resultId: v.optional(v.string()),
   sslUrl: v.optional(v.string()),
