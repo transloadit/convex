@@ -741,9 +741,9 @@ const WeddingLayout = ({
         </p>
         {children}
         <p className="status">
-          Gallery shows the most recent uploads (retention {retentionLabel},
-          configured). Files are persisted in R2 via Transloadit’s Cloudflare
-          store robot. Built with{" "}
+          Gallery shows the most recent uploads (retention {retentionLabel}).
+          Files are persisted in R2 via Transloadit’s Cloudflare store robot.
+          Built with{" "}
           <a href="https://github.com/transloadit/convex">
             @transloadit/convex
           </a>{" "}
