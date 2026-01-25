@@ -371,6 +371,19 @@ export function makeTransloaditAPI(
         return ctx.runQuery(component.lib.listAlbumResults, args);
       },
     }),
+    purgeAlbum: mutationGeneric({
+      args: {
+        album: v.string(),
+        deleteAssemblies: v.optional(v.boolean()),
+      },
+      returns: v.object({
+        deletedResults: v.number(),
+        deletedAssemblies: v.number(),
+      }),
+      handler: async (ctx, args) => {
+        return ctx.runMutation(component.lib.purgeAlbum, args);
+      },
+    }),
     storeAssemblyMetadata: mutationGeneric({
       args: {
         assemblyId: v.string(),

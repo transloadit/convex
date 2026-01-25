@@ -685,6 +685,45 @@ export const listAlbumResults = query({
   },
 });
 
+export const purgeAlbum = mutation({
+  args: {
+    album: v.string(),
+    deleteAssemblies: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    deletedResults: v.number(),
+    deletedAssemblies: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const results = await ctx.db
+      .query("results")
+      .withIndex("by_album", (q) => q.eq("album", args.album))
+      .collect();
+    const assemblyIds = new Set<string>();
+
+    for (const result of results) {
+      assemblyIds.add(result.assemblyId);
+      await ctx.db.delete(result._id);
+    }
+
+    let deletedAssemblies = 0;
+    if (args.deleteAssemblies ?? true) {
+      for (const assemblyId of assemblyIds) {
+        const assembly = await ctx.db
+          .query("assemblies")
+          .withIndex("by_assemblyId", (q) => q.eq("assemblyId", assemblyId))
+          .unique();
+        if (assembly) {
+          await ctx.db.delete(assembly._id);
+          deletedAssemblies += 1;
+        }
+      }
+    }
+
+    return { deletedResults: results.length, deletedAssemblies };
+  },
+});
+
 export const storeAssemblyMetadata = mutation({
   args: {
     assemblyId: v.string(),

@@ -146,7 +146,7 @@ jobs:
         env:
           CI_OUTPUT: "1"
           CONVEX_PREVIEW_NAME: ${{ steps.preview_name.outputs.name }}
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
           TRANSLOADIT_R2_CREDENTIALS: ${{ secrets.TRANSLOADIT_R2_CREDENTIALS }}
@@ -205,8 +205,8 @@ jobs:
           if [ -z "${VERCEL_PROTECTION_BYPASS}" ]; then
             missing+=("VERCEL_PROTECTION_BYPASS")
           fi
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ -z "${CONVEX_DEPLOY_KEY}" ]; then
-            missing+=("CONVEX_DEPLOY_KEY")
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ] && [ -z "${CONVEX_PREVIEW_DEPLOY_KEY}" ]; then
+            missing+=("CONVEX_PREVIEW_DEPLOY_KEY")
           fi
           if [ -z "${E2E_REMOTE_CONVEX_URL}" ]; then
             missing+=("E2E_REMOTE_CONVEX_URL")
@@ -221,6 +221,7 @@ jobs:
           E2E_REMOTE_CONVEX_URL_STABLE: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          CONVEX_PREVIEW_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
       - run: yarn verify:cloud
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
