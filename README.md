@@ -206,7 +206,7 @@ export R2_PUBLIC_URL=...   # optional public URL prefix
 
 The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default: 24) to discourage spam/abuse.
 The demo bucket auto-expires objects after 1 day via an R2 lifecycle rule (reapply with `yarn r2:lifecycle` or override with `R2_RETENTION_DAYS`).
-Preview deployments reset data on each deploy. The demo is built with
+The demo is built with
 [`@transloadit/convex`](https://github.com/transloadit/convex) and
 [Transloadit](https://transloadit.com/).
 If you set `WEDDING_UPLOAD_CODE` on the Convex deployment, guests must enter the passcode before uploads can start.

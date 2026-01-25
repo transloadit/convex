@@ -1,6 +1,4 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { chromium } from "@playwright/test";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
@@ -172,14 +170,14 @@ describeE2e("e2e upload flow", () => {
         }
       }
 
-      const tempDir = await mkdtemp(join(tmpdir(), "transloadit-e2e-"));
-      const imagePath = join(tempDir, "sample.png");
-      const pngBase64 =
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
-      await writeFile(imagePath, Buffer.from(pngBase64, "base64"));
-      const videoPath = join(fixturesDir, "sample.mp4");
+      const imagePath = join(fixturesDir, "wedding-photo-01.png");
+      const imagePathAlt = join(fixturesDir, "wedding-photo-02.png");
+      const videoPath = join(fixturesDir, "wedding-video-01.mp4");
+      if (!existsSync(imagePath) || !existsSync(imagePathAlt)) {
+        throw new Error("Missing wedding photo fixtures for e2e run");
+      }
       if (!existsSync(videoPath)) {
-        throw new Error("Missing sample.mp4 fixture for e2e run");
+        throw new Error("Missing wedding video fixture for e2e run");
       }
 
       await page.waitForSelector('[data-testid="uppy-dashboard"]', {
@@ -190,7 +188,7 @@ describeE2e("e2e upload flow", () => {
         '[data-testid="uppy-dashboard"] input.uppy-Dashboard-input[name="files[]"]:not([webkitdirectory])',
       );
       await fileInput.waitFor({ state: "attached" });
-      await fileInput.setInputFiles([imagePath, videoPath]);
+      await fileInput.setInputFiles([imagePath, imagePathAlt, videoPath]);
       await page.waitForFunction(
         () => document.querySelectorAll(".uppy-Dashboard-Item").length >= 2,
         undefined,

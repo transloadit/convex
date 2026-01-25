@@ -1,0 +1,2 @@
+test/e2e/fixtures/*.png filter=lfs diff=lfs merge=lfs -text
+test/e2e/fixtures/*.mp4 filter=lfs diff=lfs merge=lfs -text
