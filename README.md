@@ -80,7 +80,7 @@ assemblies 1 ──── * results
 ```
 
 - `assemblies`: one row per Transloadit Assembly (status/ok, notify URL, uploads, raw payload, etc).
-- `results`: one row per output file, keyed by `assemblyId` + `stepName`, plus normalized fields (name/size/mime/url) and the raw Transloadit output object.
+- `results`: one row per output file, grouped by `assemblyId` + `stepName` (a step can yield multiple rows). Each row includes normalized fields (name/size/mime/url), optional `resultId`, and the raw Transloadit output object.
 
 Lifecycle:
 1. `createAssembly` inserts the initial `assemblies` row.
