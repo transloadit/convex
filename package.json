@@ -34,6 +34,7 @@
     "verify:browser": "yarn verify:local",
     "verify:convex": "yarn verify:cloud",
     "deploy:cloud": "node scripts/deploy-cloud.ts",
+    "demo:cleanup": "node scripts/cleanup-demo.ts",
     "example:dev": "yarn build && node ./node_modules/next/dist/bin/next dev example",
     "example:build": "yarn build && node ./node_modules/next/dist/bin/next build example",
     "example:start": "yarn build && node ./node_modules/next/dist/bin/next start example",
@@ -95,6 +96,7 @@
   },
   "devDependencies": {
     "@auth/core": "^0.37.0",
+    "@aws-sdk/client-s3": "^3.551.0",
     "@biomejs/biome": "^2.3.11",
     "@changesets/cli": "^2.27.12",
     "@convex-dev/auth": "^0.0.90",

@@ -232,6 +232,30 @@ yarn deploy:cloud
 Once deployed, use the Vercel URL as `E2E_REMOTE_APP_URL` for `yarn verify:cloud`.
 CI expects a stable Vercel production URL in the `E2E_REMOTE_APP_URL` secret on `main`.
 
+### Demo cleanup (Convex + R2)
+
+To remove demo uploads from Convex and Cloudflare R2, run:
+
+```bash
+yarn demo:cleanup
+```
+
+This requires:
+
+- `CONVEX_URL`
+- `CONVEX_ADMIN_KEY`
+- `R2_BUCKET`
+- `R2_ACCESS_KEY_ID`
+- `R2_SECRET_ACCESS_KEY`
+- `R2_ACCOUNT_ID` or `R2_HOST`
+
+Optional:
+
+- `DEMO_ALBUM` (defaults to `wedding-gallery`)
+- `--dry-run` (prints the counts without deleting)
+
+Note: R2 objects are retained until deleted unless you configure a Cloudflare R2 lifecycle rule.
+
 ## Verification and QA
 
 Fast checks:

@@ -10,5 +10,6 @@ export const {
   listAssemblies,
   listAlbumResults,
   listResults,
+  purgeAlbum,
   storeAssemblyMetadata,
 } = makeTransloaditAPI(components.transloadit);

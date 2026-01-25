@@ -149,6 +149,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       Array<any>,
       Name
     >;
+    purgeAlbum: FunctionReference<
+      "mutation",
+      "internal",
+      { album: string; deleteAssemblies?: boolean },
+      { deletedResults: number; deletedAssemblies: number },
+      Name
+    >;
     storeAssemblyMetadata: FunctionReference<
       "mutation",
       "internal",
