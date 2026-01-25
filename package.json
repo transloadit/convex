@@ -1,7 +1,7 @@
 {
   "name": "@transloadit/convex",
   "description": "Transloadit component for Convex",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "type": "module",
   "packageManager": "yarn@4.5.0",
   "repository": {
@@ -43,7 +43,8 @@
     "check": "yarn format && yarn lint && yarn typecheck && yarn test",
     "prepack": "yarn build",
     "template:ensure": "node scripts/ensure-template.ts",
-    "tunnel": "node scripts/start-webhook-tunnel.ts"
+    "tunnel": "node scripts/start-webhook-tunnel.ts",
+    "r2:lifecycle": "node scripts/ensure-r2-lifecycle.ts"
   },
   "files": [
     "dist",
@@ -98,7 +99,7 @@
     "@auth/core": "^0.37.0",
     "@aws-sdk/client-s3": "^3.551.0",
     "@biomejs/biome": "^2.3.11",
-    "@changesets/cli": "^2.27.12",
+    "@changesets/cli": "^2.29.8",
     "@convex-dev/auth": "^0.0.90",
     "@edge-runtime/vm": "^5.0.0",
     "@playwright/test": "^1.57.0",

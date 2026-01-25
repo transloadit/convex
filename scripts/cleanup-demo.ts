@@ -52,6 +52,7 @@ const r2Host =
 if (!r2Host) {
   throw new Error("Missing R2_HOST or R2_ACCOUNT_ID environment variable");
 }
+const r2Endpoint = r2Host.startsWith("http") ? r2Host : `https://${r2Host}`;
 
 const client = new ConvexHttpClient(convexUrl, {
   logger: false,
@@ -72,7 +73,7 @@ const deleteFromConvex = async () => {
 const deleteFromR2 = async () => {
   const s3 = new S3Client({
     region: "auto",
-    endpoint: r2Host,
+    endpoint: r2Endpoint,
     credentials: {
       accessKeyId: r2AccessKeyId,
       secretAccessKey: r2SecretAccessKey,

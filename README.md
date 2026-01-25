@@ -155,6 +155,12 @@ The `example/` app is a wedding gallery where guests upload photos + short video
 Uploads are stored via Transloadit directly into Cloudflare R2.
 The client wiring uses the `useTransloaditUppy` hook from `@transloadit/convex/react` to keep Uppy + polling in sync.
 
+Live demo:
+
+```
+https://convex-demo.transload.it
+```
+
 Quick start (local):
 
 ```bash
@@ -199,6 +205,7 @@ export R2_PUBLIC_URL=...   # optional public URL prefix
 ```
 
 The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default: 24) to discourage spam/abuse.
+The demo bucket auto-expires objects after 1 day via an R2 lifecycle rule (reapply with `yarn r2:lifecycle` or override with `R2_RETENTION_DAYS`).
 Preview deployments reset data on each deploy. The demo is built with
 [`@transloadit/convex`](https://github.com/transloadit/convex) and
 [Transloadit](https://transloadit.com/).
@@ -254,7 +261,7 @@ Optional:
 - `DEMO_ALBUM` (defaults to `wedding-gallery`)
 - `--dry-run` (prints the counts without deleting)
 
-Note: R2 objects are retained until deleted unless you configure a Cloudflare R2 lifecycle rule.
+Note: the demo bucket is configured to auto-expire objects after 1 day via `yarn r2:lifecycle`.
 
 ## Verification and QA
 
@@ -319,7 +326,25 @@ yarn check
 yarn changeset
 ```
 
-4. Push the changeset to `main`. The Changesets workflow will open a “Version Packages” PR.
-5. Merge the “Version Packages” PR. This will publish to npm and tag the release.
+4. Apply the version bump + changelog updates:
+
+```bash
+yarn changeset:version
+git add package.json CHANGELOG.md
+git commit -m "Release vX.Y.Z"
+git push
+```
+
+5. Tag and push the release:
+
+```bash
+git tag vX.Y.Z
+git push origin vX.Y.Z
+```
+
+6. The publish workflow will:
+   - build and pack a `.tgz` artifact,
+   - create a draft GitHub release,
+   - publish the tarball to npm with provenance.
 
 Note: This package is 0.x, so breaking changes are allowed. Use changesets to document them clearly.
