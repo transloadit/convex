@@ -1,5 +1,11 @@
 # @transloadit/convex
 
+## 0.0.6
+
+### Patch Changes
+
+- a8389a0: Docs: clarify results table stores one row per output file per step.
+
 ## 0.0.5
 
 ### Patch Changes
