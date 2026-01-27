@@ -62,6 +62,10 @@ We can reduce duplication without fully replacing Convex validators:
 This aligns with Convex guidance: Zod is great for args; use `zodToConvex` for DB schemas only
 when the tradeoffs are acceptable.
 
+**Decision for now:** keep a single Convex schema source in `src/shared/schemas.ts`. We can revisit
+convex-helpers later for *function args only* if we want richer validation, but it does not replace
+DB schemas and adds another dependency.
+
 ## Proposed direction (phased)
 
 ### Phase 0: Remove custom hooks + expose the official path (short)
