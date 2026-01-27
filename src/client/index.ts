@@ -1,9 +1,30 @@
 import type { AssemblyStatus } from "@transloadit/zod/v3/assemblyStatus";
 import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
 import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
-import { type Infer, v } from "convex/values";
+import { v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.ts";
+import {
+  type AssemblyResponse,
+  type AssemblyResultResponse,
+  type CreateAssemblyArgs,
+  vAssemblyIdArgs,
+  vAssemblyResponse,
+  vAssemblyResultResponse,
+  vCreateAssemblyArgs,
+  vCreateAssemblyReturn,
+  vListAlbumResultsArgs,
+  vListAssembliesArgs,
+  vListResultsArgs,
+  vPurgeAlbumArgs,
+  vPurgeAlbumResponse,
+  vQueueWebhookResponse,
+  vStoreAssemblyMetadataArgs,
+  vWebhookActionArgs,
+  vWebhookResponse,
+} from "../shared/schemas.ts";
 import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.ts";
+
+export { vAssemblyResponse, vAssemblyResultResponse, vCreateAssemblyArgs };
 
 export {
   assemblyStatusErrCodeSchema,
@@ -20,11 +41,6 @@ export {
   isAssemblyTerminalOk,
   isAssemblyTerminalOkStatus,
 } from "@transloadit/zod/v3/assemblyStatus";
-export type {
-  ParsedWebhookRequest,
-  VerifiedWebhookRequest,
-  WebhookActionArgs,
-} from "../component/apiUtils.ts";
 export {
   buildWebhookQueueArgs,
   handleWebhookRequest,
@@ -62,6 +78,11 @@ export {
   getResultUrl,
 } from "../shared/resultUtils.ts";
 export type {
+  ParsedWebhookRequest,
+  VerifiedWebhookRequest,
+  WebhookActionArgs,
+} from "../shared/schemas.ts";
+export type {
   TusMetadataOptions,
   TusUploadConfig,
 } from "../shared/tusUpload.ts";
@@ -85,56 +106,7 @@ function requireEnv(names: string[]): string {
   throw new Error(`Missing ${names.join(" or ")} environment variable`);
 }
 
-export const vAssemblyResponse = v.object({
-  _id: v.string(),
-  _creationTime: v.number(),
-  assemblyId: v.string(),
-  status: v.optional(v.string()),
-  ok: v.optional(v.string()),
-  message: v.optional(v.string()),
-  templateId: v.optional(v.string()),
-  notifyUrl: v.optional(v.string()),
-  numExpectedUploadFiles: v.optional(v.number()),
-  fields: v.optional(v.record(v.string(), v.any())),
-  uploads: v.optional(v.array(v.any())),
-  results: v.optional(v.record(v.string(), v.array(v.any()))),
-  error: v.optional(v.any()),
-  raw: v.optional(v.any()),
-  createdAt: v.number(),
-  updatedAt: v.number(),
-  userId: v.optional(v.string()),
-});
-
-export type AssemblyResponse = Infer<typeof vAssemblyResponse>;
-
-export const vAssemblyResultResponse = v.object({
-  _id: v.string(),
-  _creationTime: v.number(),
-  assemblyId: v.string(),
-  album: v.optional(v.string()),
-  userId: v.optional(v.string()),
-  stepName: v.string(),
-  resultId: v.optional(v.string()),
-  sslUrl: v.optional(v.string()),
-  name: v.optional(v.string()),
-  size: v.optional(v.number()),
-  mime: v.optional(v.string()),
-  raw: v.any(),
-  createdAt: v.number(),
-});
-
-export type AssemblyResultResponse = Infer<typeof vAssemblyResultResponse>;
-
-export const vCreateAssemblyArgs = v.object({
-  templateId: v.optional(v.string()),
-  steps: v.optional(v.record(v.string(), v.any())),
-  fields: v.optional(v.record(v.string(), v.any())),
-  notifyUrl: v.optional(v.string()),
-  numExpectedUploadFiles: v.optional(v.number()),
-  expires: v.optional(v.string()),
-  additionalParams: v.optional(v.record(v.string(), v.any())),
-  userId: v.optional(v.string()),
-});
+export type { AssemblyResponse, AssemblyResultResponse, CreateAssemblyArgs };
 
 /**
  * @deprecated Prefer `makeTransloaditAPI` or `Transloadit` for new code.
@@ -158,10 +130,7 @@ export class TransloaditClient {
     return new TransloaditClient(component, config);
   }
 
-  async createAssembly(
-    ctx: RunActionCtx,
-    args: Infer<typeof vCreateAssemblyArgs>,
-  ) {
+  async createAssembly(ctx: RunActionCtx, args: CreateAssemblyArgs) {
     return ctx.runAction(this.component.lib.createAssembly, {
       ...args,
       config: this.config,
@@ -266,10 +235,7 @@ export function makeTransloaditAPI(
   return {
     createAssembly: actionGeneric({
       args: vCreateAssemblyArgs,
-      returns: v.object({
-        assemblyId: v.string(),
-        data: v.any(),
-      }),
+      returns: vCreateAssemblyReturn,
       handler: async (ctx, args) => {
         const resolvedConfig = resolveConfig();
         return ctx.runAction(component.lib.createAssembly, {
@@ -279,17 +245,8 @@ export function makeTransloaditAPI(
       },
     }),
     handleWebhook: actionGeneric({
-      args: {
-        payload: v.any(),
-        rawBody: v.optional(v.string()),
-        signature: v.optional(v.string()),
-      },
-      returns: v.object({
-        assemblyId: v.string(),
-        resultCount: v.number(),
-        ok: v.optional(v.string()),
-        status: v.optional(v.string()),
-      }),
+      args: vWebhookActionArgs,
+      returns: vWebhookResponse,
       handler: async (ctx, args) => {
         const resolvedConfig = resolveConfig();
         return ctx.runAction(component.lib.handleWebhook, {
@@ -299,15 +256,8 @@ export function makeTransloaditAPI(
       },
     }),
     queueWebhook: actionGeneric({
-      args: {
-        payload: v.any(),
-        rawBody: v.optional(v.string()),
-        signature: v.optional(v.string()),
-      },
-      returns: v.object({
-        assemblyId: v.string(),
-        queued: v.boolean(),
-      }),
+      args: vWebhookActionArgs,
+      returns: vQueueWebhookResponse,
       handler: async (ctx, args) => {
         const resolvedConfig = resolveConfig();
         return ctx.runAction(component.lib.queueWebhook, {
@@ -317,13 +267,8 @@ export function makeTransloaditAPI(
       },
     }),
     refreshAssembly: actionGeneric({
-      args: { assemblyId: v.string() },
-      returns: v.object({
-        assemblyId: v.string(),
-        resultCount: v.number(),
-        ok: v.optional(v.string()),
-        status: v.optional(v.string()),
-      }),
+      args: vAssemblyIdArgs,
+      returns: vWebhookResponse,
       handler: async (ctx, args) => {
         const resolvedConfig = resolveConfig();
         return ctx.runAction(component.lib.refreshAssembly, {
@@ -333,63 +278,42 @@ export function makeTransloaditAPI(
       },
     }),
     getAssemblyStatus: queryGeneric({
-      args: { assemblyId: v.string() },
+      args: vAssemblyIdArgs,
       returns: v.union(vAssemblyResponse, v.null()),
       handler: async (ctx, args) => {
         return ctx.runQuery(component.lib.getAssemblyStatus, args);
       },
     }),
     listAssemblies: queryGeneric({
-      args: {
-        status: v.optional(v.string()),
-        userId: v.optional(v.string()),
-        limit: v.optional(v.number()),
-      },
+      args: vListAssembliesArgs,
       returns: v.array(vAssemblyResponse),
       handler: async (ctx, args) => {
         return ctx.runQuery(component.lib.listAssemblies, args);
       },
     }),
     listResults: queryGeneric({
-      args: {
-        assemblyId: v.string(),
-        stepName: v.optional(v.string()),
-        limit: v.optional(v.number()),
-      },
+      args: vListResultsArgs,
       returns: v.array(vAssemblyResultResponse),
       handler: async (ctx, args) => {
         return ctx.runQuery(component.lib.listResults, args);
       },
     }),
     listAlbumResults: queryGeneric({
-      args: {
-        album: v.string(),
-        limit: v.optional(v.number()),
-      },
+      args: vListAlbumResultsArgs,
       returns: v.array(vAssemblyResultResponse),
       handler: async (ctx, args) => {
         return ctx.runQuery(component.lib.listAlbumResults, args);
       },
     }),
     purgeAlbum: mutationGeneric({
-      args: {
-        album: v.string(),
-        deleteAssemblies: v.optional(v.boolean()),
-      },
-      returns: v.object({
-        deletedResults: v.number(),
-        deletedAssemblies: v.number(),
-      }),
+      args: vPurgeAlbumArgs,
+      returns: vPurgeAlbumResponse,
       handler: async (ctx, args) => {
         return ctx.runMutation(component.lib.purgeAlbum, args);
       },
     }),
     storeAssemblyMetadata: mutationGeneric({
-      args: {
-        assemblyId: v.string(),
-        userId: v.optional(v.string()),
-        fields: v.optional(v.record(v.string(), v.any())),
-      },
+      args: vStoreAssemblyMetadataArgs,
       returns: v.union(vAssemblyResponse, v.null()),
       handler: async (ctx, args) => {
         return ctx.runMutation(component.lib.storeAssemblyMetadata, args);

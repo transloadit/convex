@@ -1,28 +1,13 @@
 import { signParams, verifyWebhookSignature } from "@transloadit/utils";
 import type { AssemblyStatusResults } from "@transloadit/zod/v3/assemblyStatus";
-import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
 import { transloaditError } from "../shared/errors.ts";
-
-export interface TransloaditAuthConfig {
-  authKey: string;
-  authSecret: string;
-}
-
-export interface BuildParamsOptions {
-  authKey: string;
-  templateId?: string;
-  steps?: AssemblyInstructionsInput["steps"];
-  fields?: AssemblyInstructionsInput["fields"];
-  notifyUrl?: string;
-  numExpectedUploadFiles?: number;
-  expires?: string;
-  additionalParams?: Record<string, unknown>;
-}
-
-export interface BuildParamsResult {
-  params: Record<string, unknown>;
-  paramsString: string;
-}
+import type {
+  BuildParamsOptions,
+  BuildParamsResult,
+  ParsedWebhookRequest,
+  VerifiedWebhookRequest,
+  WebhookActionArgs,
+} from "../shared/schemas.ts";
 
 export function buildTransloaditParams(
   options: BuildParamsOptions,
@@ -73,16 +58,6 @@ export async function signTransloaditParams(
 ): Promise<string> {
   return signParams(paramsString, authSecret, "sha384");
 }
-
-export type ParsedWebhookRequest = {
-  payload: unknown;
-  rawBody: string;
-  signature?: string;
-};
-
-export type VerifiedWebhookRequest = ParsedWebhookRequest & {
-  verified: boolean;
-};
 
 export async function parseTransloaditWebhook(
   request: Request,
@@ -153,12 +128,6 @@ export async function buildWebhookQueueArgs(
     signature: parsed.signature,
   };
 }
-
-export type WebhookActionArgs = {
-  payload: unknown;
-  rawBody?: string;
-  signature?: string;
-};
 
 export async function handleWebhookRequest(
   request: Request,
