@@ -60,6 +60,23 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       { assemblyId: string; data: any },
       Name
     >;
+    createAssemblyOptions: FunctionReference<
+      "action",
+      "internal",
+      {
+        config: { authKey: string; authSecret: string };
+        templateId?: string;
+        steps?: any;
+        fields?: any;
+        notifyUrl?: string;
+        numExpectedUploadFiles?: number;
+        expires?: string;
+        additionalParams?: any;
+        userId?: string;
+      },
+      { params: string; signature: string; fields?: any },
+      Name
+    >;
     handleWebhook: FunctionReference<
       "action",
       "internal",

@@ -5,6 +5,7 @@ export const weddingStepNames = {
 };
 
 export type {
+  AssemblyOptions,
   AssemblyResponse,
   AssemblyResultResponse,
   AssemblyStatus,
@@ -13,7 +14,6 @@ export type {
 export {
   ASSEMBLY_STATUS_COMPLETED,
   ASSEMBLY_STATUS_UPLOADING,
-  buildTusUploadConfig,
   getAssemblyStage,
   getResultOriginalKey,
   getResultUrl,
@@ -27,10 +27,3 @@ export {
   parseAssemblyStatus,
   pollAssembly,
 } from "@transloadit/convex";
-
-export type { UppyUploadResult } from "@transloadit/convex/react";
-export {
-  uploadWithAssembly,
-  useAssemblyPoller,
-  useTransloaditUppy,
-} from "@transloadit/convex/react";

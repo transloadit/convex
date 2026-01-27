@@ -113,6 +113,10 @@ export const startExampleApp = async ({
     TRANSLOADIT_NOTIFY_URL: notifyUrl,
     ...env,
   };
+  if (env.E2E_MODE === "local") {
+    nextEnv.NEXT_PUBLIC_CONVEX_URL = "";
+    nextEnv.CONVEX_URL = "";
+  }
 
   await runCommand("yarn", ["build"], nextEnv, "Package build");
 

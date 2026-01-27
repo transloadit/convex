@@ -58,11 +58,6 @@
       "types": "./dist/client/index.d.ts",
       "default": "./dist/client/index.js"
     },
-    "./react": {
-      "@convex-dev/component-source": "./src/react/index.tsx",
-      "types": "./dist/react/index.d.ts",
-      "default": "./dist/react/index.js"
-    },
     "./lib": {
       "@convex-dev/component-source": "./src/component/lib.ts",
       "types": "./dist/component/lib.d.ts",
@@ -83,18 +78,11 @@
     }
   },
   "peerDependencies": {
-    "convex": "^1.24.8",
-    "react": "^18.3.1 || ^19.0.0"
-  },
-  "peerDependenciesMeta": {
-    "react": {
-      "optional": true
-    }
+    "convex": "^1.24.8"
   },
   "dependencies": {
     "@transloadit/utils": "^4.1.9",
-    "@transloadit/zod": "^4.1.9",
-    "tus-js-client": "^4.3.1"
+    "@transloadit/zod": "^4.1.9"
   },
   "devDependencies": {
     "@auth/core": "^0.37.0",
@@ -113,7 +101,7 @@
     "@uppy/core": "^5.2.0",
     "@uppy/dashboard": "^5.1.0",
     "@uppy/react": "^5.1.1",
-    "@uppy/tus": "^5.1.0",
+    "@uppy/transloadit": "^5.4.0",
     "convex": "^1.31.4",
     "convex-test": "^0.0.41",
     "dotenv": "^17.2.3",

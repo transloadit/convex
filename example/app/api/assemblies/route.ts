@@ -11,7 +11,7 @@ export async function POST(request: Request) {
     ? Math.max(1, payload.fileCount ?? 1)
     : 1;
 
-  const response = await runAction("createWeddingAssembly", {
+  const response = await runAction("createWeddingAssemblyOptions", {
     fileCount,
     guestName: payload.guestName ?? "Guest",
     uploadCode: payload.uploadCode,

@@ -1,14 +1,14 @@
 # Transloadit Convex Component
 
-A Convex component for creating Transloadit Assemblies, handling resumable uploads with tus, and persisting status/results in Convex.
+A Convex component for creating Transloadit Assemblies, signing Uppy uploads, and persisting status/results in Convex.
 
 ## Features
 
 - Create Assemblies with Templates or inline Steps.
-- Resumable uploads via tus (client-side hook; form/XHR uploads are intentionally not supported).
+- Signed upload options for Uppy + `@uppy/transloadit`.
 - Webhook ingestion with signature verification (direct or queued).
 - Persist Assembly status + results in Convex tables.
-- Typed API wrappers and React hooks.
+- Typed API wrappers and helpers.
 
 ## Requirements
 
@@ -45,8 +45,8 @@ npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
 
 ## Golden path (secure by default)
 
-1. **Server-only create**: a Convex action creates the Assembly (auth secret stays server-side).
-2. **Client upload**: use `useTransloaditUppy` for resumable uploads.
+1. **Server-only create**: a Convex action creates signed `assemblyOptions` (auth secret stays server-side).
+2. **Client upload**: use Uppy + `@uppy/transloadit` with `assemblyOptions()`.
 3. **Webhook ingestion**: verify the signature and `queueWebhook` for durable processing.
 4. **Realtime UI**: query status/results and render the gallery.
 
@@ -59,6 +59,7 @@ import { components } from "./_generated/api";
 
 export const {
   createAssembly,
+  createAssemblyOptions,
   handleWebhook,
   queueWebhook,
   refreshAssembly,
@@ -129,25 +130,30 @@ const transloadit = new Transloadit(components.transloadit, {
 });
 ```
 
-## React usage (Uppy)
+## Uppy client (React example)
 
 ```tsx
-import { useTransloaditUppy } from "@transloadit/convex/react";
+import Uppy from "@uppy/core";
+import Transloadit from "@uppy/transloadit";
 import { api } from "../convex/_generated/api";
 
-const { startUpload, status, results, stage } = useTransloaditUppy({
-  uppy,
-  createAssembly: api.wedding.createWeddingAssembly,
-  getStatus: api.transloadit.getAssemblyStatus,
-  listResults: api.transloadit.listResults,
-  refreshAssembly: api.transloadit.refreshAssembly,
+const uppy = new Uppy().use(Transloadit, {
+  waitForEncoding: true,
+  assemblyOptions: async () => {
+    const { assemblyOptions } = await runAction(
+      api.wedding.createWeddingAssemblyOptions,
+      { fileCount, guestName, uploadCode },
+    );
+    return assemblyOptions;
+  },
 });
 
-await startUpload({
-  createAssemblyArgs: { guestName, uploadCode },
-});
+await uppy.upload();
 ```
-For advanced/legacy helpers (raw parsing, low-level tus uploads, polling utilities), see `docs/advanced.md`.
+Note: `assemblyOptions()` is called once per batch, so pass per-file metadata via Uppy file meta
+(e.g. `uppy.setFileMeta(fileId, {...})`) and use `fields` for shared values.
+
+For status parsing and polling helpers, see `docs/advanced.md`.
 
 ## Example app (Next.js + Uppy wedding gallery)
 
