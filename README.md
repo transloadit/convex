@@ -153,6 +153,9 @@ await uppy.upload();
 Note: `assemblyOptions()` is called once per batch, so pass per-file metadata via Uppy file meta
 (e.g. `uppy.setFileMeta(fileId, {...})`) and use `fields` for shared values.
 
+Migration note: the `@transloadit/convex/react` entrypoint has been removed; use Uppy +
+`@uppy/transloadit` directly.
+
 For status parsing and polling helpers, see `docs/advanced.md`.
 
 ## Example app (Next.js + Uppy wedding gallery)

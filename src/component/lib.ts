@@ -365,7 +365,7 @@ export const createAssemblyOptions = action({
       steps: args.steps as AssemblyInstructionsInput["steps"],
       fields: args.fields as AssemblyInstructionsInput["fields"],
       notifyUrl: args.notifyUrl,
-      numExpectedUploadFiles: undefined,
+      numExpectedUploadFiles: args.numExpectedUploadFiles,
       expires: args.expires,
       additionalParams: args.additionalParams as
         | Record<string, unknown>

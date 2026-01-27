@@ -256,6 +256,25 @@ describe("Transloadit component lib", () => {
     expect(result.resultCount).toBe(1);
   });
 
+  test("createAssemblyOptions includes expected upload count when provided", async () => {
+    const t = convexTest(schema, modules);
+
+    const result = await t.action(api.lib.createAssemblyOptions, {
+      steps: {
+        resize: {
+          robot: "/image/resize",
+          width: 120,
+          height: 120,
+        },
+      },
+      numExpectedUploadFiles: 3,
+      config: { authKey: "test-key", authSecret: "test-secret" },
+    });
+
+    const params = JSON.parse(result.params) as Record<string, unknown>;
+    expect(params.num_expected_upload_files).toBe(3);
+  });
+
   test("queueWebhook rejects invalid signature", async () => {
     const t = convexTest(schema, modules);
     const payload = { assembly_id: "asm_bad" };
