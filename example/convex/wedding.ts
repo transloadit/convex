@@ -1,3 +1,4 @@
+import { vAssemblyOptions } from "@transloadit/convex";
 import { v } from "convex/values";
 import { buildWeddingSteps } from "../lib/transloadit-steps";
 import { components, internal } from "./_generated/api";
@@ -51,15 +52,14 @@ export const checkUploadLimit = internalMutation({
   },
 });
 
-export const createWeddingAssembly = action({
+export const createWeddingAssemblyOptions = action({
   args: {
     fileCount: v.number(),
     guestName: v.optional(v.string()),
     uploadCode: v.optional(v.string()),
   },
   returns: v.object({
-    assemblyId: v.string(),
-    data: v.any(),
+    assemblyOptions: vAssemblyOptions,
     params: v.any(),
   }),
   handler: async (ctx, args) => {
@@ -96,8 +96,8 @@ export const createWeddingAssembly = action({
       userId: identity.subject,
     };
 
-    const assembly = await ctx.runAction(
-      components.transloadit.lib.createAssembly,
+    const assemblyOptions = await ctx.runAction(
+      components.transloadit.lib.createAssemblyOptions,
       {
         ...assemblyArgs,
         config: {
@@ -107,14 +107,24 @@ export const createWeddingAssembly = action({
       },
     );
 
-    const params = redactSecrets(assemblyArgs);
+    const parsedParams = safeParseParams(assemblyOptions.params);
+    const params = redactSecrets(parsedParams ?? assemblyArgs);
 
     return {
-      ...assembly,
+      assemblyOptions,
       params,
     };
   },
 });
+
+const safeParseParams = (value: string) => {
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch (error) {
+    console.warn("Failed to parse Transloadit params", error);
+    return null;
+  }
+};
 
 const secretKeys = new Set([
   "secret",

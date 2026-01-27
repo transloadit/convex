@@ -100,6 +100,14 @@ export const vCreateAssemblyReturn = v.object({
 
 export type CreateAssemblyReturn = Infer<typeof vCreateAssemblyReturn>;
 
+export const vAssemblyOptions = v.object({
+  params: v.string(),
+  signature: v.string(),
+  fields: v.optional(v.record(v.string(), v.any())),
+});
+
+export type AssemblyOptions = Infer<typeof vAssemblyOptions>;
+
 export const vWebhookArgs = {
   payload: v.any(),
   rawBody: v.optional(v.string()),

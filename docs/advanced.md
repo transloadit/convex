@@ -1,109 +1,6 @@
 # Advanced usage
 
-This page collects low-level helpers and optional maintenance tools. These are intentionally
-kept out of the main README so new users can follow a single, Uppy-first path.
-
-## Low-level tus helpers (advanced)
-
-If you need a custom uploader (no Uppy), the legacy tus helpers are still available:
-
-```tsx
-import {
-  uploadWithTransloaditTus,
-  useTransloaditTusUpload,
-  uploadFilesWithTransloaditTus,
-} from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-function TusUpload() {
-  const { upload, isUploading, progress } = useTransloaditTusUpload(
-    api.transloadit.createAssembly,
-  );
-
-  const handleUpload = async (file: File) => {
-    await upload(file, {
-      templateId: "template_id_here",
-      onAssemblyCreated: (assembly) => console.log(assembly.assemblyId),
-    });
-  };
-
-  return (
-    <div>
-      <input type="file" onChange={(e) => handleUpload(e.target.files![0])} />
-      {isUploading && <p>Uploading: {progress}%</p>}
-    </div>
-  );
-}
-```
-
-Imperative helper (e.g. non-React):
-
-```ts
-import { useAction } from "convex/react";
-
-const createAssembly = useAction(api.transloadit.createAssembly);
-
-await uploadWithTransloaditTus(
-  createAssembly,
-  file,
-  { templateId: "template_id_here" },
-  { onStateChange: (state) => console.log(state) },
-);
-```
-
-Multi-file uploads with concurrency + cancellation:
-
-```ts
-import { uploadFilesWithTransloaditTus } from "@transloadit/convex/react";
-
-const controller = uploadFilesWithTransloaditTus(createAssembly, files, {
-  concurrency: 3,
-  onFileProgress: (file, progress) => console.log(file.name, progress),
-  onOverallProgress: (progress) => console.log("overall", progress),
-});
-
-// Optional: cancel in-flight uploads
-// controller.cancel();
-
-const result = await controller.promise;
-console.log(result.files);
-```
-
-## Reactive status/results helpers
-
-```tsx
-import { useAssemblyStatus, useTransloaditFiles } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-function AssemblyStatus({ assemblyId }: { assemblyId: string }) {
-  const status = useAssemblyStatus(api.transloadit.getAssemblyStatus, assemblyId);
-  const results = useTransloaditFiles(api.transloadit.listResults, {
-    assemblyId,
-  });
-
-  if (!status) return null;
-  return (
-    <div>
-      <p>Status: {status.ok}</p>
-      <p>Results: {results?.length ?? 0}</p>
-    </div>
-  );
-}
-```
-
-Polling fallback (no webhooks):
-
-```tsx
-import { useAssemblyStatusWithPolling } from "@transloadit/convex/react";
-import { api } from "../convex/_generated/api";
-
-const status = useAssemblyStatusWithPolling(
-  api.transloadit.getAssemblyStatus,
-  api.transloadit.refreshAssembly,
-  assemblyId,
-  { pollIntervalMs: 5000, stopOnTerminal: true },
-);
-```
+This page collects optional helpers that build on the Uppy-first integration path.
 
 ## Typed helpers (raw payload parsing)
 
@@ -145,14 +42,20 @@ type ResizeResult = ResultForRobot<"/image/resize">;
 type EncodeResult = ResultForRobot<"/video/encode">;
 ```
 
-Uppy/Tus wiring:
+Polling fallback (no webhooks):
 
 ```ts
-import { buildTusUploadConfig } from "@transloadit/convex";
+import { pollAssembly, isAssemblyTerminal } from "@transloadit/convex";
 
-const { endpoint, metadata } = buildTusUploadConfig(assembly.data, file, {
-  fieldName: "file",
+const controller = pollAssembly({
+  intervalMs: 5000,
+  refresh: async () => {
+    await refreshAssembly({ assemblyId });
+  },
+  isTerminal: () => isAssemblyTerminal(status),
 });
+
+// controller.stop();
 ```
 
 ## Optional demo template tooling

@@ -10,6 +10,7 @@ import {
   vAssembly,
   vAssemblyBaseArgs,
   vAssemblyIdArgs,
+  vAssemblyOptions,
   vAssemblyResult,
   vCreateAssemblyReturn,
   vHandleWebhookArgs,
@@ -282,7 +283,7 @@ export const createAssembly = action({
       steps: args.steps as AssemblyInstructionsInput["steps"],
       fields: args.fields as AssemblyInstructionsInput["fields"],
       notifyUrl: args.notifyUrl,
-      numExpectedUploadFiles: undefined,
+      numExpectedUploadFiles: args.numExpectedUploadFiles,
       expires: args.expires,
       additionalParams: args.additionalParams as
         | Record<string, unknown>
@@ -348,6 +349,44 @@ export const createAssembly = action({
     });
 
     return { assemblyId, data };
+  },
+});
+
+export const createAssemblyOptions = action({
+  args: {
+    config: vTransloaditConfig,
+    ...vAssemblyBaseArgs,
+  },
+  returns: vAssemblyOptions,
+  handler: async (_ctx, args) => {
+    const { paramsString, params } = buildTransloaditParams({
+      authKey: args.config.authKey,
+      templateId: args.templateId,
+      steps: args.steps as AssemblyInstructionsInput["steps"],
+      fields: args.fields as AssemblyInstructionsInput["fields"],
+      notifyUrl: args.notifyUrl,
+      numExpectedUploadFiles: args.numExpectedUploadFiles,
+      expires: args.expires,
+      additionalParams: args.additionalParams as
+        | Record<string, unknown>
+        | undefined,
+    });
+
+    const signature = await signTransloaditParams(
+      paramsString,
+      args.config.authSecret,
+    );
+
+    const fields =
+      params && typeof params.fields === "object" && params.fields
+        ? (params.fields as Record<string, unknown>)
+        : undefined;
+
+    return {
+      params: paramsString,
+      signature,
+      fields,
+    };
   },
 });
 

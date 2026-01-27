@@ -4,10 +4,12 @@ import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
 import { v } from "convex/values";
 import type { ComponentApi } from "../component/_generated/component.ts";
 import {
+  type AssemblyOptions,
   type AssemblyResponse,
   type AssemblyResultResponse,
   type CreateAssemblyArgs,
   vAssemblyIdArgs,
+  vAssemblyOptions,
   vAssemblyResponse,
   vAssemblyResultResponse,
   vCreateAssemblyArgs,
@@ -82,11 +84,6 @@ export type {
   VerifiedWebhookRequest,
   WebhookActionArgs,
 } from "../shared/schemas.ts";
-export type {
-  TusMetadataOptions,
-  TusUploadConfig,
-} from "../shared/tusUpload.ts";
-export { buildTusUploadConfig } from "../shared/tusUpload.ts";
 export type { AssemblyStatus, AssemblyInstructionsInput };
 
 export interface TransloaditConfig {
@@ -106,7 +103,13 @@ function requireEnv(names: string[]): string {
   throw new Error(`Missing ${names.join(" or ")} environment variable`);
 }
 
-export type { AssemblyResponse, AssemblyResultResponse, CreateAssemblyArgs };
+export { vAssemblyOptions };
+export type {
+  AssemblyOptions,
+  AssemblyResponse,
+  AssemblyResultResponse,
+  CreateAssemblyArgs,
+};
 
 /**
  * @deprecated Prefer `makeTransloaditAPI` or `Transloadit` for new code.
@@ -132,6 +135,13 @@ export class TransloaditClient {
 
   async createAssembly(ctx: RunActionCtx, args: CreateAssemblyArgs) {
     return ctx.runAction(this.component.lib.createAssembly, {
+      ...args,
+      config: this.config,
+    });
+  }
+
+  async createAssemblyOptions(ctx: RunActionCtx, args: CreateAssemblyArgs) {
+    return ctx.runAction(this.component.lib.createAssemblyOptions, {
       ...args,
       config: this.config,
     });
@@ -239,6 +249,17 @@ export function makeTransloaditAPI(
       handler: async (ctx, args) => {
         const resolvedConfig = resolveConfig();
         return ctx.runAction(component.lib.createAssembly, {
+          ...args,
+          config: resolvedConfig,
+        });
+      },
+    }),
+    createAssemblyOptions: actionGeneric({
+      args: vCreateAssemblyArgs,
+      returns: vAssemblyOptions,
+      handler: async (ctx, args) => {
+        const resolvedConfig = resolveConfig();
+        return ctx.runAction(component.lib.createAssemblyOptions, {
           ...args,
           config: resolvedConfig,
         });

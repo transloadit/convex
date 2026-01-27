@@ -44,8 +44,8 @@ export const runAction = async (
 ) => {
   if (remoteClient) {
     const remoteName =
-      name === "createWeddingAssembly"
-        ? "wedding:createWeddingAssembly"
+      name === "createWeddingAssemblyOptions"
+        ? "wedding:createWeddingAssemblyOptions"
         : `transloadit:${name}`;
     const remoteAction = remoteClient as ConvexHttpClient & {
       action: (
@@ -70,7 +70,7 @@ export const runAction = async (
     throw new Error("Missing TRANSLOADIT_KEY or TRANSLOADIT_SECRET");
   }
 
-  if (name === "createWeddingAssembly") {
+  if (name === "createWeddingAssemblyOptions") {
     const notifyUrl = process.env.TRANSLOADIT_NOTIFY_URL;
     if (!notifyUrl) {
       throw new Error("Missing TRANSLOADIT_NOTIFY_URL");
@@ -88,17 +88,25 @@ export const runAction = async (
       }
     }
 
-    return testClient.action(api.lib.createAssembly, {
-      steps: buildWeddingSteps(),
-      notifyUrl,
-      numExpectedUploadFiles: fileCount,
-      fields: {
-        guestName,
-        album: "wedding-gallery",
-        fileCount,
+    const assemblyOptions = await testClient.action(
+      api.lib.createAssemblyOptions,
+      {
+        steps: buildWeddingSteps(),
+        notifyUrl,
+        numExpectedUploadFiles: fileCount,
+        fields: {
+          guestName,
+          album: "wedding-gallery",
+          fileCount,
+        },
+        config,
       },
-      config,
-    });
+    );
+    const params = safeParseParams(assemblyOptions.params);
+    return {
+      assemblyOptions,
+      params,
+    };
   }
 
   if (name === "createAssembly") {
@@ -176,4 +184,13 @@ export const runQuery = async (name: string, args: Record<string, unknown>) => {
   }
 
   throw new Error(`Unknown query ${name}`);
+};
+
+const safeParseParams = (value: string) => {
+  try {
+    return JSON.parse(value) as Record<string, unknown>;
+  } catch (error) {
+    console.warn("Failed to parse Transloadit params", error);
+    return null;
+  }
 };
