@@ -234,7 +234,35 @@ describeE2e("e2e upload flow", () => {
       const assemblyId = assemblyText?.replace("ID:", "").trim() ?? "";
       expect(assemblyId).not.toBe("");
 
-      const waitForStatus = async () => {
+      const readGalleryReady = async (targetAssemblyId: string) =>
+        page.evaluate((assemblyId) => {
+          const cards = Array.from(
+            document.querySelectorAll<HTMLElement>("[data-assembly-id]"),
+          ).filter((card) => card.dataset.assemblyId === assemblyId);
+          const imgs = cards.flatMap((card) =>
+            Array.from(card.querySelectorAll<HTMLImageElement>("img")),
+          );
+          const vids = cards.flatMap((card) =>
+            Array.from(card.querySelectorAll<HTMLVideoElement>("video")),
+          );
+          const imagesReady =
+            imgs.length > 0 && imgs.every((img) => img.complete);
+          const videosReady =
+            vids.length > 0 &&
+            vids.every((video) => {
+              const src = video.getAttribute("src");
+              if (src && src.length > 0) return true;
+              const poster = video.getAttribute("poster");
+              return Boolean(poster && poster.length > 0);
+            });
+          return {
+            hasCards: cards.length > 0,
+            imagesReady,
+            videosReady,
+          };
+        }, targetAssemblyId);
+
+      const waitForStatusOrGallery = async (targetAssemblyId: string) => {
         const deadline = Date.now() + timeouts.refresh;
         let lastStatus: string | null = null;
         while (Date.now() < deadline) {
@@ -250,6 +278,10 @@ describeE2e("e2e upload flow", () => {
               throw new Error(`Assembly ended unsuccessfully: ${text}`);
             }
           }
+          const ready = await readGalleryReady(targetAssemblyId);
+          if (ready.hasCards && ready.imagesReady && ready.videosReady) {
+            return;
+          }
           await sleep(2000);
         }
         throw new Error(
@@ -257,37 +289,12 @@ describeE2e("e2e upload flow", () => {
         );
       };
 
-      await waitForStatus();
+      await waitForStatusOrGallery(assemblyId);
 
       const waitForAssemblyMedia = async (targetAssemblyId: string) => {
         const deadline = Date.now() + timeouts.results;
         while (Date.now() < deadline) {
-          const ready = await page.evaluate((assemblyId) => {
-            const cards = Array.from(
-              document.querySelectorAll<HTMLElement>("[data-assembly-id]"),
-            ).filter((card) => card.dataset.assemblyId === assemblyId);
-            const imgs = cards.flatMap((card) =>
-              Array.from(card.querySelectorAll<HTMLImageElement>("img")),
-            );
-            const vids = cards.flatMap((card) =>
-              Array.from(card.querySelectorAll<HTMLVideoElement>("video")),
-            );
-            const imagesReady =
-              imgs.length > 0 && imgs.every((img) => img.complete);
-            const videosReady =
-              vids.length > 0 &&
-              vids.every((video) => {
-                const src = video.getAttribute("src");
-                if (src && src.length > 0) return true;
-                const poster = video.getAttribute("poster");
-                return Boolean(poster && poster.length > 0);
-              });
-            return {
-              hasCards: cards.length > 0,
-              imagesReady,
-              videosReady,
-            };
-          }, targetAssemblyId);
+          const ready = await readGalleryReady(targetAssemblyId);
 
           if (!ready.hasCards) {
             await sleep(1000);
