@@ -1,10 +1,32 @@
 import type { AssemblyStatus } from "@transloadit/zod/v3/assemblyStatus";
 import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
 import { anyApi, type FunctionReference } from "convex/server";
-import { type Infer, v } from "convex/values";
+import { v } from "convex/values";
 import { parseAssemblyStatus } from "../shared/assemblyUrls.ts";
 import { transloaditError } from "../shared/errors.ts";
 import { getResultUrl } from "../shared/resultUtils.ts";
+import {
+  type ProcessWebhookResult,
+  vAssembly,
+  vAssemblyBaseArgs,
+  vAssemblyIdArgs,
+  vAssemblyResult,
+  vCreateAssemblyReturn,
+  vHandleWebhookArgs,
+  vListAlbumResultsArgs,
+  vListAssembliesArgs,
+  vListResultsArgs,
+  vPurgeAlbumArgs,
+  vPurgeAlbumResponse,
+  vQueueWebhookResponse,
+  vRefreshAssemblyArgs,
+  vReplaceResultsArgs,
+  vStoreAssemblyMetadataArgs,
+  vTransloaditConfig,
+  vUpsertAssemblyArgs,
+  vWebhookArgs,
+  vWebhookResponse,
+} from "../shared/schemas.ts";
 import {
   action,
   internalAction,
@@ -21,12 +43,8 @@ import {
 
 const TRANSLOADIT_ASSEMBLY_URL = "https://api2.transloadit.com/assemblies";
 
-type ProcessWebhookResult = {
-  assemblyId: string;
-  resultCount: number;
-  ok?: string;
-  status?: string;
-};
+export { vAssembly, vAssemblyResult, vTransloaditConfig };
+export type { Assembly, AssemblyResult } from "../shared/schemas.ts";
 
 type InternalApi = {
   lib: {
@@ -147,78 +165,8 @@ const applyAssemblyStatus = async (
   };
 };
 
-export const vAssembly = v.object({
-  _id: v.id("assemblies"),
-  _creationTime: v.number(),
-  assemblyId: v.string(),
-  status: v.optional(v.string()),
-  ok: v.optional(v.string()),
-  message: v.optional(v.string()),
-  templateId: v.optional(v.string()),
-  notifyUrl: v.optional(v.string()),
-  numExpectedUploadFiles: v.optional(v.number()),
-  fields: v.optional(v.record(v.string(), v.any())),
-  uploads: v.optional(v.array(v.any())),
-  results: v.optional(v.record(v.string(), v.array(v.any()))),
-  error: v.optional(v.any()),
-  raw: v.optional(v.any()),
-  createdAt: v.number(),
-  updatedAt: v.number(),
-  userId: v.optional(v.string()),
-});
-
-export type Assembly = Infer<typeof vAssembly>;
-
-export const vAssemblyResult = v.object({
-  _id: v.id("results"),
-  _creationTime: v.number(),
-  assemblyId: v.string(),
-  album: v.optional(v.string()),
-  userId: v.optional(v.string()),
-  stepName: v.string(),
-  resultId: v.optional(v.string()),
-  sslUrl: v.optional(v.string()),
-  name: v.optional(v.string()),
-  size: v.optional(v.number()),
-  mime: v.optional(v.string()),
-  raw: v.any(),
-  createdAt: v.number(),
-});
-
-export type AssemblyResult = Infer<typeof vAssemblyResult>;
-
-export const vTransloaditConfig = v.object({
-  authKey: v.string(),
-  authSecret: v.string(),
-});
-
-const vAssemblyBaseArgs = {
-  templateId: v.optional(v.string()),
-  steps: v.optional(v.record(v.string(), v.any())),
-  fields: v.optional(v.record(v.string(), v.any())),
-  notifyUrl: v.optional(v.string()),
-  numExpectedUploadFiles: v.optional(v.number()),
-  expires: v.optional(v.string()),
-  additionalParams: v.optional(v.record(v.string(), v.any())),
-  userId: v.optional(v.string()),
-};
-
 export const upsertAssembly = internalMutation({
-  args: {
-    assemblyId: v.string(),
-    status: v.optional(v.string()),
-    ok: v.optional(v.string()),
-    message: v.optional(v.string()),
-    templateId: v.optional(v.string()),
-    notifyUrl: v.optional(v.string()),
-    numExpectedUploadFiles: v.optional(v.number()),
-    fields: v.optional(v.record(v.string(), v.any())),
-    uploads: v.optional(v.array(v.any())),
-    results: v.optional(v.record(v.string(), v.array(v.any()))),
-    error: v.optional(v.any()),
-    raw: v.optional(v.any()),
-    userId: v.optional(v.string()),
-  },
+  args: vUpsertAssemblyArgs,
   returns: v.id("assemblies"),
   handler: async (ctx, args) => {
     // Note: we persist full `raw` + `results` for debugging/fidelity. Large
@@ -272,15 +220,7 @@ export const upsertAssembly = internalMutation({
 });
 
 export const replaceResultsForAssembly = internalMutation({
-  args: {
-    assemblyId: v.string(),
-    results: v.array(
-      v.object({
-        stepName: v.string(),
-        result: v.any(),
-      }),
-    ),
-  },
+  args: vReplaceResultsArgs,
   returns: v.null(),
   handler: async (ctx, args) => {
     // We store raw result payloads for fidelity. For very large assemblies,
@@ -334,10 +274,7 @@ export const createAssembly = action({
     config: vTransloaditConfig,
     ...vAssemblyBaseArgs,
   },
-  returns: v.object({
-    assemblyId: v.string(),
-    data: v.any(),
-  }),
+  returns: vCreateAssemblyReturn,
   handler: async (ctx, args) => {
     const { paramsString, params } = buildTransloaditParams({
       authKey: args.config.authKey,
@@ -414,29 +351,9 @@ export const createAssembly = action({
   },
 });
 
-const vWebhookArgs = {
-  payload: v.any(),
-  rawBody: v.optional(v.string()),
-  signature: v.optional(v.string()),
-  verifySignature: v.optional(v.boolean()),
-  authSecret: v.optional(v.string()),
-};
-
-const vPublicWebhookArgs = {
-  payload: v.any(),
-  rawBody: v.optional(v.string()),
-  signature: v.optional(v.string()),
-  verifySignature: v.optional(v.boolean()),
-};
-
 export const processWebhook = internalAction({
   args: vWebhookArgs,
-  returns: v.object({
-    assemblyId: v.string(),
-    resultCount: v.number(),
-    ok: v.optional(v.string()),
-    status: v.optional(v.string()),
-  }),
+  returns: vWebhookResponse,
   handler: async (ctx, args) => {
     const rawBody = resolveWebhookRawBody(args);
     const shouldVerify = args.verifySignature ?? true;
@@ -474,20 +391,8 @@ export const processWebhook = internalAction({
 });
 
 export const handleWebhook = action({
-  args: {
-    ...vPublicWebhookArgs,
-    config: v.optional(
-      v.object({
-        authSecret: v.string(),
-      }),
-    ),
-  },
-  returns: v.object({
-    assemblyId: v.string(),
-    resultCount: v.number(),
-    ok: v.optional(v.string()),
-    status: v.optional(v.string()),
-  }),
+  args: vHandleWebhookArgs,
+  returns: vWebhookResponse,
   handler: async (ctx, args) => {
     const verifySignature = args.verifySignature ?? true;
     return ctx.runAction(internal.lib.processWebhook, {
@@ -501,18 +406,8 @@ export const handleWebhook = action({
 });
 
 export const queueWebhook = action({
-  args: {
-    ...vPublicWebhookArgs,
-    config: v.optional(
-      v.object({
-        authSecret: v.string(),
-      }),
-    ),
-  },
-  returns: v.object({
-    assemblyId: v.string(),
-    queued: v.boolean(),
-  }),
+  args: vHandleWebhookArgs,
+  returns: vQueueWebhookResponse,
   handler: async (ctx, args) => {
     const rawBody = resolveWebhookRawBody(args);
     const shouldVerify = args.verifySignature ?? true;
@@ -564,21 +459,8 @@ export const queueWebhook = action({
 });
 
 export const refreshAssembly = action({
-  args: {
-    assemblyId: v.string(),
-    config: v.optional(
-      v.object({
-        authKey: v.string(),
-        authSecret: v.string(),
-      }),
-    ),
-  },
-  returns: v.object({
-    assemblyId: v.string(),
-    resultCount: v.number(),
-    ok: v.optional(v.string()),
-    status: v.optional(v.string()),
-  }),
+  args: vRefreshAssemblyArgs,
+  returns: vWebhookResponse,
   handler: async (ctx, args) => {
     const { assemblyId } = args;
     const authKey = args.config?.authKey ?? process.env.TRANSLOADIT_KEY;
@@ -603,7 +485,7 @@ export const refreshAssembly = action({
 });
 
 export const getAssemblyStatus = query({
-  args: { assemblyId: v.string() },
+  args: vAssemblyIdArgs,
   returns: v.union(vAssembly, v.null()),
   handler: async (ctx, args) => {
     return await ctx.db
@@ -614,11 +496,7 @@ export const getAssemblyStatus = query({
 });
 
 export const listAssemblies = query({
-  args: {
-    status: v.optional(v.string()),
-    userId: v.optional(v.string()),
-    limit: v.optional(v.number()),
-  },
+  args: vListAssembliesArgs,
   returns: v.array(vAssembly),
   handler: async (ctx, args) => {
     if (args.userId) {
@@ -644,11 +522,7 @@ export const listAssemblies = query({
 });
 
 export const listResults = query({
-  args: {
-    assemblyId: v.string(),
-    stepName: v.optional(v.string()),
-    limit: v.optional(v.number()),
-  },
+  args: vListResultsArgs,
   returns: v.array(vAssemblyResult),
   handler: async (ctx, args) => {
     if (args.stepName) {
@@ -671,10 +545,7 @@ export const listResults = query({
 });
 
 export const listAlbumResults = query({
-  args: {
-    album: v.string(),
-    limit: v.optional(v.number()),
-  },
+  args: vListAlbumResultsArgs,
   returns: v.array(vAssemblyResult),
   handler: async (ctx, args) => {
     return ctx.db
@@ -686,14 +557,8 @@ export const listAlbumResults = query({
 });
 
 export const purgeAlbum = mutation({
-  args: {
-    album: v.string(),
-    deleteAssemblies: v.optional(v.boolean()),
-  },
-  returns: v.object({
-    deletedResults: v.number(),
-    deletedAssemblies: v.number(),
-  }),
+  args: vPurgeAlbumArgs,
+  returns: vPurgeAlbumResponse,
   handler: async (ctx, args) => {
     const results = await ctx.db
       .query("results")
@@ -725,11 +590,7 @@ export const purgeAlbum = mutation({
 });
 
 export const storeAssemblyMetadata = mutation({
-  args: {
-    assemblyId: v.string(),
-    userId: v.optional(v.string()),
-    fields: v.optional(v.record(v.string(), v.any())),
-  },
+  args: vStoreAssemblyMetadataArgs,
   returns: v.union(vAssembly, v.null()),
   handler: async (ctx, args) => {
     const existing = await ctx.db
