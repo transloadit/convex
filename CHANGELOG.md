@@ -1,5 +1,13 @@
 # @transloadit/convex
 
+## 0.1.0
+
+### Minor Changes
+
+- e14fee2: - switch the example and docs to Uppy + @uppy/transloadit and remove the React/tus helpers
+  - add signed assemblyOptions helpers and ensure expected upload counts are included in params
+  - update docs for the new Uppy-first integration path
+
 ## 0.0.6
 
 ### Patch Changes
