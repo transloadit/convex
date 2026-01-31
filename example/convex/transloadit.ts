@@ -1,5 +1,5 @@
-import { makeTransloaditAPI } from "@transloadit/convex";
-import { components } from "./_generated/api";
+import { makeTransloaditAPI } from '@transloadit/convex';
+import { components } from './_generated/api';
 
 export const {
   createAssembly,

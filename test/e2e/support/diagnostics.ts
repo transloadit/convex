@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import type { Page } from '@playwright/test';
 
 type DiagnosticsOptions = {
   shouldTrackRequest: (url: string) => boolean;
@@ -19,43 +19,41 @@ export const attachBrowserDiagnostics = (
   const requestFailures: string[] = [];
   const requestLog: string[] = [];
 
-  page.on("console", (message) => {
+  page.on('console', (message) => {
     consoleMessages.push(`[${message.type()}] ${message.text()}`);
   });
-  page.on("pageerror", (error) => {
+  page.on('pageerror', (error) => {
     consoleMessages.push(`[pageerror] ${error.message}`);
   });
-  page.on("requestfailed", (request) => {
+  page.on('requestfailed', (request) => {
     const url = request.url();
     if (shouldTrackRequest(url)) {
-      requestFailures.push(`${url} ${request.failure()?.errorText ?? ""}`);
+      requestFailures.push(`${url} ${request.failure()?.errorText ?? ''}`);
     }
   });
-  page.on("request", (request) => {
+  page.on('request', (request) => {
     const url = request.url();
     if (shouldTrackRequest(url)) {
       requestLog.push(`${new Date().toISOString()} ${request.method()} ${url}`);
     }
   });
-  page.on("response", (response) => {
+  page.on('response', (response) => {
     const url = response.url();
     if (shouldTrackRequest(url)) {
-      requestLog.push(
-        `${new Date().toISOString()} ${response.status()} ${url}`,
-      );
+      requestLog.push(`${new Date().toISOString()} ${response.status()} ${url}`);
     }
   });
 
   const dump = () => {
     if (consoleMessages.length) {
-      console.log("Browser console logs:", consoleMessages);
+      console.log('Browser console logs:', consoleMessages);
     }
     if (requestFailures.length) {
-      console.log("Browser request failures:", requestFailures);
+      console.log('Browser request failures:', requestFailures);
     }
     if (requestLog.length) {
       const tail = requestLog.slice(-200);
-      console.log("Browser request log (last 200):", tail);
+      console.log('Browser request log (last 200):', tail);
     }
   };
 

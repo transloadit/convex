@@ -1,10 +1,10 @@
-import type { AssemblyStatus } from "@transloadit/zod/v3/assemblyStatus";
-import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
-import { anyApi, type FunctionReference } from "convex/server";
-import { v } from "convex/values";
-import { parseAssemblyStatus } from "../shared/assemblyUrls.ts";
-import { transloaditError } from "../shared/errors.ts";
-import { getResultUrl } from "../shared/resultUtils.ts";
+import type { AssemblyStatus } from '@transloadit/zod/v3/assemblyStatus';
+import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template';
+import { anyApi, type FunctionReference } from 'convex/server';
+import { v } from 'convex/values';
+import { parseAssemblyStatus } from '../shared/assemblyUrls.ts';
+import { transloaditError } from '../shared/errors.ts';
+import { getResultUrl } from '../shared/resultUtils.ts';
 import {
   type ProcessWebhookResult,
   vAssembly,
@@ -27,43 +27,32 @@ import {
   vUpsertAssemblyArgs,
   vWebhookArgs,
   vWebhookResponse,
-} from "../shared/schemas.ts";
-import {
-  action,
-  internalAction,
-  internalMutation,
-  mutation,
-  query,
-} from "./_generated/server.ts";
+} from '../shared/schemas.ts';
+import { action, internalAction, internalMutation, mutation, query } from './_generated/server.ts';
 import {
   buildTransloaditParams,
   flattenResults,
   signTransloaditParams,
   verifyWebhookSignature,
-} from "./apiUtils.ts";
+} from './apiUtils.ts';
 
-const TRANSLOADIT_ASSEMBLY_URL = "https://api2.transloadit.com/assemblies";
+const TRANSLOADIT_ASSEMBLY_URL = 'https://api2.transloadit.com/assemblies';
 
 export { vAssembly, vAssemblyResult, vTransloaditConfig };
-export type { Assembly, AssemblyResult } from "../shared/schemas.ts";
+export type { Assembly, AssemblyResult } from '../shared/schemas.ts';
 
 type InternalApi = {
   lib: {
-    upsertAssembly: FunctionReference<
-      "mutation",
-      "internal",
-      Record<string, unknown>,
-      unknown
-    >;
+    upsertAssembly: FunctionReference<'mutation', 'internal', Record<string, unknown>, unknown>;
     replaceResultsForAssembly: FunctionReference<
-      "mutation",
-      "internal",
+      'mutation',
+      'internal',
       Record<string, unknown>,
       unknown
     >;
     processWebhook: FunctionReference<
-      "action",
-      "internal",
+      'action',
+      'internal',
       Record<string, unknown>,
       ProcessWebhookResult
     >;
@@ -73,21 +62,21 @@ type InternalApi = {
 const internal = anyApi as unknown as InternalApi;
 
 const resolveAssemblyId = (payload: AssemblyStatus): string => {
-  if (typeof payload.assembly_id === "string") return payload.assembly_id;
-  if (typeof payload.assemblyId === "string") return payload.assemblyId;
-  return "";
+  if (typeof payload.assembly_id === 'string') return payload.assembly_id;
+  if (typeof payload.assemblyId === 'string') return payload.assemblyId;
+  return '';
 };
 
 const getFieldString = (fields: unknown, key: string): string | undefined => {
-  if (!fields || typeof fields !== "object") return undefined;
+  if (!fields || typeof fields !== 'object') return undefined;
   const value = (fields as Record<string, unknown>)[key];
-  return typeof value === "string" ? value : undefined;
+  return typeof value === 'string' ? value : undefined;
 };
 
 const parseAssemblyPayload = (payload: unknown): AssemblyStatus => {
   const parsed = parseAssemblyStatus(payload);
   if (!parsed) {
-    throw transloaditError("payload", "Invalid Transloadit payload");
+    throw transloaditError('payload', 'Invalid Transloadit payload');
   }
   return parsed;
 };
@@ -97,7 +86,7 @@ const resolveWebhookRawBody = (args: {
   rawBody?: string;
   verifySignature?: boolean;
 }) => {
-  if (typeof args.rawBody === "string") return args.rawBody;
+  if (typeof args.rawBody === 'string') return args.rawBody;
   if (args.verifySignature === false) {
     return JSON.stringify(args.payload ?? {});
   }
@@ -117,40 +106,38 @@ const buildSignedAssemblyUrl = async (
   });
   const signature = await signTransloaditParams(params, authSecret);
   const url = new URL(`${TRANSLOADIT_ASSEMBLY_URL}/${assemblyId}`);
-  url.searchParams.set("signature", signature);
-  url.searchParams.set("params", params);
+  url.searchParams.set('signature', signature);
+  url.searchParams.set('params', params);
   return url.toString();
 };
 
 const applyAssemblyStatus = async (
-  ctx: Pick<import("./_generated/server.ts").FunctionCtx, "runMutation">,
+  ctx: Pick<import('./_generated/server.ts').FunctionCtx, 'runMutation'>,
   payload: AssemblyStatus,
 ) => {
   const assemblyId = resolveAssemblyId(payload);
   if (!assemblyId) {
-    throw transloaditError("webhook", "Webhook payload missing assembly_id");
+    throw transloaditError('webhook', 'Webhook payload missing assembly_id');
   }
 
   const results = flattenResults(payload.results ?? undefined);
 
   await ctx.runMutation(internal.lib.upsertAssembly, {
     assemblyId,
-    status: typeof payload.ok === "string" ? payload.ok : undefined,
-    ok: typeof payload.ok === "string" ? payload.ok : undefined,
-    message: typeof payload.message === "string" ? payload.message : undefined,
-    templateId:
-      typeof payload.template_id === "string" ? payload.template_id : undefined,
-    notifyUrl:
-      typeof payload.notify_url === "string" ? payload.notify_url : undefined,
+    status: typeof payload.ok === 'string' ? payload.ok : undefined,
+    ok: typeof payload.ok === 'string' ? payload.ok : undefined,
+    message: typeof payload.message === 'string' ? payload.message : undefined,
+    templateId: typeof payload.template_id === 'string' ? payload.template_id : undefined,
+    notifyUrl: typeof payload.notify_url === 'string' ? payload.notify_url : undefined,
     fields: payload.fields,
     uploads: payload.uploads,
     results: payload.results,
     error: payload.error,
     raw: payload,
     userId:
-      typeof payload.user_id === "string"
+      typeof payload.user_id === 'string'
         ? payload.user_id
-        : getFieldString(payload.fields, "userId"),
+        : getFieldString(payload.fields, 'userId'),
   });
 
   await ctx.runMutation(internal.lib.replaceResultsForAssembly, {
@@ -161,26 +148,26 @@ const applyAssemblyStatus = async (
   return {
     assemblyId,
     resultCount: results.length,
-    ok: typeof payload.ok === "string" ? payload.ok : undefined,
-    status: typeof payload.ok === "string" ? payload.ok : undefined,
+    ok: typeof payload.ok === 'string' ? payload.ok : undefined,
+    status: typeof payload.ok === 'string' ? payload.ok : undefined,
   };
 };
 
 export const upsertAssembly = internalMutation({
   args: vUpsertAssemblyArgs,
-  returns: v.id("assemblies"),
+  returns: v.id('assemblies'),
   handler: async (ctx, args) => {
     // Note: we persist full `raw` + `results` for debugging/fidelity. Large
     // assemblies can hit Convex document size limits; trim or externalize
     // payloads if this becomes an issue for your workload.
     const existing = await ctx.db
-      .query("assemblies")
-      .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
+      .query('assemblies')
+      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
       .unique();
 
     const now = Date.now();
     if (!existing) {
-      return await ctx.db.insert("assemblies", {
+      return await ctx.db.insert('assemblies', {
         assemblyId: args.assemblyId,
         status: args.status,
         ok: args.ok,
@@ -205,8 +192,7 @@ export const upsertAssembly = internalMutation({
       message: args.message ?? existing.message,
       templateId: args.templateId ?? existing.templateId,
       notifyUrl: args.notifyUrl ?? existing.notifyUrl,
-      numExpectedUploadFiles:
-        args.numExpectedUploadFiles ?? existing.numExpectedUploadFiles,
+      numExpectedUploadFiles: args.numExpectedUploadFiles ?? existing.numExpectedUploadFiles,
       fields: args.fields ?? existing.fields,
       uploads: args.uploads ?? existing.uploads,
       results: args.results ?? existing.results,
@@ -229,8 +215,8 @@ export const replaceResultsForAssembly = internalMutation({
     // This mutation replaces all results in one transaction; extremely large
     // result sets may need batching or external storage to avoid Convex limits.
     const existingResults = await ctx.db
-      .query("results")
-      .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
+      .query('results')
+      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
       .collect();
 
     for (const existing of existingResults) {
@@ -238,29 +224,29 @@ export const replaceResultsForAssembly = internalMutation({
     }
 
     const assembly = await ctx.db
-      .query("assemblies")
-      .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
+      .query('assemblies')
+      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
       .unique();
-    const album = getFieldString(assembly?.fields, "album");
+    const album = getFieldString(assembly?.fields, 'album');
     const userId =
-      typeof assembly?.userId === "string"
+      typeof assembly?.userId === 'string'
         ? assembly.userId
-        : getFieldString(assembly?.fields, "userId");
+        : getFieldString(assembly?.fields, 'userId');
 
     const now = Date.now();
     for (const entry of args.results) {
       const raw = entry.result as Record<string, unknown>;
       const sslUrl = getResultUrl(entry.result);
-      await ctx.db.insert("results", {
+      await ctx.db.insert('results', {
         assemblyId: args.assemblyId,
         album,
         userId,
         stepName: entry.stepName,
-        resultId: typeof raw.id === "string" ? raw.id : undefined,
+        resultId: typeof raw.id === 'string' ? raw.id : undefined,
         sslUrl,
-        name: typeof raw.name === "string" ? raw.name : undefined,
-        size: typeof raw.size === "number" ? raw.size : undefined,
-        mime: typeof raw.mime === "string" ? raw.mime : undefined,
+        name: typeof raw.name === 'string' ? raw.name : undefined,
+        size: typeof raw.size === 'number' ? raw.size : undefined,
+        mime: typeof raw.mime === 'string' ? raw.mime : undefined,
         raw,
         createdAt: now,
       });
@@ -280,63 +266,49 @@ export const createAssembly = action({
     const { paramsString, params } = buildTransloaditParams({
       authKey: args.config.authKey,
       templateId: args.templateId,
-      steps: args.steps as AssemblyInstructionsInput["steps"],
-      fields: args.fields as AssemblyInstructionsInput["fields"],
+      steps: args.steps as AssemblyInstructionsInput['steps'],
+      fields: args.fields as AssemblyInstructionsInput['fields'],
       notifyUrl: args.notifyUrl,
       numExpectedUploadFiles: args.numExpectedUploadFiles,
       expires: args.expires,
-      additionalParams: args.additionalParams as
-        | Record<string, unknown>
-        | undefined,
+      additionalParams: args.additionalParams as Record<string, unknown> | undefined,
     });
 
-    const signature = await signTransloaditParams(
-      paramsString,
-      args.config.authSecret,
-    );
+    const signature = await signTransloaditParams(paramsString, args.config.authSecret);
 
     const formData = new FormData();
-    formData.append("params", paramsString);
-    formData.append("signature", signature);
-    if (typeof args.numExpectedUploadFiles === "number") {
-      formData.append(
-        "tus_num_expected_upload_files",
-        String(args.numExpectedUploadFiles),
-      );
+    formData.append('params', paramsString);
+    formData.append('signature', signature);
+    if (typeof args.numExpectedUploadFiles === 'number') {
+      formData.append('tus_num_expected_upload_files', String(args.numExpectedUploadFiles));
     }
 
     const response = await fetch(TRANSLOADIT_ASSEMBLY_URL, {
-      method: "POST",
+      method: 'POST',
       body: formData,
     });
 
     const data = (await response.json()) as Record<string, unknown>;
     if (!response.ok) {
-      throw transloaditError(
-        "createAssembly",
-        `HTTP ${response.status}: ${JSON.stringify(data)}`,
-      );
+      throw transloaditError('createAssembly', `HTTP ${response.status}: ${JSON.stringify(data)}`);
     }
 
     const assemblyId =
-      typeof data.assembly_id === "string"
+      typeof data.assembly_id === 'string'
         ? data.assembly_id
-        : typeof data.assemblyId === "string"
+        : typeof data.assemblyId === 'string'
           ? data.assemblyId
-          : "";
+          : '';
 
     if (!assemblyId) {
-      throw transloaditError(
-        "createAssembly",
-        "Transloadit response missing assembly_id",
-      );
+      throw transloaditError('createAssembly', 'Transloadit response missing assembly_id');
     }
 
     await ctx.runMutation(internal.lib.upsertAssembly, {
       assemblyId,
-      status: typeof data.ok === "string" ? data.ok : undefined,
-      ok: typeof data.ok === "string" ? data.ok : undefined,
-      message: typeof data.message === "string" ? data.message : undefined,
+      status: typeof data.ok === 'string' ? data.ok : undefined,
+      ok: typeof data.ok === 'string' ? data.ok : undefined,
+      message: typeof data.message === 'string' ? data.message : undefined,
       templateId: args.templateId,
       notifyUrl: args.notifyUrl,
       numExpectedUploadFiles: args.numExpectedUploadFiles,
@@ -362,23 +334,18 @@ export const createAssemblyOptions = action({
     const { paramsString, params } = buildTransloaditParams({
       authKey: args.config.authKey,
       templateId: args.templateId,
-      steps: args.steps as AssemblyInstructionsInput["steps"],
-      fields: args.fields as AssemblyInstructionsInput["fields"],
+      steps: args.steps as AssemblyInstructionsInput['steps'],
+      fields: args.fields as AssemblyInstructionsInput['fields'],
       notifyUrl: args.notifyUrl,
       numExpectedUploadFiles: args.numExpectedUploadFiles,
       expires: args.expires,
-      additionalParams: args.additionalParams as
-        | Record<string, unknown>
-        | undefined,
+      additionalParams: args.additionalParams as Record<string, unknown> | undefined,
     });
 
-    const signature = await signTransloaditParams(
-      paramsString,
-      args.config.authSecret,
-    );
+    const signature = await signTransloaditParams(paramsString, args.config.authSecret);
 
     const fields =
-      params && typeof params.fields === "object" && params.fields
+      params && typeof params.fields === 'object' && params.fields
         ? (params.fields as Record<string, unknown>)
         : undefined;
 
@@ -400,16 +367,10 @@ export const processWebhook = internalAction({
 
     if (shouldVerify) {
       if (!rawBody) {
-        throw transloaditError(
-          "webhook",
-          "Missing rawBody for webhook verification",
-        );
+        throw transloaditError('webhook', 'Missing rawBody for webhook verification');
       }
       if (!authSecret) {
-        throw transloaditError(
-          "webhook",
-          "Missing TRANSLOADIT_SECRET for webhook validation",
-        );
+        throw transloaditError('webhook', 'Missing TRANSLOADIT_SECRET for webhook validation');
       }
       const verified = await verifyWebhookSignature({
         rawBody,
@@ -417,10 +378,7 @@ export const processWebhook = internalAction({
         authSecret,
       });
       if (!verified) {
-        throw transloaditError(
-          "webhook",
-          "Invalid Transloadit webhook signature",
-        );
+        throw transloaditError('webhook', 'Invalid Transloadit webhook signature');
       }
     }
 
@@ -450,21 +408,14 @@ export const queueWebhook = action({
   handler: async (ctx, args) => {
     const rawBody = resolveWebhookRawBody(args);
     const shouldVerify = args.verifySignature ?? true;
-    const authSecret =
-      args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
+    const authSecret = args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
 
     if (shouldVerify) {
       if (!rawBody) {
-        throw transloaditError(
-          "webhook",
-          "Missing rawBody for webhook verification",
-        );
+        throw transloaditError('webhook', 'Missing rawBody for webhook verification');
       }
       if (!authSecret) {
-        throw transloaditError(
-          "webhook",
-          "Missing TRANSLOADIT_SECRET for webhook validation",
-        );
+        throw transloaditError('webhook', 'Missing TRANSLOADIT_SECRET for webhook validation');
       }
       const verified = await verifyWebhookSignature({
         rawBody,
@@ -472,17 +423,14 @@ export const queueWebhook = action({
         authSecret,
       });
       if (!verified) {
-        throw transloaditError(
-          "webhook",
-          "Invalid Transloadit webhook signature",
-        );
+        throw transloaditError('webhook', 'Invalid Transloadit webhook signature');
       }
     }
 
     const parsed = parseAssemblyPayload(args.payload);
     const assemblyId = resolveAssemblyId(parsed);
     if (!assemblyId) {
-      throw transloaditError("webhook", "Webhook payload missing assembly_id");
+      throw transloaditError('webhook', 'Webhook payload missing assembly_id');
     }
 
     await ctx.scheduler.runAfter(0, internal.lib.processWebhook, {
@@ -503,8 +451,7 @@ export const refreshAssembly = action({
   handler: async (ctx, args) => {
     const { assemblyId } = args;
     const authKey = args.config?.authKey ?? process.env.TRANSLOADIT_KEY;
-    const authSecret =
-      args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
+    const authSecret = args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET;
     const url =
       authKey && authSecret
         ? await buildSignedAssemblyUrl(assemblyId, authKey, authSecret)
@@ -513,10 +460,7 @@ export const refreshAssembly = action({
     const response = await fetch(url);
     const payload = parseAssemblyPayload(await response.json());
     if (!response.ok) {
-      throw transloaditError(
-        "status",
-        `HTTP ${response.status}: ${JSON.stringify(payload)}`,
-      );
+      throw transloaditError('status', `HTTP ${response.status}: ${JSON.stringify(payload)}`);
     }
 
     return applyAssemblyStatus(ctx, payload);
@@ -528,8 +472,8 @@ export const getAssemblyStatus = query({
   returns: v.union(vAssembly, v.null()),
   handler: async (ctx, args) => {
     return await ctx.db
-      .query("assemblies")
-      .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
+      .query('assemblies')
+      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
       .unique();
   },
 });
@@ -540,22 +484,22 @@ export const listAssemblies = query({
   handler: async (ctx, args) => {
     if (args.userId) {
       return ctx.db
-        .query("assemblies")
-        .withIndex("by_userId", (q) => q.eq("userId", args.userId))
-        .order("desc")
+        .query('assemblies')
+        .withIndex('by_userId', (q) => q.eq('userId', args.userId))
+        .order('desc')
         .take(args.limit ?? 50);
     }
     if (args.status) {
       return ctx.db
-        .query("assemblies")
-        .withIndex("by_status", (q) => q.eq("status", args.status))
-        .order("desc")
+        .query('assemblies')
+        .withIndex('by_status', (q) => q.eq('status', args.status))
+        .order('desc')
         .take(args.limit ?? 50);
     }
 
     return ctx.db
-      .query("assemblies")
-      .order("desc")
+      .query('assemblies')
+      .order('desc')
       .take(args.limit ?? 50);
   },
 });
@@ -567,18 +511,18 @@ export const listResults = query({
     if (args.stepName) {
       const stepName = args.stepName;
       return ctx.db
-        .query("results")
-        .withIndex("by_assemblyId_and_step", (q) =>
-          q.eq("assemblyId", args.assemblyId).eq("stepName", stepName),
+        .query('results')
+        .withIndex('by_assemblyId_and_step', (q) =>
+          q.eq('assemblyId', args.assemblyId).eq('stepName', stepName),
         )
-        .order("desc")
+        .order('desc')
         .take(args.limit ?? 200);
     }
 
     return ctx.db
-      .query("results")
-      .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
-      .order("desc")
+      .query('results')
+      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
+      .order('desc')
       .take(args.limit ?? 200);
   },
 });
@@ -588,9 +532,9 @@ export const listAlbumResults = query({
   returns: v.array(vAssemblyResult),
   handler: async (ctx, args) => {
     return ctx.db
-      .query("results")
-      .withIndex("by_album", (q) => q.eq("album", args.album))
-      .order("desc")
+      .query('results')
+      .withIndex('by_album', (q) => q.eq('album', args.album))
+      .order('desc')
       .take(args.limit ?? 200);
   },
 });
@@ -600,8 +544,8 @@ export const purgeAlbum = mutation({
   returns: vPurgeAlbumResponse,
   handler: async (ctx, args) => {
     const results = await ctx.db
-      .query("results")
-      .withIndex("by_album", (q) => q.eq("album", args.album))
+      .query('results')
+      .withIndex('by_album', (q) => q.eq('album', args.album))
       .collect();
     const assemblyIds = new Set<string>();
 
@@ -614,8 +558,8 @@ export const purgeAlbum = mutation({
     if (args.deleteAssemblies ?? true) {
       for (const assemblyId of assemblyIds) {
         const assembly = await ctx.db
-          .query("assemblies")
-          .withIndex("by_assemblyId", (q) => q.eq("assemblyId", assemblyId))
+          .query('assemblies')
+          .withIndex('by_assemblyId', (q) => q.eq('assemblyId', assemblyId))
           .unique();
         if (assembly) {
           await ctx.db.delete(assembly._id);
@@ -633,8 +577,8 @@ export const storeAssemblyMetadata = mutation({
   returns: v.union(vAssembly, v.null()),
   handler: async (ctx, args) => {
     const existing = await ctx.db
-      .query("assemblies")
-      .withIndex("by_assemblyId", (q) => q.eq("assemblyId", args.assemblyId))
+      .query('assemblies')
+      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
       .unique();
 
     if (!existing) {

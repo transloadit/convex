@@ -5,23 +5,23 @@ import type {
   FunctionReturnType,
   StorageActionWriter,
   StorageReader,
-} from "convex/server";
-import type { GenericId } from "convex/values";
+} from 'convex/server';
+import type { GenericId } from 'convex/values';
 
 export type RunQueryCtx = {
-  runQuery: <Query extends FunctionReference<"query", "internal">>(
+  runQuery: <Query extends FunctionReference<'query', 'internal'>>(
     query: Query,
     args: FunctionArgs<Query>,
   ) => Promise<FunctionReturnType<Query>>;
 };
 export type RunMutationCtx = RunQueryCtx & {
-  runMutation: <Mutation extends FunctionReference<"mutation", "internal">>(
+  runMutation: <Mutation extends FunctionReference<'mutation', 'internal'>>(
     mutation: Mutation,
     args: FunctionArgs<Mutation>,
   ) => Promise<FunctionReturnType<Mutation>>;
 };
 export type RunActionCtx = RunMutationCtx & {
-  runAction: <Action extends FunctionReference<"action", "internal">>(
+  runAction: <Action extends FunctionReference<'action', 'internal'>>(
     action: Action,
     args: FunctionArgs<Action>,
   ) => Promise<FunctionReturnType<Action>>;
@@ -49,17 +49,11 @@ export type OpaqueIds<T> =
 export type UseApi<API> = Expand<{
   [mod in keyof API]: API[mod] extends FunctionReference<
     infer FType,
-    "public",
+    'public',
     infer FArgs,
     infer FReturnType,
     infer FComponentPath
   >
-    ? FunctionReference<
-        FType,
-        "internal",
-        OpaqueIds<FArgs>,
-        OpaqueIds<FReturnType>,
-        FComponentPath
-      >
+    ? FunctionReference<FType, 'internal', OpaqueIds<FArgs>, OpaqueIds<FReturnType>, FComponentPath>
     : UseApi<API[mod]>;
 }>;

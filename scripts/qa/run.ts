@@ -1,9 +1,9 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync } from 'node:child_process';
 
 export type RunOptions = {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
-  stdio?: "inherit" | "pipe";
+  stdio?: 'inherit' | 'pipe';
   input?: string;
 };
 
@@ -15,39 +15,34 @@ export const requireEnv = (name: string) => {
   return value;
 };
 
-export const run = (
-  command: string,
-  args: string[],
-  options: RunOptions = {},
-) => {
-  const stdio =
-    options.input !== undefined ? "pipe" : (options.stdio ?? "inherit");
+export const run = (command: string, args: string[], options: RunOptions = {}) => {
+  const stdio = options.input !== undefined ? 'pipe' : (options.stdio ?? 'inherit');
   const result = spawnSync(command, args, {
     cwd: options.cwd,
     env: options.env,
     stdio,
     input: options.input,
-    encoding: "utf8",
+    encoding: 'utf8',
   });
 
   if (result.status !== 0) {
-    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
-    throw new Error(`Command failed: ${command} ${args.join(" ")}\n${output}`);
+    const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+    throw new Error(`Command failed: ${command} ${args.join(' ')}\n${output}`);
   }
 
-  return `${result.stdout ?? ""}${result.stderr ?? ""}`;
+  return `${result.stdout ?? ''}${result.stderr ?? ''}`;
 };
 
 export const parseJson = <T>(output: string): T => {
   const trimmed = output.trim();
   if (!trimmed) {
-    throw new Error("Template preflight returned empty output");
+    throw new Error('Template preflight returned empty output');
   }
-  if (trimmed.startsWith("{")) {
+  if (trimmed.startsWith('{')) {
     return JSON.parse(trimmed) as T;
   }
-  const first = trimmed.indexOf("{");
-  const last = trimmed.lastIndexOf("}");
+  const first = trimmed.indexOf('{');
+  const last = trimmed.lastIndexOf('}');
   if (first === -1 || last === -1 || last <= first) {
     throw new Error(`Unable to parse JSON from output: ${trimmed}`);
   }

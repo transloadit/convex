@@ -1,18 +1,18 @@
-import WeddingUploadsApp from "./WeddingUploadsApp";
+import WeddingUploadsApp from './WeddingUploadsApp';
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic';
 
 const slugifyBranch = (value: string) =>
   value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
 
 const resolvePreviewConvexUrl = () => {
-  if (process.env.VERCEL_ENV !== "preview") return null;
-  const branch = process.env.VERCEL_GIT_COMMIT_REF ?? "";
+  if (process.env.VERCEL_ENV !== 'preview') return null;
+  const branch = process.env.VERCEL_GIT_COMMIT_REF ?? '';
   if (!branch) return null;
   const slug = slugifyBranch(branch);
   if (!slug) return null;

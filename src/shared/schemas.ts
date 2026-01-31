@@ -1,5 +1,5 @@
-import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
-import { type Infer, v } from "convex/values";
+import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template';
+import { type Infer, v } from 'convex/values';
 
 export const vAssemblyFields = {
   assemblyId: v.string(),
@@ -34,7 +34,7 @@ export const vAssemblyResultFields = {
 };
 
 export const vAssembly = v.object({
-  _id: v.id("assemblies"),
+  _id: v.id('assemblies'),
   _creationTime: v.number(),
   ...vAssemblyFields,
 });
@@ -50,7 +50,7 @@ export const vAssemblyResponse = v.object({
 export type AssemblyResponse = Infer<typeof vAssemblyResponse>;
 
 export const vAssemblyResult = v.object({
-  _id: v.id("results"),
+  _id: v.id('results'),
   _creationTime: v.number(),
   ...vAssemblyResultFields,
 });
@@ -85,12 +85,9 @@ export const vAssemblyBaseArgs = {
 
 export const vCreateAssemblyArgs = v.object(vAssemblyBaseArgs);
 
-export type CreateAssemblyArgs = Omit<
-  Infer<typeof vCreateAssemblyArgs>,
-  "steps" | "fields"
-> & {
-  steps?: AssemblyInstructionsInput["steps"];
-  fields?: AssemblyInstructionsInput["fields"];
+export type CreateAssemblyArgs = Omit<Infer<typeof vCreateAssemblyArgs>, 'steps' | 'fields'> & {
+  steps?: AssemblyInstructionsInput['steps'];
+  fields?: AssemblyInstructionsInput['fields'];
 };
 
 export const vCreateAssemblyReturn = v.object({
@@ -246,12 +243,9 @@ export const vBuildParamsOptions = v.object({
   additionalParams: v.optional(v.record(v.string(), v.any())),
 });
 
-export type BuildParamsOptions = Omit<
-  Infer<typeof vBuildParamsOptions>,
-  "steps" | "fields"
-> & {
-  steps?: AssemblyInstructionsInput["steps"];
-  fields?: AssemblyInstructionsInput["fields"];
+export type BuildParamsOptions = Omit<Infer<typeof vBuildParamsOptions>, 'steps' | 'fields'> & {
+  steps?: AssemblyInstructionsInput['steps'];
+  fields?: AssemblyInstructionsInput['fields'];
 };
 
 export const vBuildParamsResult = v.object({

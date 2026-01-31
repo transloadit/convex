@@ -11,7 +11,7 @@ const clean = (value?: string) => value?.trim() || undefined;
 
 const normalizeHost = (value?: string) => {
   if (!value) return undefined;
-  if (value.startsWith("http://") || value.startsWith("https://")) {
+  if (value.startsWith('http://') || value.startsWith('https://')) {
     return value;
   }
   return `https://${value}`;
@@ -19,7 +19,7 @@ const normalizeHost = (value?: string) => {
 
 const normalizeUrlPrefix = (value?: string) => {
   if (!value) return undefined;
-  return value.endsWith("/") ? value : `${value}/`;
+  return value.endsWith('/') ? value : `${value}/`;
 };
 
 export const readR2ConfigFromEnv = (env: NodeJS.ProcessEnv): R2Config => {
@@ -31,8 +31,7 @@ export const readR2ConfigFromEnv = (env: NodeJS.ProcessEnv): R2Config => {
   const hostValue = clean(env.R2_HOST);
   const publicUrl = clean(env.R2_PUBLIC_URL);
   const host = normalizeHost(
-    hostValue ??
-      (accountId ? `${accountId}.r2.cloudflarestorage.com` : undefined),
+    hostValue ?? (accountId ? `${accountId}.r2.cloudflarestorage.com` : undefined),
   );
 
   if (credentials) {
@@ -48,11 +47,11 @@ export const readR2ConfigFromEnv = (env: NodeJS.ProcessEnv): R2Config => {
 
   if (!bucket || !accessKeyId || !secretAccessKey) {
     throw new Error(
-      "Missing R2 credentials. Set TRANSLOADIT_R2_CREDENTIALS or provide R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY.",
+      'Missing R2 credentials. Set TRANSLOADIT_R2_CREDENTIALS or provide R2_BUCKET, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY.',
     );
   }
   if (!host) {
-    throw new Error("Missing R2 host. Set R2_HOST or R2_ACCOUNT_ID.");
+    throw new Error('Missing R2 host. Set R2_HOST or R2_ACCOUNT_ID.');
   }
 
   return {
