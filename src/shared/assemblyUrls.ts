@@ -12,7 +12,7 @@ import {
   type AssemblyStage as ZodAssemblyStage,
   type AssemblyUrls as ZodAssemblyUrls,
   type NormalizedAssemblyUrls as ZodNormalizedAssemblyUrls,
-} from "@transloadit/zod/v3";
+} from '@transloadit/zod/v3';
 
 export type AssemblyUrls = ZodAssemblyUrls;
 export type NormalizedAssemblyUrls = ZodNormalizedAssemblyUrls;
@@ -29,11 +29,9 @@ export {
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === "object" && !Array.isArray(value);
+  value !== null && typeof value === 'object' && !Array.isArray(value);
 
-export const parseAssemblyStatus = (
-  data: unknown,
-): TransloaditAssembly | null => {
+export const parseAssemblyStatus = (data: unknown): TransloaditAssembly | null => {
   const parsed = assemblyStatusSchema.safeParse(data);
   return parsed.success ? parsed.data : null;
 };

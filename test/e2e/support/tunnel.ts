@@ -1,5 +1,5 @@
-import { spawn } from "node:child_process";
-import { resolve } from "node:path";
+import { spawn } from 'node:child_process';
+import { resolve } from 'node:path';
 
 export type TunnelInfo = {
   url: string;
@@ -8,13 +8,13 @@ export type TunnelInfo = {
 
 const startTunnelOnce = (port: number) => {
   const process = spawn(
-    "node",
-    [resolve("scripts/start-webhook-tunnel.ts"), "--json", "--port", `${port}`],
-    { stdio: ["ignore", "pipe", "pipe"] },
+    'node',
+    [resolve('scripts/start-webhook-tunnel.ts'), '--json', '--port', `${port}`],
+    { stdio: ['ignore', 'pipe', 'pipe'] },
   );
 
   const info = new Promise<TunnelInfo>((resolvePromise, reject) => {
-    let buffer = "";
+    let buffer = '';
     const logs: string[] = [];
     let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -24,11 +24,11 @@ const startTunnelOnce = (port: number) => {
         const leftover = buffer.trim();
         if (leftover) {
           logs.push(leftover);
-          buffer = "";
+          buffer = '';
         }
       }
       if (error) {
-        const details = logs.length ? `\n${logs.join("\n")}` : "";
+        const details = logs.length ? `\n${logs.join('\n')}` : '';
         reject(new Error(`${error.message}${details}`));
         return;
       }
@@ -36,12 +36,12 @@ const startTunnelOnce = (port: number) => {
     };
 
     timeoutId = setTimeout(() => {
-      finish(new Error("Timed out waiting for webhook tunnel URL"));
+      finish(new Error('Timed out waiting for webhook tunnel URL'));
     }, 90_000);
 
     const onData = (chunk: Buffer) => {
       buffer += chunk.toString();
-      let newlineIndex = buffer.indexOf("\n");
+      let newlineIndex = buffer.indexOf('\n');
       while (newlineIndex !== -1) {
         const line = buffer.slice(0, newlineIndex).trim();
         buffer = buffer.slice(newlineIndex + 1);
@@ -53,14 +53,14 @@ const startTunnelOnce = (port: number) => {
             logs.push(line);
           }
         }
-        newlineIndex = buffer.indexOf("\n");
+        newlineIndex = buffer.indexOf('\n');
       }
     };
 
-    process.stdout?.on("data", onData);
-    process.stderr?.on("data", onData);
-    process.on("error", (error) => finish(error));
-    process.on("exit", (code) => {
+    process.stdout?.on('data', onData);
+    process.stderr?.on('data', onData);
+    process.on('error', (error) => finish(error));
+    process.on('exit', (code) => {
       if (code && code !== 0) {
         finish(new Error(`Webhook tunnel exited with code ${code}`));
       }
@@ -82,5 +82,5 @@ export async function startTunnel(port: number) {
       lastError = error instanceof Error ? error : new Error(String(error));
     }
   }
-  throw lastError ?? new Error("Failed to start webhook tunnel");
+  throw lastError ?? new Error('Failed to start webhook tunnel');
 }

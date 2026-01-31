@@ -1,4 +1,4 @@
-import { transloaditError } from "./errors.ts";
+import { transloaditError } from './errors.ts';
 
 export type PollAssemblyOptions = {
   intervalMs: number;
@@ -12,9 +12,7 @@ export type PollAssemblyController = {
   stop: () => void;
 };
 
-export const pollAssembly = (
-  options: PollAssemblyOptions,
-): PollAssemblyController => {
+export const pollAssembly = (options: PollAssemblyOptions): PollAssemblyController => {
   const intervalMs = Math.max(0, options.intervalMs);
   let cancelled = false;
   let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -47,9 +45,7 @@ export const pollAssembly = (
       await options.refresh();
     } catch (error) {
       const resolved =
-        error instanceof Error
-          ? error
-          : transloaditError("polling", "Refresh failed");
+        error instanceof Error ? error : transloaditError('polling', 'Refresh failed');
       options.onError?.(resolved);
     } finally {
       inFlight = false;

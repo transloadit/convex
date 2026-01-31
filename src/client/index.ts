@@ -1,8 +1,8 @@
-import type { AssemblyStatus } from "@transloadit/zod/v3/assemblyStatus";
-import type { AssemblyInstructionsInput } from "@transloadit/zod/v3/template";
-import { actionGeneric, mutationGeneric, queryGeneric } from "convex/server";
-import { v } from "convex/values";
-import type { ComponentApi } from "../component/_generated/component.ts";
+import type { AssemblyStatus } from '@transloadit/zod/v3/assemblyStatus';
+import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template';
+import { actionGeneric, mutationGeneric, queryGeneric } from 'convex/server';
+import { v } from 'convex/values';
+import type { ComponentApi } from '../component/_generated/component.ts';
 import {
   type AssemblyOptions,
   type AssemblyResponse,
@@ -23,8 +23,8 @@ import {
   vStoreAssemblyMetadataArgs,
   vWebhookActionArgs,
   vWebhookResponse,
-} from "../shared/schemas.ts";
-import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from "./types.ts";
+} from '../shared/schemas.ts';
+import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from './types.ts';
 
 export { vAssemblyResponse, vAssemblyResultResponse, vCreateAssemblyArgs };
 
@@ -42,17 +42,17 @@ export {
   isAssemblyTerminalError,
   isAssemblyTerminalOk,
   isAssemblyTerminalOkStatus,
-} from "@transloadit/zod/v3/assemblyStatus";
+} from '@transloadit/zod/v3/assemblyStatus';
 export {
   buildWebhookQueueArgs,
   handleWebhookRequest,
   parseAndVerifyTransloaditWebhook,
   parseTransloaditWebhook,
-} from "../component/apiUtils.ts";
+} from '../component/apiUtils.ts';
 export type {
   NormalizedAssemblyUrls,
   TransloaditAssembly,
-} from "../shared/assemblyUrls.ts";
+} from '../shared/assemblyUrls.ts';
 export {
   ASSEMBLY_STATUS_COMPLETED,
   ASSEMBLY_STATUS_UPLOADING,
@@ -64,8 +64,8 @@ export {
   parseAssemblyResults,
   parseAssemblyStatus,
   parseAssemblyUrls,
-} from "../shared/assemblyUrls.ts";
-export { pollAssembly } from "../shared/pollAssembly.ts";
+} from '../shared/assemblyUrls.ts';
+export { pollAssembly } from '../shared/pollAssembly.ts';
 export type {
   ImageResizeResult,
   ResultByRobot,
@@ -74,16 +74,16 @@ export type {
   TransloaditResult,
   VideoEncodeResult,
   VideoThumbsResult,
-} from "../shared/resultTypes.ts";
+} from '../shared/resultTypes.ts';
 export {
   getResultOriginalKey,
   getResultUrl,
-} from "../shared/resultUtils.ts";
+} from '../shared/resultUtils.ts';
 export type {
   ParsedWebhookRequest,
   VerifiedWebhookRequest,
   WebhookActionArgs,
-} from "../shared/schemas.ts";
+} from '../shared/schemas.ts';
 export type { AssemblyStatus, AssemblyInstructionsInput };
 
 export interface TransloaditConfig {
@@ -100,16 +100,11 @@ function requireEnv(names: string[]): string {
       return value;
     }
   }
-  throw new Error(`Missing ${names.join(" or ")} environment variable`);
+  throw new Error(`Missing ${names.join(' or ')} environment variable`);
 }
 
 export { vAssemblyOptions };
-export type {
-  AssemblyOptions,
-  AssemblyResponse,
-  AssemblyResultResponse,
-  CreateAssemblyArgs,
-};
+export type { AssemblyOptions, AssemblyResponse, AssemblyResultResponse, CreateAssemblyArgs };
 
 /**
  * @deprecated Prefer `makeTransloaditAPI` or `Transloadit` for new code.
@@ -118,14 +113,11 @@ export class TransloaditClient {
   declare component: TransloaditComponent;
   declare config: TransloaditConfig;
 
-  constructor(
-    component: TransloaditComponent,
-    config?: Partial<TransloaditConfig>,
-  ) {
+  constructor(component: TransloaditComponent, config?: Partial<TransloaditConfig>) {
     this.component = component;
     this.config = {
-      authKey: config?.authKey ?? requireEnv(["TRANSLOADIT_KEY"]),
-      authSecret: config?.authSecret ?? requireEnv(["TRANSLOADIT_SECRET"]),
+      authKey: config?.authKey ?? requireEnv(['TRANSLOADIT_KEY']),
+      authSecret: config?.authSecret ?? requireEnv(['TRANSLOADIT_SECRET']),
     };
   }
 
@@ -202,10 +194,7 @@ export class TransloaditClient {
     return ctx.runQuery(this.component.lib.listResults, args);
   }
 
-  async listAlbumResults(
-    ctx: RunQueryCtx,
-    args: { album: string; limit?: number },
-  ) {
+  async listAlbumResults(ctx: RunQueryCtx, args: { album: string; limit?: number }) {
     return ctx.runQuery(this.component.lib.listAlbumResults, args);
   }
 
@@ -238,8 +227,8 @@ export function makeTransloaditAPI(
   config?: Partial<TransloaditConfig>,
 ) {
   const resolveConfig = (): TransloaditConfig => ({
-    authKey: config?.authKey ?? requireEnv(["TRANSLOADIT_KEY"]),
-    authSecret: config?.authSecret ?? requireEnv(["TRANSLOADIT_SECRET"]),
+    authKey: config?.authKey ?? requireEnv(['TRANSLOADIT_KEY']),
+    authSecret: config?.authSecret ?? requireEnv(['TRANSLOADIT_SECRET']),
   });
 
   return {

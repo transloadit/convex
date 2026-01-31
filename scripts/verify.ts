@@ -1,17 +1,17 @@
-import { createDebugLogger } from "../src/debug/index.ts";
-import { loadEnv } from "./env.ts";
-import { run } from "./qa/run.ts";
+import { createDebugLogger } from '../src/debug/index.ts';
+import { loadEnv } from './env.ts';
+import { run } from './qa/run.ts';
 
 loadEnv();
 
-type Mode = "local" | "cloud";
+type Mode = 'local' | 'cloud';
 
 const parseArgs = (args: string[]) => {
   let mode: string | undefined;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
-    if (arg === "--mode") {
+    if (arg === '--mode') {
       mode = args[index + 1];
       index += 1;
     }
@@ -20,7 +20,7 @@ const parseArgs = (args: string[]) => {
   return { mode };
 };
 
-const logger = createDebugLogger({ namespace: "verify" });
+const logger = createDebugLogger({ namespace: 'verify' });
 
 const runBrowser = async (options: {
   mode: Mode;
@@ -29,15 +29,15 @@ const runBrowser = async (options: {
     convexUrl?: string;
   };
 }) => {
-  const skipInstall = process.env.PLAYWRIGHT_SKIP_INSTALL === "1";
+  const skipInstall = process.env.PLAYWRIGHT_SKIP_INSTALL === '1';
 
   if (!skipInstall) {
-    logger.event("playwright-install", { browser: "chromium" });
-    run("yarn", ["exec", "playwright", "install", "chromium"]);
+    logger.event('playwright-install', { browser: 'chromium' });
+    run('yarn', ['exec', 'playwright', 'install', 'chromium']);
   }
 
-  logger.event("build");
-  run("yarn", ["build"]);
+  logger.event('build');
+  run('yarn', ['build']);
 
   const testEnv: NodeJS.ProcessEnv = {
     ...process.env,
@@ -51,24 +51,24 @@ const runBrowser = async (options: {
     }
   }
 
-  run("yarn", ["exec", "vitest", "run", "--config", "vitest.e2e.config.ts"], {
+  run('yarn', ['exec', 'vitest', 'run', '--config', 'vitest.e2e.config.ts'], {
     env: testEnv,
   });
 };
 
 const resolveCloudConfig = () => {
-  const appUrl = process.env.E2E_REMOTE_APP_URL ?? "";
+  const appUrl = process.env.E2E_REMOTE_APP_URL ?? '';
   if (!appUrl) {
     if (!process.env.CI) {
       throw new Error(
-        "E2E_REMOTE_APP_URL is required for local verify:cloud (CI resolves it automatically).",
+        'E2E_REMOTE_APP_URL is required for local verify:cloud (CI resolves it automatically).',
       );
     }
     throw new Error(
-      "Missing E2E_REMOTE_APP_URL (CI should resolve it via resolve-vercel-preview).",
+      'Missing E2E_REMOTE_APP_URL (CI should resolve it via resolve-vercel-preview).',
     );
   }
-  const convexUrl = process.env.E2E_REMOTE_CONVEX_URL ?? "";
+  const convexUrl = process.env.E2E_REMOTE_CONVEX_URL ?? '';
   return {
     appUrl,
     convexUrl,
@@ -76,31 +76,28 @@ const resolveCloudConfig = () => {
 };
 
 const args = parseArgs(process.argv.slice(2));
-const rawMode = args.mode ?? process.env.VERIFY_MODE ?? "local";
+const rawMode = args.mode ?? process.env.VERIFY_MODE ?? 'local';
 const resolvedMode: Mode =
-  rawMode === "cloud" ||
-  rawMode === "preview" ||
-  rawMode === "real" ||
-  rawMode === "convex"
-    ? "cloud"
-    : "local";
+  rawMode === 'cloud' || rawMode === 'preview' || rawMode === 'real' || rawMode === 'convex'
+    ? 'cloud'
+    : 'local';
 const runMain = async () => {
-  logger.event("start", { mode: resolvedMode });
-  if (resolvedMode === "cloud") {
+  logger.event('start', { mode: resolvedMode });
+  if (resolvedMode === 'cloud') {
     const remote = resolveCloudConfig();
-    logger.event("remote", {
+    logger.event('remote', {
       appUrl: remote.appUrl,
       convexUrl: remote.convexUrl,
     });
     await runBrowser({
-      mode: "cloud",
+      mode: 'cloud',
       remote,
     });
     return;
   }
 
   await runBrowser({
-    mode: "local",
+    mode: 'local',
   });
 };
 

@@ -1,4 +1,4 @@
-import type { AssemblyStatusResult } from "@transloadit/zod/v3/assemblyStatus";
+import type { AssemblyStatusResult } from '@transloadit/zod/v3/assemblyStatus';
 
 export type TransloaditResult = AssemblyStatusResult;
 
@@ -33,12 +33,11 @@ export type StoreResult = AssemblyStatusResult & {
 };
 
 export type ResultByRobot = {
-  "/image/resize": ImageResizeResult;
-  "/video/encode": VideoEncodeResult;
-  "/video/thumbs": VideoThumbsResult;
-  "/r2/store": StoreResult;
-  "/s3/store": StoreResult;
+  '/image/resize': ImageResizeResult;
+  '/video/encode': VideoEncodeResult;
+  '/video/thumbs': VideoThumbsResult;
+  '/r2/store': StoreResult;
+  '/s3/store': StoreResult;
 };
 
-export type ResultForRobot<Robot extends keyof ResultByRobot> =
-  ResultByRobot[Robot];
+export type ResultForRobot<Robot extends keyof ResultByRobot> = ResultByRobot[Robot];

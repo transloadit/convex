@@ -1,21 +1,19 @@
-import { signParams, verifyWebhookSignature } from "@transloadit/utils";
-import type { AssemblyStatusResults } from "@transloadit/zod/v3/assemblyStatus";
-import { transloaditError } from "../shared/errors.ts";
+import { signParams, verifyWebhookSignature } from '@transloadit/utils';
+import type { AssemblyStatusResults } from '@transloadit/zod/v3/assemblyStatus';
+import { transloaditError } from '../shared/errors.ts';
 import type {
   BuildParamsOptions,
   BuildParamsResult,
   ParsedWebhookRequest,
   VerifiedWebhookRequest,
   WebhookActionArgs,
-} from "../shared/schemas.ts";
+} from '../shared/schemas.ts';
 
-export function buildTransloaditParams(
-  options: BuildParamsOptions,
-): BuildParamsResult {
+export function buildTransloaditParams(options: BuildParamsOptions): BuildParamsResult {
   if (!options.templateId && !options.steps) {
     throw transloaditError(
-      "createAssembly",
-      "Provide either templateId or steps to create an Assembly",
+      'createAssembly',
+      'Provide either templateId or steps to create an Assembly',
     );
   }
 
@@ -23,8 +21,7 @@ export function buildTransloaditParams(
     key: options.authKey,
   };
 
-  auth.expires =
-    options.expires ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  auth.expires = options.expires ?? new Date(Date.now() + 60 * 60 * 1000).toISOString();
 
   const params: Record<string, unknown> = {
     auth,
@@ -56,24 +53,22 @@ export async function signTransloaditParams(
   paramsString: string,
   authSecret: string,
 ): Promise<string> {
-  return signParams(paramsString, authSecret, "sha384");
+  return signParams(paramsString, authSecret, 'sha384');
 }
 
-export async function parseTransloaditWebhook(
-  request: Request,
-): Promise<ParsedWebhookRequest> {
+export async function parseTransloaditWebhook(request: Request): Promise<ParsedWebhookRequest> {
   const formData = await request.formData();
-  const rawPayload = formData.get("transloadit");
-  const signature = formData.get("signature");
+  const rawPayload = formData.get('transloadit');
+  const signature = formData.get('signature');
 
-  if (typeof rawPayload !== "string") {
-    throw transloaditError("webhook", "Missing transloadit payload");
+  if (typeof rawPayload !== 'string') {
+    throw transloaditError('webhook', 'Missing transloadit payload');
   }
 
   return {
     payload: JSON.parse(rawPayload),
     rawBody: rawPayload,
-    signature: typeof signature === "string" ? signature : undefined,
+    signature: typeof signature === 'string' ? signature : undefined,
   };
 }
 
@@ -87,10 +82,7 @@ export async function parseAndVerifyTransloaditWebhook(
   const parsed = await parseTransloaditWebhook(request);
   const authSecret = options.authSecret;
   if (!authSecret) {
-    throw transloaditError(
-      "webhook",
-      "Missing authSecret for webhook verification",
-    );
+    throw transloaditError('webhook', 'Missing authSecret for webhook verification');
   }
   const verified = await verifyWebhookSignature({
     rawBody: parsed.rawBody,
@@ -100,10 +92,7 @@ export async function parseAndVerifyTransloaditWebhook(
 
   if (options.requireSignature ?? true) {
     if (!verified) {
-      throw transloaditError(
-        "webhook",
-        "Invalid Transloadit webhook signature",
-      );
+      throw transloaditError('webhook', 'Invalid Transloadit webhook signature');
     }
   }
 
@@ -132,19 +121,19 @@ export async function buildWebhookQueueArgs(
 export async function handleWebhookRequest(
   request: Request,
   options: {
-    mode?: "queue" | "sync";
+    mode?: 'queue' | 'sync';
     runAction: (args: WebhookActionArgs) => Promise<unknown>;
     requireSignature?: boolean;
     authSecret?: string;
     responseStatus?: number;
   },
 ): Promise<Response> {
-  const mode = options.mode ?? "queue";
+  const mode = options.mode ?? 'queue';
   const requireSignature = options.requireSignature ?? false;
 
   const parsed = requireSignature
     ? await parseAndVerifyTransloaditWebhook(request, {
-        authSecret: options.authSecret ?? "",
+        authSecret: options.authSecret ?? '',
         requireSignature: true,
       })
     : await parseTransloaditWebhook(request);
@@ -155,7 +144,7 @@ export async function handleWebhookRequest(
     signature: parsed.signature,
   });
 
-  const status = options.responseStatus ?? (mode === "sync" ? 204 : 202);
+  const status = options.responseStatus ?? (mode === 'sync' ? 204 : 202);
   return new Response(null, { status });
 }
 
@@ -168,9 +157,7 @@ export type AssemblyResultRecord = {
   result: AssemblyResult;
 };
 
-export function flattenResults(
-  results: AssemblyStatusResults | undefined,
-): AssemblyResultRecord[] {
+export function flattenResults(results: AssemblyStatusResults | undefined): AssemblyResultRecord[] {
   if (!results) return [];
   const output: AssemblyResultRecord[] = [];
   for (const [stepName, entries] of Object.entries(results)) {

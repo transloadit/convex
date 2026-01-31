@@ -1,4 +1,4 @@
-type Mode = "local" | "cloud";
+type Mode = 'local' | 'cloud';
 
 export type RuntimeConfig = {
   authKey: string;
@@ -10,13 +10,12 @@ export type RuntimeConfig = {
 };
 
 export const getRuntimeConfig = (): RuntimeConfig => {
-  const authKey = process.env.TRANSLOADIT_KEY ?? "";
-  const authSecret = process.env.TRANSLOADIT_SECRET ?? "";
-  const modeEnv = process.env.E2E_MODE ?? "local";
-  const mode: Mode = modeEnv === "cloud" ? "cloud" : "local";
-  const useRemote = mode === "cloud";
-  const remoteAppUrl =
-    process.env.E2E_REMOTE_APP_URL ?? process.env.E2E_APP_URL ?? "";
+  const authKey = process.env.TRANSLOADIT_KEY ?? '';
+  const authSecret = process.env.TRANSLOADIT_SECRET ?? '';
+  const modeEnv = process.env.E2E_MODE ?? 'local';
+  const mode: Mode = modeEnv === 'cloud' ? 'cloud' : 'local';
+  const useRemote = mode === 'cloud';
+  const remoteAppUrl = process.env.E2E_REMOTE_APP_URL ?? process.env.E2E_APP_URL ?? '';
   const shouldRun = useRemote || Boolean(authKey && authSecret);
   return {
     authKey,

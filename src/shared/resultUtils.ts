@@ -1,4 +1,4 @@
-import type { TransloaditResult } from "./resultTypes.ts";
+import type { TransloaditResult } from './resultTypes.ts';
 
 const extractUrlFromContainer = (container: Record<string, unknown>) => {
   const candidates = [
@@ -15,7 +15,7 @@ const extractUrlFromContainer = (container: Record<string, unknown>) => {
     container.signedUrl,
   ];
   for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.length > 0) {
+    if (typeof candidate === 'string' && candidate.length > 0) {
       return candidate;
     }
   }
@@ -23,7 +23,7 @@ const extractUrlFromContainer = (container: Record<string, unknown>) => {
 };
 
 const extractNestedUrl = (value: unknown) => {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined;
   }
   return extractUrlFromContainer(value as Record<string, unknown>);
@@ -33,7 +33,7 @@ export const getResultUrl = (result: TransloaditResult) => {
   const direct = extractUrlFromContainer(result as Record<string, unknown>);
   if (direct) return direct;
 
-  const nestedKeys = ["meta", "metadata", "result", "results", "file", "data"];
+  const nestedKeys = ['meta', 'metadata', 'result', 'results', 'file', 'data'];
   for (const key of nestedKeys) {
     const nested = extractNestedUrl((result as Record<string, unknown>)[key]);
     if (nested) return nested;
@@ -52,14 +52,14 @@ export const getResultUrl = (result: TransloaditResult) => {
 
 export const getResultOriginalKey = (result: TransloaditResult) => {
   const raw = (result as TransloaditResult & { raw?: unknown }).raw;
-  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const rawRecord = raw as Record<string, unknown>;
     const originalId = rawRecord.original_id;
-    if (typeof originalId === "string" && originalId.length > 0) {
+    if (typeof originalId === 'string' && originalId.length > 0) {
       return originalId;
     }
     const originalBase = rawRecord.original_basename;
-    if (typeof originalBase === "string" && originalBase.length > 0) {
+    if (typeof originalBase === 'string' && originalBase.length > 0) {
       return originalBase;
     }
   }

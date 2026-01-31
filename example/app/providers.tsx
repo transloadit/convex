@@ -1,8 +1,8 @@
-"use client";
+'use client';
 
-import { ConvexAuthProvider } from "@convex-dev/auth/react";
-import { ConvexReactClient } from "convex/react";
-import { useMemo } from "react";
+import { ConvexAuthProvider } from '@convex-dev/auth/react';
+import { ConvexReactClient } from 'convex/react';
+import { useMemo } from 'react';
 
 export const Providers = ({
   convexUrl,
