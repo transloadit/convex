@@ -1,19 +1,19 @@
-import { buildWebhookQueueArgs } from '@transloadit/convex';
-import { httpRouter } from 'convex/server';
-import { api } from './_generated/api';
-import { httpAction } from './_generated/server';
-import { auth } from './auth';
+import { buildWebhookQueueArgs } from '@transloadit/convex'
+import { httpRouter } from 'convex/server'
+import { api } from './_generated/api'
+import { httpAction } from './_generated/server'
+import { auth } from './auth'
 
-const http = httpRouter();
-auth.addHttpRoutes(http);
+const http = httpRouter()
+auth.addHttpRoutes(http)
 
 const requireEnv = (name: string) => {
-  const value = process.env[name];
+  const value = process.env[name]
   if (!value) {
-    throw new Error(`Missing ${name}`);
+    throw new Error(`Missing ${name}`)
   }
-  return value;
-};
+  return value
+}
 
 http.route({
   path: '/transloadit/webhook',
@@ -22,12 +22,12 @@ http.route({
     const args = await buildWebhookQueueArgs(request, {
       authSecret: requireEnv('TRANSLOADIT_SECRET'),
       requireSignature: false,
-    });
+    })
 
-    await ctx.runAction(api.transloadit.queueWebhook, args);
+    await ctx.runAction(api.transloadit.queueWebhook, args)
 
-    return new Response(null, { status: 202 });
+    return new Response(null, { status: 202 })
   }),
-});
+})
 
-export default http;
+export default http

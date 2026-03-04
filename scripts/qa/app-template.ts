@@ -1,26 +1,26 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 type WriteAppFilesOptions = {
-  projectDir: string;
-  tgzPath: string;
-};
+  projectDir: string
+  tgzPath: string
+}
 
 export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOptions) => {
-  const convexDir = join(projectDir, 'convex');
-  const libDir = join(projectDir, 'lib');
-  const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-  await mkdir(convexDir, { recursive: true });
-  await mkdir(libDir, { recursive: true });
+  const convexDir = join(projectDir, 'convex')
+  const libDir = join(projectDir, 'lib')
+  const repoRoot = resolve(fileURLToPath(new URL('../..', import.meta.url)))
+  await mkdir(convexDir, { recursive: true })
+  await mkdir(libDir, { recursive: true })
 
-  const r2Source = await readFile(join(repoRoot, 'example', 'lib', 'r2.ts'), 'utf8');
+  const r2Source = await readFile(join(repoRoot, 'example', 'lib', 'r2.ts'), 'utf8')
   const stepsSource = await readFile(
     join(repoRoot, 'example', 'lib', 'transloadit-steps.ts'),
     'utf8',
-  );
-  await writeFile(join(libDir, 'r2.ts'), r2Source, 'utf8');
-  await writeFile(join(libDir, 'transloadit-steps.ts'), stepsSource, 'utf8');
+  )
+  await writeFile(join(libDir, 'r2.ts'), r2Source, 'utf8')
+  await writeFile(join(libDir, 'transloadit-steps.ts'), stepsSource, 'utf8')
 
   await writeFile(
     join(projectDir, 'package.json'),
@@ -41,7 +41,7 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
       2,
     ),
     'utf8',
-  );
+  )
 
   await writeFile(
     join(convexDir, 'convex.config.ts'),
@@ -56,7 +56,7 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
       '',
     ].join('\n'),
     'utf8',
-  );
+  )
 
   await writeFile(
     join(convexDir, 'schema.ts'),
@@ -77,7 +77,7 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
       '',
     ].join('\n'),
     'utf8',
-  );
+  )
 
   await writeFile(
     join(convexDir, 'auth.ts'),
@@ -101,7 +101,7 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
       '',
     ].join('\n'),
     'utf8',
-  );
+  )
 
   await writeFile(
     join(convexDir, 'auth.config.ts'),
@@ -127,7 +127,7 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
       '',
     ].join('\n'),
     'utf8',
-  );
+  )
 
   await writeFile(
     join(convexDir, 'transloadit.ts'),
@@ -281,7 +281,7 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
       '',
     ].join('\n'),
     'utf8',
-  );
+  )
 
   await writeFile(
     join(convexDir, 'wedding.ts'),
@@ -431,7 +431,7 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
       '',
     ].join('\n'),
     'utf8',
-  );
+  )
 
   await writeFile(
     join(convexDir, 'http.ts'),
@@ -506,5 +506,5 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
       '',
     ].join('\n'),
     'utf8',
-  );
-};
+  )
+}

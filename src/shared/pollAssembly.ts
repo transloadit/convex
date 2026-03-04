@@ -1,61 +1,61 @@
-import { transloaditError } from './errors.ts';
+import { transloaditError } from './errors.ts'
 
 export type PollAssemblyOptions = {
-  intervalMs: number;
-  refresh: () => Promise<void>;
-  isTerminal?: () => boolean;
-  shouldContinue?: () => boolean;
-  onError?: (error: Error) => void;
-};
+  intervalMs: number
+  refresh: () => Promise<void>
+  isTerminal?: () => boolean
+  shouldContinue?: () => boolean
+  onError?: (error: Error) => void
+}
 
 export type PollAssemblyController = {
-  stop: () => void;
-};
+  stop: () => void
+}
 
 export const pollAssembly = (options: PollAssemblyOptions): PollAssemblyController => {
-  const intervalMs = Math.max(0, options.intervalMs);
-  let cancelled = false;
-  let intervalId: ReturnType<typeof setInterval> | null = null;
-  let inFlight = false;
+  const intervalMs = Math.max(0, options.intervalMs)
+  let cancelled = false
+  let intervalId: ReturnType<typeof setInterval> | null = null
+  let inFlight = false
 
   const shouldKeepPolling = () => {
-    if (!options.isTerminal?.()) return true;
-    return options.shouldContinue?.() ?? false;
-  };
+    if (!options.isTerminal?.()) return true
+    return options.shouldContinue?.() ?? false
+  }
 
   const stop = () => {
-    cancelled = true;
-    if (intervalId) clearInterval(intervalId);
-    intervalId = null;
-  };
+    cancelled = true
+    if (intervalId) clearInterval(intervalId)
+    intervalId = null
+  }
 
   if (intervalMs <= 0) {
-    return { stop };
+    return { stop }
   }
 
   const poll = async () => {
-    if (cancelled) return;
+    if (cancelled) return
     if (!shouldKeepPolling()) {
-      stop();
-      return;
+      stop()
+      return
     }
-    if (inFlight) return;
-    inFlight = true;
+    if (inFlight) return
+    inFlight = true
     try {
-      await options.refresh();
+      await options.refresh()
     } catch (error) {
       const resolved =
-        error instanceof Error ? error : transloaditError('polling', 'Refresh failed');
-      options.onError?.(resolved);
+        error instanceof Error ? error : transloaditError('polling', 'Refresh failed')
+      options.onError?.(resolved)
     } finally {
-      inFlight = false;
+      inFlight = false
     }
-  };
+  }
 
-  void poll();
+  void poll()
   intervalId = setInterval(() => {
-    void poll();
-  }, intervalMs);
+    void poll()
+  }, intervalMs)
 
-  return { stop };
-};
+  return { stop }
+}

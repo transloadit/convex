@@ -1,5 +1,5 @@
-import { makeTransloaditAPI } from '@transloadit/convex';
-import { components } from './_generated/api';
+import { makeTransloaditAPI } from '@transloadit/convex'
+import { components } from './_generated/api'
 
 export const {
   createAssembly,
@@ -13,4 +13,4 @@ export const {
   listResults,
   purgeAlbum,
   storeAssemblyMetadata,
-} = makeTransloaditAPI(components.transloadit);
+} = makeTransloaditAPI(components.transloadit)

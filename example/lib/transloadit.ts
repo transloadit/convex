@@ -2,14 +2,14 @@ export const weddingStepNames = {
   image: 'images_resized',
   video: 'videos_encoded',
   videoThumbs: 'videos_thumbs',
-};
+}
 
 export type {
   AssemblyOptions,
   AssemblyResponse,
   AssemblyResultResponse,
   AssemblyStatus,
-} from '@transloadit/convex';
+} from '@transloadit/convex'
 
 export {
   ASSEMBLY_STATUS_COMPLETED,
@@ -26,4 +26,4 @@ export {
   isAssemblyUploadingStatus,
   parseAssemblyStatus,
   pollAssembly,
-} from '@transloadit/convex';
+} from '@transloadit/convex'

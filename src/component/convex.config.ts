@@ -1,3 +1,3 @@
-import { defineComponent } from 'convex/server';
+import { defineComponent } from 'convex/server'
 
-export default defineComponent('transloadit');
+export default defineComponent('transloadit')

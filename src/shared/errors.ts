@@ -5,19 +5,19 @@ export type TransloaditErrorContext =
   | 'status'
   | 'webhook'
   | 'payload'
-  | 'config';
+  | 'config'
 
 export class TransloaditError extends Error {
-  readonly context: TransloaditErrorContext;
+  readonly context: TransloaditErrorContext
 
   constructor(context: TransloaditErrorContext, message: string) {
-    super(`Transloadit ${context}: ${message}`);
-    this.name = 'TransloaditError';
-    this.context = context;
+    super(`Transloadit ${context}: ${message}`)
+    this.name = 'TransloaditError'
+    this.context = context
   }
 }
 
 export const transloaditError = (
   context: TransloaditErrorContext,
   message: string,
-): TransloaditError => new TransloaditError(context, message);
+): TransloaditError => new TransloaditError(context, message)

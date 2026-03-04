@@ -1,5 +1,5 @@
-import { defineSchema, defineTable } from 'convex/server';
-import { vAssemblyFields, vAssemblyResultFields } from '../shared/schemas.ts';
+import { defineSchema, defineTable } from 'convex/server'
+import { vAssemblyFields, vAssemblyResultFields } from '../shared/schemas.ts'
 
 export default defineSchema({
   assemblies: defineTable(vAssemblyFields)
@@ -10,4 +10,4 @@ export default defineSchema({
     .index('by_assemblyId', ['assemblyId'])
     .index('by_assemblyId_and_step', ['assemblyId', 'stepName'])
     .index('by_album', ['album']),
-});
+})

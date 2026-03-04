@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
-import { test } from 'vitest';
+import { test } from 'vitest'
 
-export const modules = import.meta.glob('./**/*.*s');
+export const modules = import.meta.glob('./**/*.*s')
 
-test('setup', () => {});
+test('setup', () => {})
