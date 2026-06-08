@@ -24,7 +24,7 @@ jobs:
       - run: npm install -g npm@11.5.1
       - run: corepack enable
       - run: corepack yarn
-      - uses: changesets/action@v1
+      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d
         with:
           version: corepack yarn changeset version
           publish: corepack yarn changeset publish
