@@ -80,6 +80,7 @@ jobs:
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -117,10 +118,20 @@ jobs:
           R2_HOST: ${{ secrets.R2_HOST }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-      - run: yarn exec playwright install --with-deps chromium
-      - run: yarn verify:local
+      - name: Check hosted Chrome
+        run: |
+          set -euo pipefail
+          echo "::group::Browser test diagnostics"
+          node --version
+          yarn --version
+          google-chrome --version
+          df -h
+          echo "::endgroup::"
+      - name: Run local browser verification
+        run: timeout --foreground 12m yarn verify:local
         env:
           PLAYWRIGHT_SKIP_INSTALL: "1"
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
           TRANSLOADIT_R2_CREDENTIALS: ${{ secrets.TRANSLOADIT_R2_CREDENTIALS }}
@@ -137,6 +148,7 @@ jobs:
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
@@ -154,7 +166,7 @@ jobs:
       - name: Deploy Convex preview (PR)
         if: github.event_name == 'pull_request'
         run: |
-          node scripts/deploy-cloud.ts >> "$GITHUB_ENV"
+          timeout --foreground 12m node scripts/deploy-cloud.ts >> "$GITHUB_ENV"
         env:
           CI_OUTPUT: "1"
           CONVEX_PREVIEW_NAME: ${{ steps.preview_name.outputs.name }}
@@ -171,7 +183,7 @@ jobs:
       - name: Deploy Convex stable (main)
         if: github.ref == 'refs/heads/main'
         run: |
-          node scripts/deploy-cloud.ts >> "$GITHUB_ENV"
+          timeout --foreground 12m node scripts/deploy-cloud.ts >> "$GITHUB_ENV"
         env:
           CI_OUTPUT: "1"
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
@@ -197,7 +209,9 @@ jobs:
       - name: Resolve Vercel preview URL
         if: env.E2E_REMOTE_APP_URL == ''
         run: |
-          echo "E2E_REMOTE_APP_URL=$(node scripts/resolve-vercel-preview.ts)" >> "$GITHUB_ENV"
+          preview_url="$(timeout --foreground 7m node scripts/resolve-vercel-preview.ts)"
+          echo "Resolved Vercel preview URL: ${preview_url}"
+          echo "E2E_REMOTE_APP_URL=${preview_url}" >> "$GITHUB_ENV"
         env:
           VERCEL_PREVIEW_DEPLOY_HOOK: ${{ secrets.VERCEL_PREVIEW_DEPLOY_HOOK }}
           VERCEL_PROJECT_SLUG: convex
@@ -234,10 +248,13 @@ jobs:
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
           CONVEX_PREVIEW_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
-      - run: yarn verify:cloud
+      - name: Run cloud verification
+        run: timeout --foreground 12m yarn verify:cloud
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
           E2E_REMOTE_CONVEX_URL: ${{ env.E2E_REMOTE_CONVEX_URL }}
+          PLAYWRIGHT_SKIP_INSTALL: "1"
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
 
   deploy-example:

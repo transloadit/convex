@@ -20,6 +20,7 @@ const log = (...args: Parameters<typeof console.log>) => {
 const runStdio = ciOutput ? 'pipe' : 'inherit'
 
 const rootDir = resolve(fileURLToPath(new URL('..', import.meta.url)))
+const minutes = (value: number) => value * 60 * 1000
 const sleep = (ms: number) =>
   new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -40,7 +41,11 @@ const deployCloud = async () => {
     await mkdir(projectDir, { recursive: true })
 
     log(`Packing @transloadit/convex into ${tgzPath}...`)
-    run('yarn', ['pack', '-o', tgzPath], { cwd: rootDir, stdio: runStdio })
+    run('yarn', ['pack', '-o', tgzPath], {
+      cwd: rootDir,
+      stdio: runStdio,
+      timeoutMs: minutes(2),
+    })
 
     await writeAppFiles({ projectDir, tgzPath })
 
@@ -48,10 +53,14 @@ const deployCloud = async () => {
     run('npm', ['install', '--no-fund', '--no-audit'], {
       cwd: projectDir,
       stdio: runStdio,
+      timeoutMs: minutes(5),
     })
 
     log('Deploying Convex app...')
     const previewName = process.env.CONVEX_PREVIEW_NAME
+    if (previewName) {
+      log(`Preview deployment name: ${previewName}`)
+    }
     const deployArgs = ['convex', 'deploy', '--typecheck', 'disable', '--yes']
     if (previewName) {
       deployArgs.push('--preview-create', previewName)
@@ -64,6 +73,7 @@ const deployCloud = async () => {
         CONVEX_DEPLOY_KEY: requireEnv('CONVEX_DEPLOY_KEY'),
       },
       stdio: 'pipe',
+      timeoutMs: minutes(8),
     })
 
     const { deploymentName, deploymentUrl } = parseDeployOutput(deployOutput)
@@ -89,6 +99,7 @@ const deployCloud = async () => {
             env: deployEnv,
             stdio: runStdio === 'inherit' ? 'pipe' : runStdio,
             input: value,
+            timeoutMs: minutes(2),
           })
           return
         } catch (error) {

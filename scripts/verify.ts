@@ -21,6 +21,7 @@ const parseArgs = (args: string[]) => {
 }
 
 const logger = createDebugLogger({ namespace: 'verify' })
+const minutes = (value: number) => value * 60 * 1000
 
 const runBrowser = async (options: {
   mode: Mode
@@ -33,11 +34,11 @@ const runBrowser = async (options: {
 
   if (!skipInstall) {
     logger.event('playwright-install', { browser: 'chromium' })
-    run('yarn', ['exec', 'playwright', 'install', 'chromium'])
+    run('yarn', ['exec', 'playwright', 'install', 'chromium'], { timeoutMs: minutes(5) })
   }
 
   logger.event('build')
-  run('yarn', ['build'])
+  run('yarn', ['build'], { timeoutMs: minutes(5) })
 
   const testEnv: NodeJS.ProcessEnv = {
     ...process.env,
@@ -53,6 +54,7 @@ const runBrowser = async (options: {
 
   run('yarn', ['exec', 'vitest', 'run', '--config', 'vitest.e2e.config.ts'], {
     env: testEnv,
+    timeoutMs: minutes(8),
   })
 }
 
