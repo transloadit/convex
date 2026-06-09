@@ -19,6 +19,7 @@ type DebugUppy = {
 }
 
 const fixturesDir = resolve('test/e2e/fixtures')
+const chromiumChannel = process.env.PLAYWRIGHT_CHROMIUM_CHANNEL
 
 const describeE2e = shouldRun ? describe : describe.skip
 
@@ -75,7 +76,7 @@ describeE2e('e2e upload flow', () => {
   })
 
   test('uploads wedding photos and videos', async () => {
-    const browser = await chromium.launch()
+    const browser = await chromium.launch(chromiumChannel ? { channel: chromiumChannel } : {})
     const page = await browser.newPage()
     const appOrigin = useRemote ? new URL(serverUrl).origin : serverUrl
     const shouldTrackRequest = (url: string) =>
