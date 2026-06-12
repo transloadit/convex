@@ -2,5 +2,10 @@
   "framework": "nextjs",
   "installCommand": "corepack enable && corepack yarn install --immutable",
   "buildCommand": "corepack yarn example:build",
-  "outputDirectory": "example/.next"
+  "outputDirectory": "example/.next",
+  "git": {
+    "deploymentEnabled": {
+      "main": false
+    }
+  }
 }
