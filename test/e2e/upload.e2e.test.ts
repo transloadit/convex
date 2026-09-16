@@ -43,10 +43,8 @@ describeE2e('e2e upload flow', () => {
         throw new Error('Missing VERCEL_PROTECTION_BYPASS for cloud preview access')
       }
       const parsed = new URL(remoteAppUrl.replace(/\/$/, ''))
-      parsed.searchParams.set('__vercel_protection_bypass', vercelBypassToken)
-      if (remoteConvexUrl) {
-        parsed.searchParams.set('convexUrl', remoteConvexUrl)
-      }
+      // Exercise the deployment visitors actually open. A backend override hid broken previews.
+      parsed.searchParams.delete('convexUrl')
       serverUrl = parsed.toString()
       return
     }
@@ -78,6 +76,8 @@ describeE2e('e2e upload flow', () => {
   test('uploads wedding photos and videos', async () => {
     const browser = await chromium.launch(chromiumChannel ? { channel: chromiumChannel } : {})
     const page = await browser.newPage()
+    const connectedHosts = new Set<string>()
+    page.on('websocket', (socket) => connectedHosts.add(new URL(socket.url()).host))
     await page.addInitScript(() => {
       const start = document.startViewTransition?.bind(document)
       if (!start) return
@@ -177,6 +177,9 @@ describeE2e('e2e upload flow', () => {
             url: new URL(page.url()).origin,
           })
           throw error
+        }
+        if (remoteConvexUrl) {
+          expect(connectedHosts.has(new URL(remoteConvexUrl).host)).toBe(true)
         }
       }
 

@@ -117,6 +117,22 @@ Use the printed deployment URL (e.g. `https://<deployment>.convex.cloud`) as the
 The stable demo URL is the Vercel production URL (e.g. `https://convex-demo.transload.it`) and
 should be stored in the GitHub Actions secret `E2E_REMOTE_APP_URL`.
 
+## Branch previews
+
+Convex assigns a host such as `https://loyal-trout-380.convex.cloud`; a Git branch name is not a
+Convex hostname. After CI first deploys a branch backend, use its printed `Deployment URL` for a
+Vercel `NEXT_PUBLIC_CONVEX_URL` variable scoped to that preview branch, then redeploy the frontend:
+
+```bash
+vercel env add NEXT_PUBLIC_CONVEX_URL preview --git-branch <branch> --project convex --scope transloadit-com
+```
+
+Subsequent CI runs reuse the named Convex preview and preserve its URL. A hosted app with no
+configured backend shows an unavailable state instead of leaving guest sign-in pending forever.
+Cloud browser QA opens the ordinary preview URL without a `convexUrl` override and checks that
+it connects to the deployment created by CI. Configure the branch variable before that check can
+pass for a new branch.
+
 ## Demo cleanup (Convex + R2)
 
 To remove demo uploads from Convex and Cloudflare R2, run:
