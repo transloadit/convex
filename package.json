@@ -3,7 +3,7 @@
   "description": "Transloadit component for Convex",
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "yarn@4.5.0",
+  "packageManager": "yarn@4.18.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/transloadit/convex.git"
@@ -24,7 +24,7 @@
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && yarn typecheck:example",
     "test": "vitest run --typecheck",
     "test:watch": "vitest --typecheck",
     "verify": "yarn check && yarn verify:local",
@@ -45,7 +45,8 @@
     "prepack": "yarn build",
     "template:ensure": "node scripts/ensure-template.ts",
     "tunnel": "node scripts/start-webhook-tunnel.ts",
-    "r2:lifecycle": "node scripts/ensure-r2-lifecycle.ts"
+    "r2:lifecycle": "node scripts/ensure-r2-lifecycle.ts",
+    "typecheck:example": "next typegen example && tsc --noEmit -p example/tsconfig.json"
   },
   "files": [
     "dist",
@@ -81,41 +82,52 @@
     "convex": "^1.24.8"
   },
   "dependencies": {
-    "@transloadit/utils": "^4.1.9",
-    "@transloadit/zod": "^4.1.9"
+    "@transloadit/utils": "^4.8.1",
+    "@transloadit/zod": "^4.4.0"
   },
   "devDependencies": {
-    "@auth/core": "^0.37.0",
-    "@aws-sdk/client-s3": "^3.551.0",
-    "@biomejs/biome": "^2.3.11",
-    "@changesets/cli": "^2.29.8",
-    "@convex-dev/auth": "^0.0.90",
+    "@auth/core": "^0.41.3",
+    "@aws-sdk/client-s3": "^3.1133.0",
+    "@biomejs/biome": "^2.5.14",
+    "@changesets/cli": "^3.0.3",
+    "@convex-dev/auth": "^0.0.95",
     "@edge-runtime/vm": "^5.0.0",
-    "@fal-ai/client": "^1.8.4",
-    "@playwright/test": "^1.57.0",
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/react": "^16.3.0",
-    "@types/node": "^25.0.8",
-    "@types/react": "^19.2.8",
-    "@types/react-dom": "^19",
-    "@uppy/core": "^5.2.0",
-    "@uppy/dashboard": "^5.1.0",
-    "@uppy/react": "^5.1.1",
-    "@uppy/transloadit": "^5.4.0",
-    "convex": "^1.31.4",
-    "convex-test": "^0.0.41",
-    "dotenv": "^17.2.3",
-    "esbuild": "^0.27.2",
-    "jsdom": "^26.1.0",
-    "next": "^16.1.3",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "@fal-ai/client": "^1.10.1",
+    "@playwright/test": "^1.63.0",
+    "@testing-library/dom": "^10.4.2",
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^24.13.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@uppy/core": "^6.0.1",
+    "@uppy/dashboard": "^6.0.0",
+    "@uppy/react": "^6.0.0",
+    "@uppy/transloadit": "^6.0.0",
+    "convex": "^1.45.0",
+    "convex-test": "^0.0.58",
+    "dotenv": "^17.4.2",
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.0.1",
+    "motion": "^13.4.0",
+    "next": "^16.3.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1",
+    "zod": "^4.6.5"
   },
   "resolutions": {
-    "preact": "10.28.2"
+    "preact": "10.29.8"
   },
   "types": "./dist/client/index.d.ts",
-  "module": "./dist/client/index.js"
+  "module": "./dist/client/index.js",
+  "engines": {
+    "node": "^24.15.0 || >=26.0.0"
+  },
+  "dependenciesMeta": {
+    "esbuild": {
+      "built": true
+    }
+  }
 }

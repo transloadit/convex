@@ -1,5 +1,13 @@
-import { spawn } from 'node:child_process'
-import { chmodSync, mkdirSync, statSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawn } from 'node:child_process'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { join, resolve } from 'node:path'
 import { loadEnv } from './env.ts'
 
@@ -42,7 +50,7 @@ function getDownloadName() {
   }
 
   if (platform === 'darwin') {
-    return arch === 'arm64' ? 'cloudflared-darwin-arm64' : 'cloudflared-darwin-amd64'
+    return arch === 'arm64' ? 'cloudflared-darwin-arm64.tgz' : 'cloudflared-darwin-amd64.tgz'
   }
 
   if (platform === 'win32') {
@@ -71,7 +79,20 @@ async function ensureCloudflared() {
     throw new Error(`Failed to download cloudflared: ${response.status} ${response.statusText}`)
   }
   const buffer = Buffer.from(await response.arrayBuffer())
-  writeFileSync(target, buffer)
+  // macOS releases are archives; Linux and Windows releases are binaries.
+  const downloadDir = mkdtempSync(join(toolsDir, 'cloudflared-'))
+  try {
+    const download = join(downloadDir, assetName)
+    writeFileSync(download, buffer)
+    if (assetName.endsWith('.tgz')) {
+      execFileSync('tar', ['-xzf', download, '-C', downloadDir, binaryName])
+      renameSync(join(downloadDir, binaryName), target)
+    } else {
+      renameSync(download, target)
+    }
+  } finally {
+    rmSync(downloadDir, { recursive: true, force: true })
+  }
   if (!isWindows) {
     chmodSync(target, 0o755)
   }
@@ -139,6 +160,11 @@ tunnel.on('error', (error) => {
   console.error(error)
   process.exit(1)
 })
+
+// The test runner stops this wrapper; forward the signal to avoid orphaned tunnels.
+for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+  process.once(signal, () => tunnel.kill(signal))
+}
 
 tunnel.on('exit', (code) => {
   if (!printed && code && code !== 0) {

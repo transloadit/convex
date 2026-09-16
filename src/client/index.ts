@@ -26,8 +26,6 @@ import {
 } from '../shared/schemas.ts'
 import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from './types.ts'
 
-export { vAssemblyResponse, vAssemblyResultResponse, vCreateAssemblyArgs }
-
 export {
   assemblyStatusErrCodeSchema,
   assemblyStatusOkCodeSchema,
@@ -84,7 +82,8 @@ export type {
   VerifiedWebhookRequest,
   WebhookActionArgs,
 } from '../shared/schemas.ts'
-export type { AssemblyStatus, AssemblyInstructionsInput }
+export type { AssemblyInstructionsInput, AssemblyStatus }
+export { vAssemblyResponse, vAssemblyResultResponse, vCreateAssemblyArgs }
 
 export interface TransloaditConfig {
   authKey: string
@@ -103,8 +102,8 @@ function requireEnv(names: string[]): string {
   throw new Error(`Missing ${names.join(' or ')} environment variable`)
 }
 
-export { vAssemblyOptions }
 export type { AssemblyOptions, AssemblyResponse, AssemblyResultResponse, CreateAssemblyArgs }
+export { vAssemblyOptions }
 
 /**
  * @deprecated Prefer `makeTransloaditAPI` or `Transloadit` for new code.

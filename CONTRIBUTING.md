@@ -5,11 +5,19 @@ them out.
 
 ## Development
 
+Use Node.js 24.15+ or 26+ and the Yarn version pinned in `package.json`:
+
+```bash
+npm install --global corepack@0.36.0
+corepack enable
+yarn install --immutable
+```
+
 ```bash
 yarn check
 ```
 
-This runs format, lint, typecheck, and unit tests. For the full verification suite:
+This runs format, lint, module and example typechecks, and unit tests. For the full verification suite:
 
 ```bash
 yarn verify
@@ -24,13 +32,16 @@ export TRANSLOADIT_KEY=...
 export TRANSLOADIT_SECRET=...
 export TRANSLOADIT_R2_CREDENTIALS=...
 
-# Get a public webhook URL (cloudflared is auto-downloaded if needed)
-yarn tunnel --once
+# Keep this running in another terminal (cloudflared is downloaded if needed).
+yarn tunnel --port 3000
 # Set TRANSLOADIT_NOTIFY_URL to the printed notifyUrl
 export TRANSLOADIT_NOTIFY_URL=...
 
 yarn example:dev
 ```
+
+Node 26 does not bundle Corepack. The bootstrap above installs it explicitly on both supported
+Node versions. Keep the tunnel running for uploads; `--once` prints a URL and stops the tunnel.
 
 If you want the API routes to talk to an existing Convex deployment (bypassing Convex Auth), set:
 
@@ -65,6 +76,14 @@ The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default
 spam/abuse. The demo bucket auto-expires objects after 1 day via an R2 lifecycle rule (reapply with
 `yarn r2:lifecycle` or override with `R2_RETENTION_DAYS`). If you set `WEDDING_UPLOAD_CODE` on the
 Convex deployment, guests must enter the passcode before uploads can start.
+
+Raw `R2_*` credentials are a local QA convenience: inline signed Assembly instructions are sent to
+the browser. For any guest-facing deployment, use named Transloadit Template credentials and omit
+raw storage keys. The diagnostic panel is redacted, but redaction does not hide the instructions
+Uppy must send. An upload code does not make gallery reads private.
+
+The [wedding archive recommendation](docs/wedding-gallery.md) lists the separate storage, originals,
+privacy, moderation, and backup work required before importing real wedding media.
 
 ## Demo deployment (Vercel + stable Convex)
 
@@ -154,6 +173,13 @@ Notes:
   credentials.
 - `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`.
 - Set `TRANSLOADIT_DEBUG=1` to enable verbose verify logs.
+- Local upload verification fails explicitly if Transloadit credentials are missing.
+- The browser flow also checks decoded photos, video metadata, native view transitions, keyboard
+  navigation, focus restoration, and phone-sized reduced-motion viewing. Set `E2E_SCREENSHOT_DIR`
+  to a local directory to retain gallery/viewer screenshots.
+- macOS tunnel bootstrap extracts the official cloudflared archive automatically.
+- Cloud QA deploys the checked-in `example/convex` sources against the packed module and uses the
+  root dependency versions; it no longer maintains a separate generated implementation.
 
 ## Component test helpers
 

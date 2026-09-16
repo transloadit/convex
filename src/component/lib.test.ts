@@ -11,6 +11,45 @@ process.env.TRANSLOADIT_KEY = 'test-key'
 process.env.TRANSLOADIT_SECRET = 'test-secret'
 
 describe('Transloadit component lib', () => {
+  test.each(['handleWebhook', 'queueWebhook'] as const)(
+    '%s persists only the signed body, even if the separate payload is changed',
+    async (method) => {
+      vi.useFakeTimers()
+      try {
+        const t = convexTest(schema, modules)
+        const signedPayload = { assembly_id: 'signed', ok: 'ASSEMBLY_COMPLETED' }
+        const rawBody = JSON.stringify(signedPayload)
+        const signature = createHmac('sha384', 'test-secret').update(rawBody).digest('hex')
+        const result = await t.action(api.lib[method], {
+          rawBody,
+          signature: `sha384:${signature}`,
+          payload: { assembly_id: 'tampered', ok: 'ASSEMBLY_COMPLETED' },
+        })
+        expect(result.assemblyId).toBe('signed')
+        await t.finishAllScheduledFunctions(vi.runAllTimers)
+        expect(await t.query(api.lib.getAssemblyStatus, { assemblyId: 'signed' })).not.toBeNull()
+        expect(await t.query(api.lib.getAssemblyStatus, { assemblyId: 'tampered' })).toBeNull()
+      } finally {
+        vi.useRealTimers()
+      }
+    },
+  )
+
+  test('queueWebhook preserves an explicit trusted verification opt-out when processing', async () => {
+    vi.useFakeTimers()
+    try {
+      const t = convexTest(schema, modules)
+      await t.action(api.lib.queueWebhook, {
+        payload: { assembly_id: 'trusted', ok: 'ASSEMBLY_COMPLETED' },
+        verifySignature: false,
+      })
+      await t.finishAllScheduledFunctions(vi.runAllTimers)
+      expect(await t.query(api.lib.getAssemblyStatus, { assemblyId: 'trusted' })).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('handleWebhook stores assembly and results', async () => {
     const t = convexTest(schema, modules)
 

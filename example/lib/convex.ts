@@ -3,6 +3,7 @@ import { convexTest } from 'convex-test'
 import { api } from '../../src/component/_generated/api.ts'
 import schema from '../../src/component/schema.ts'
 import { modules } from '../../src/test/nodeModules.ts'
+import { parseDisplayParams } from './assembly-params'
 import { buildWeddingSteps } from './transloadit-steps'
 
 type Mode = 'local' | 'cloud'
@@ -89,7 +90,7 @@ export const runAction = async (name: string, args: Record<string, unknown>) => 
       },
       config,
     })
-    const params = safeParseParams(assemblyOptions.params)
+    const params = parseDisplayParams(assemblyOptions.params)
     return {
       assemblyOptions,
       params,
@@ -168,13 +169,4 @@ export const runQuery = async (name: string, args: Record<string, unknown>) => {
   }
 
   throw new Error(`Unknown query ${name}`)
-}
-
-const safeParseParams = (value: string) => {
-  try {
-    return JSON.parse(value) as Record<string, unknown>
-  } catch (error) {
-    console.warn('Failed to parse Transloadit params', error)
-    return null
-  }
 }

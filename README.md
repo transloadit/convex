@@ -12,7 +12,7 @@ A Convex component for creating Transloadit Assemblies, signing Uppy uploads, an
 
 ## Requirements
 
-- Node.js 24+
+- Node.js 24.15+ or 26+
 - Yarn 4 (Corepack)
 
 ## Install
@@ -43,7 +43,7 @@ npx convex env set TRANSLOADIT_KEY <your_auth_key>
 npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
 ```
 
-## Golden path (secure by default)
+## Upload flow
 
 1. **Server-only create**: a Convex action creates signed `assemblyOptions` (auth secret stays server-side).
 2. **Client upload**: use Uppy + `@uppy/transloadit` with `assemblyOptions()`.
@@ -69,6 +69,10 @@ export const {
   storeAssemblyMetadata,
 } = makeTransloaditAPI(components.transloadit);
 ```
+
+These wrappers do not add application authorization. Expose only the operations your app needs,
+and add membership/ownership checks for signing, queries, refresh, edits, and deletion. The example
+limits guest signing to its wedding pipeline and keeps cleanup internal; its gallery remains public.
 
 Note: pass `expires` in `createAssembly` when you need a custom expiry; otherwise the component defaults to 1 hour from now.
 
@@ -167,3 +171,7 @@ Transloadit directly into Cloudflare R2.
 Live demo: `https://convex-demo.transload.it`
 
 For setup, deployment, and verification details, see `CONTRIBUTING.md`.
+
+Photo viewing uses Motion 13.4 `AnimateView` with React 19.3, a keyboard-accessible dialog, and a
+reduced-motion path. See [the wedding archive recommendation](docs/wedding-gallery.md) before using
+the disposable demo for real wedding media, including the proposed Storage/`@transloadit/img` integration.

@@ -38,8 +38,8 @@ import {
 
 const TRANSLOADIT_ASSEMBLY_URL = 'https://api2.transloadit.com/assemblies'
 
-export { vAssembly, vAssemblyResult, vTransloaditConfig }
 export type { Assembly, AssemblyResult } from '../shared/schemas.ts'
+export { vAssembly, vAssemblyResult, vTransloaditConfig }
 
 type InternalApi = {
   lib: {
@@ -81,16 +81,37 @@ const parseAssemblyPayload = (payload: unknown): AssemblyStatus => {
   return parsed
 }
 
-const resolveWebhookRawBody = (args: {
+// Always persist the signed bytes, never an independently supplied payload.
+const parseWebhookPayload = async (args: {
   payload: unknown
   rawBody?: string
+  signature?: string
   verifySignature?: boolean
-}) => {
-  if (typeof args.rawBody === 'string') return args.rawBody
-  if (args.verifySignature === false) {
-    return JSON.stringify(args.payload ?? {})
+  authSecret?: string
+}): Promise<AssemblyStatus> => {
+  if (args.verifySignature === false) return parseAssemblyPayload(args.payload)
+  if (!args.rawBody) {
+    throw transloaditError('webhook', 'Missing rawBody for webhook verification')
   }
-  return null
+  const authSecret = args.authSecret ?? process.env.TRANSLOADIT_SECRET
+  if (!authSecret) {
+    throw transloaditError('webhook', 'Missing TRANSLOADIT_SECRET for webhook validation')
+  }
+  const verified = await verifyWebhookSignature({
+    rawBody: args.rawBody,
+    signatureHeader: args.signature,
+    authSecret,
+  })
+  if (!verified) {
+    throw transloaditError('webhook', 'Invalid Transloadit webhook signature')
+  }
+  let payload: unknown
+  try {
+    payload = JSON.parse(args.rawBody)
+  } catch {
+    throw transloaditError('webhook', 'Invalid JSON in signed webhook body')
+  }
+  return parseAssemblyPayload(payload)
 }
 
 const buildSignedAssemblyUrl = async (
@@ -112,7 +133,7 @@ const buildSignedAssemblyUrl = async (
 }
 
 const applyAssemblyStatus = async (
-  ctx: Pick<import('./_generated/server.ts').FunctionCtx, 'runMutation'>,
+  ctx: Pick<import('./_generated/server.ts').ActionCtx, 'runMutation'>,
   payload: AssemblyStatus,
 ) => {
   const assemblyId = resolveAssemblyId(payload)
@@ -361,28 +382,7 @@ export const processWebhook = internalAction({
   args: vWebhookArgs,
   returns: vWebhookResponse,
   handler: async (ctx, args) => {
-    const rawBody = resolveWebhookRawBody(args)
-    const shouldVerify = args.verifySignature ?? true
-    const authSecret = args.authSecret ?? process.env.TRANSLOADIT_SECRET
-
-    if (shouldVerify) {
-      if (!rawBody) {
-        throw transloaditError('webhook', 'Missing rawBody for webhook verification')
-      }
-      if (!authSecret) {
-        throw transloaditError('webhook', 'Missing TRANSLOADIT_SECRET for webhook validation')
-      }
-      const verified = await verifyWebhookSignature({
-        rawBody,
-        signatureHeader: args.signature,
-        authSecret,
-      })
-      if (!verified) {
-        throw transloaditError('webhook', 'Invalid Transloadit webhook signature')
-      }
-    }
-
-    const parsed = parseAssemblyPayload(args.payload)
+    const parsed = await parseWebhookPayload(args)
     return applyAssemblyStatus(ctx, parsed)
   },
 })
@@ -406,28 +406,10 @@ export const queueWebhook = action({
   args: vHandleWebhookArgs,
   returns: vQueueWebhookResponse,
   handler: async (ctx, args) => {
-    const rawBody = resolveWebhookRawBody(args)
-    const shouldVerify = args.verifySignature ?? true
-    const authSecret = args.config?.authSecret ?? process.env.TRANSLOADIT_SECRET
-
-    if (shouldVerify) {
-      if (!rawBody) {
-        throw transloaditError('webhook', 'Missing rawBody for webhook verification')
-      }
-      if (!authSecret) {
-        throw transloaditError('webhook', 'Missing TRANSLOADIT_SECRET for webhook validation')
-      }
-      const verified = await verifyWebhookSignature({
-        rawBody,
-        signatureHeader: args.signature,
-        authSecret,
-      })
-      if (!verified) {
-        throw transloaditError('webhook', 'Invalid Transloadit webhook signature')
-      }
-    }
-
-    const parsed = parseAssemblyPayload(args.payload)
+    const parsed = await parseWebhookPayload({
+      ...args,
+      authSecret: args.config?.authSecret,
+    })
     const assemblyId = resolveAssemblyId(parsed)
     if (!assemblyId) {
       throw transloaditError('webhook', 'Webhook payload missing assembly_id')
@@ -437,7 +419,7 @@ export const queueWebhook = action({
       payload: parsed,
       rawBody: args.rawBody,
       signature: args.signature,
-      verifySignature: true,
+      verifySignature: args.verifySignature ?? true,
       authSecret: args.config?.authSecret,
     })
 

@@ -4,6 +4,11 @@ type DiagnosticsOptions = {
   shouldTrackRequest: (url: string) => boolean
 }
 
+const withoutQuery = (value: string) => {
+  const url = new URL(value)
+  return `${url.origin}${url.pathname}`
+}
+
 export type BrowserDiagnostics = {
   consoleMessages: string[]
   requestFailures: string[]
@@ -28,19 +33,19 @@ export const attachBrowserDiagnostics = (
   page.on('requestfailed', (request) => {
     const url = request.url()
     if (shouldTrackRequest(url)) {
-      requestFailures.push(`${url} ${request.failure()?.errorText ?? ''}`)
+      requestFailures.push(`${withoutQuery(url)} ${request.failure()?.errorText ?? ''}`)
     }
   })
   page.on('request', (request) => {
     const url = request.url()
     if (shouldTrackRequest(url)) {
-      requestLog.push(`${new Date().toISOString()} ${request.method()} ${url}`)
+      requestLog.push(`${new Date().toISOString()} ${request.method()} ${withoutQuery(url)}`)
     }
   })
   page.on('response', (response) => {
     const url = response.url()
     if (shouldTrackRequest(url)) {
-      requestLog.push(`${new Date().toISOString()} ${response.status()} ${url}`)
+      requestLog.push(`${new Date().toISOString()} ${response.status()} ${withoutQuery(url)}`)
     }
   })
 

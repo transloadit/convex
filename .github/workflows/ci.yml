@@ -12,16 +12,17 @@ jobs:
     name: Build package
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - run: npm install --global corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn pack
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: package
           path: '*.tgz'
@@ -30,12 +31,13 @@ jobs:
     name: Lint (Biome)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - run: npm install --global corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn lint
@@ -44,12 +46,13 @@ jobs:
     name: Lint (TypeScript)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - run: npm install --global corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn typecheck
@@ -60,19 +63,33 @@ jobs:
     strategy:
       matrix:
         node:
-          - 20
-          - 22
           - 24
+          - 26
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ matrix.node }}
+      - run: npm install --global corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn test
+
+  example:
+    name: Build wedding example
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: npm install --global corepack@0.36.0
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn example:build
 
   browser:
     name: Browser tests
@@ -82,12 +99,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - run: npm install --global corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
       - name: Ensure Transloadit secrets
@@ -150,12 +168,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - run: npm install --global corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
       - name: Compute preview deployment name
@@ -266,15 +285,17 @@ jobs:
       - biome
       - typescript
       - unit
+      - example
       - browser
       - convex-qa
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           lfs: true
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
+      - run: npm install --global corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
       - name: Deploy demo Convex backend

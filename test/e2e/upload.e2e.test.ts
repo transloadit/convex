@@ -1,6 +1,6 @@
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { chromium } from '@playwright/test'
+import { expect as browserExpect, chromium } from '@playwright/test'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import { attachBrowserDiagnostics } from './support/diagnostics.js'
 import { startExampleApp } from './support/example-app.js'
@@ -78,6 +78,21 @@ describeE2e('e2e upload flow', () => {
   test('uploads wedding photos and videos', async () => {
     const browser = await chromium.launch(chromiumChannel ? { channel: chromiumChannel } : {})
     const page = await browser.newPage()
+    await page.addInitScript(() => {
+      const start = document.startViewTransition?.bind(document)
+      if (!start) return
+      const state = window as typeof window & {
+        __viewTransitions: number
+        __viewTransitionFinished?: Promise<void>
+      }
+      state.__viewTransitions = 0
+      document.startViewTransition = (...args) => {
+        state.__viewTransitions += 1
+        const transition = start(...args)
+        state.__viewTransitionFinished = transition.finished
+        return transition
+      }
+    })
     const appOrigin = useRemote ? new URL(serverUrl).origin : serverUrl
     const shouldTrackRequest = (url: string) =>
       url.includes('transloadit') ||
@@ -91,7 +106,7 @@ describeE2e('e2e upload flow', () => {
       if (useRemote && vercelBypassToken) {
         await page.route('**/*', async (route) => {
           const url = route.request().url()
-          if (!url.startsWith(appOrigin)) {
+          if (new URL(url).origin !== appOrigin) {
             await route.continue()
             return
           }
@@ -130,19 +145,18 @@ describeE2e('e2e upload flow', () => {
             .textContent()
             .catch(() => null)
           const bodyHtml = await page.evaluate(() => document.body?.outerHTML ?? '').catch(() => '')
-          const bodyHtmlSnippet = bodyHtml.slice(0, 1000)
           const bodyTextSnippet = await page
             .evaluate(() => document.body?.innerText?.slice(0, 500) ?? '')
             .catch(() => '')
           const authStorage = await page
             .evaluate(() => {
-              const entries: Array<{ key: string; value: string | null }> = []
+              const entries: string[] = []
               try {
                 for (let index = 0; index < localStorage.length; index += 1) {
                   const key = localStorage.key(index)
                   if (!key) continue
                   if (!key.includes('__convexAuth')) continue
-                  entries.push({ key, value: localStorage.getItem(key) })
+                  entries.push(key)
                 }
               } catch {
                 return { error: 'localStorage unavailable' }
@@ -157,11 +171,10 @@ describeE2e('e2e upload flow', () => {
             authState,
             headingText,
             headline,
-            bodyHtmlSnippet,
             bodyTextSnippet,
             authStorage,
             hasVercelProtection,
-            url: page.url(),
+            url: new URL(page.url()).origin,
           })
           throw error
         }
@@ -242,7 +255,8 @@ describeE2e('e2e upload flow', () => {
           const vids = cards.flatMap((card) =>
             Array.from(card.querySelectorAll<HTMLVideoElement>('video')),
           )
-          const imagesReady = imgs.length > 0 && imgs.every((img) => img.complete)
+          const imagesReady =
+            imgs.length > 0 && imgs.every((img) => img.complete && img.naturalWidth > 0)
           const videosReady =
             vids.length > 0 &&
             vids.every((video) => {
@@ -303,6 +317,81 @@ describeE2e('e2e upload flow', () => {
       }
 
       await waitForAssemblyMedia(assemblyId)
+
+      const cards = page.locator(`[data-testid="gallery"] [data-assembly-id="${assemblyId}"]`)
+      await browserExpect(cards).toHaveCount(3)
+      const allCards = page.locator('[data-testid="gallery"] [data-assembly-id]')
+      const total = await allCards.count()
+      const screenshots = process.env.E2E_SCREENSHOT_DIR
+      if (screenshots) {
+        mkdirSync(screenshots, { recursive: true })
+        await page.screenshot({ path: join(screenshots, 'gallery-desktop.png'), fullPage: true })
+      }
+      const transitions = await page.evaluate(
+        () => (window as typeof window & { __viewTransitions?: number }).__viewTransitions,
+      )
+      const photo = cards
+        .filter({ has: page.locator('img') })
+        .first()
+        .getByRole('button')
+      await photo.click()
+      const viewer = page.getByRole('dialog')
+      await browserExpect(viewer).toBeVisible()
+      await browserExpect(viewer.getByRole('button', { name: 'Close viewer' })).toBeFocused()
+      if (transitions !== undefined) {
+        await browserExpect
+          .poll(() =>
+            page.evaluate(
+              () => (window as typeof window & { __viewTransitions: number }).__viewTransitions,
+            ),
+          )
+          .toBeGreaterThan(transitions)
+        await page.evaluate(
+          () =>
+            (window as typeof window & { __viewTransitionFinished?: Promise<void> })
+              .__viewTransitionFinished,
+        )
+      }
+      await browserExpect(viewer.locator('img')).toHaveJSProperty('complete', true)
+      const viewingBounds = await viewer.locator('img').boundingBox()
+      expect(viewingBounds?.width).toBeGreaterThan(600)
+      if (screenshots) {
+        await page.screenshot({ path: join(screenshots, 'viewer-desktop.png') })
+      }
+      await page.keyboard.press('Escape')
+      await browserExpect(viewer).toHaveCount(0)
+      await browserExpect(photo).toBeFocused()
+
+      // Phone-sized viewing and reduced motion must keep every navigation control usable.
+      await page.setViewportSize({ width: 390, height: 844 })
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await allCards.first().getByRole('button').click()
+      await browserExpect(viewer).toBeVisible()
+      await browserExpect(viewer.getByRole('button', { name: 'Previous' })).toBeDisabled()
+      await page.keyboard.press('ArrowRight')
+      await browserExpect(viewer.locator('[aria-live="polite"]')).toHaveText(`2 / ${total}`)
+      await viewer.getByRole('button', { name: 'Previous' }).click()
+      await browserExpect(viewer.locator('[aria-live="polite"]')).toHaveText(`1 / ${total}`)
+      await browserExpect(viewer.getByRole('button', { name: 'Previous' })).toBeDisabled()
+      if (screenshots) {
+        await page.screenshot({ path: join(screenshots, 'viewer-mobile.png') })
+      }
+      await viewer.getByRole('button', { name: 'Close viewer' }).click()
+      await browserExpect(viewer).toHaveCount(0)
+
+      await cards
+        .filter({ has: page.locator('video') })
+        .first()
+        .getByRole('button')
+        .click()
+      await browserExpect(viewer.locator('video')).toHaveJSProperty('controls', true)
+      await browserExpect
+        .poll(() => viewer.locator('video').evaluate((video: HTMLVideoElement) => video.readyState))
+        .toBeGreaterThanOrEqual(1)
+      await page.keyboard.press('Escape')
+      expect(
+        diagnostics.consoleMessages.filter((message) => message.startsWith('[pageerror]')),
+      ).toEqual([])
     } catch (error) {
       diagnostics.dump()
       const uppyState = await page

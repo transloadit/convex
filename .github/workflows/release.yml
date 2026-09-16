@@ -14,17 +14,18 @@ jobs:
       pull-requests: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: npm install -g npm@11.5.1
+      - run: npm install -g npm@12.0.2
+      - run: npm install --global corepack@0.36.0
       - run: corepack enable
-      - run: corepack yarn
-      - uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d
+      - run: yarn install --immutable
+      - uses: changesets/action@66d7d1ddafddf1ef45f98ee51a7496f9cdadb2f4 # v2.1.2
         with:
           version: corepack yarn changeset version
           publish: corepack yarn changeset publish

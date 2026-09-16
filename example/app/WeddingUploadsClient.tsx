@@ -1,12 +1,11 @@
 'use client'
 
 import { useAuthActions } from '@convex-dev/auth/react'
-import Uppy, { type UploadResult } from '@uppy/core'
-import Transloadit from '@uppy/transloadit'
 import { useAction, useConvexAuth, useQuery } from 'convex/react'
 import { makeFunctionReference } from 'convex/server'
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { galleryRetentionLabel as retentionLabel } from '../lib/gallery'
 import {
   ASSEMBLY_STATUS_COMPLETED,
   type AssemblyOptions,
@@ -14,19 +13,25 @@ import {
   type AssemblyResultResponse,
   type AssemblyStatus,
   getAssemblyStage,
-  getResultOriginalKey,
   isAssemblyTerminal,
   parseAssemblyStatus,
   pollAssembly,
-  weddingStepNames,
 } from '../lib/transloadit'
+import { Gallery } from './Gallery'
 import { Providers } from './providers'
+import {
+  formatUploadFailure,
+  shouldAdvanceStage,
+  stageRank,
+  type UploadStage,
+  useAssemblyEvents,
+  useWeddingUppy,
+  type WeddingUppy,
+} from './useWeddingUppy'
 
 const Dashboard = dynamic(() => import('@uppy/react/dashboard'), {
   ssr: false,
 })
-
-type WeddingUppy = Uppy<Record<string, unknown>, Record<string, unknown>>
 
 type WeddingAssemblyOptionsResponse = {
   assemblyOptions: AssemblyOptions
@@ -38,44 +43,7 @@ type Toast = {
   message: string
 }
 
-type UploadStage = 'idle' | 'creating' | 'uploading' | 'processing' | 'complete' | 'error'
-
 const galleryAlbum = 'wedding-gallery'
-const retentionHours = Number.parseFloat(process.env.NEXT_PUBLIC_GALLERY_RETENTION_HOURS ?? '24')
-const retentionMs =
-  Number.isFinite(retentionHours) && retentionHours > 0
-    ? retentionHours * 60 * 60 * 1000
-    : Number.POSITIVE_INFINITY
-const retentionLabel = retentionMs === Number.POSITIVE_INFINITY ? 'all time' : `${retentionHours}h`
-
-const filterResults = (results: AssemblyResultResponse[]) => {
-  if (retentionMs === Number.POSITIVE_INFINITY) return results
-  return results.filter((item) => {
-    if (typeof item.createdAt !== 'number') return true
-    return Date.now() - item.createdAt < retentionMs
-  })
-}
-
-const stageRank: Record<UploadStage, number> = {
-  idle: 0,
-  creating: 1,
-  uploading: 2,
-  processing: 3,
-  complete: 4,
-  error: 5,
-}
-
-const shouldAdvanceStage = (current: UploadStage, next: UploadStage) =>
-  stageRank[next] >= stageRank[current]
-
-const resolveAssemblyId = (assembly: unknown): string | null => {
-  if (!assembly || typeof assembly !== 'object') return null
-  const record = assembly as Record<string, unknown>
-  if (typeof record.assembly_id === 'string') return record.assembly_id
-  if (typeof record.assemblyId === 'string') return record.assemblyId
-  if (typeof record.id === 'string') return record.id
-  return null
-}
 
 const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
   const steps: Array<{ stage: UploadStage; label: string }> = [
@@ -104,41 +72,6 @@ const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
       {stage === 'error' && <div className="timeline-error">Upload failed. Try again.</div>}
     </div>
   )
-}
-
-const useWeddingUppy = (getAssemblyOptions: () => Promise<AssemblyOptions>): WeddingUppy => {
-  const getAssemblyOptionsRef = useRef(getAssemblyOptions)
-
-  useEffect(() => {
-    getAssemblyOptionsRef.current = getAssemblyOptions
-  }, [getAssemblyOptions])
-
-  const [uppy] = useState(() =>
-    new Uppy<Record<string, unknown>, Record<string, unknown>>({
-      autoProceed: false,
-      restrictions: {
-        allowedFileTypes: ['image/*', 'video/*'],
-        maxNumberOfFiles: 12,
-      },
-    }).use(Transloadit, {
-      waitForEncoding: true,
-      assemblyOptions: () => getAssemblyOptionsRef.current(),
-    }),
-  )
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      ;(window as { __uppy?: WeddingUppy }).__uppy = uppy
-    }
-    return () => {
-      // Avoid StrictMode dev cleanup nuking plugins on the shared instance.
-      if (process.env.NODE_ENV === 'production') {
-        uppy.destroy()
-      }
-    }
-  }, [uppy])
-
-  return uppy
 }
 
 const useUploadToasts = (assemblies: AssemblyResponse[] | undefined) => {
@@ -191,27 +124,6 @@ const useUploadToasts = (assemblies: AssemblyResponse[] | undefined) => {
   return toasts
 }
 
-const formatUploadFailure = (
-  result: UploadResult<Record<string, unknown>, Record<string, unknown>>,
-) => {
-  const failed = result.failed ?? []
-  if (failed.length === 0) return null
-  const summary = failed
-    .map((file) => {
-      const name = file.name ?? file.id
-      const errorValue = file.error as unknown
-      const message =
-        typeof errorValue === 'string'
-          ? errorValue
-          : typeof (errorValue as { message?: unknown })?.message === 'string'
-            ? (errorValue as { message: string }).message
-            : 'Unknown error'
-      return `${name}: ${message}`
-    })
-    .join('; ')
-  return `Upload failed (${failed.length} file${failed.length === 1 ? '' : 's'}). ${summary}`
-}
-
 type WeddingAssemblyArgs = {
   fileCount: number
   guestName?: string
@@ -248,69 +160,6 @@ const refreshAssemblyRef = makeFunctionReference<
   { assemblyId: string },
   { assemblyId: string; resultCount: number; ok?: string; status?: string }
 >('transloadit:refreshAssembly')
-
-const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
-  const visibleResults = filterResults(results)
-  const thumbStep = weddingStepNames.videoThumbs
-  const imageStep = weddingStepNames.image
-  const videoStep = weddingStepNames.video
-  const thumbByOriginal = new Map<string, string>()
-
-  for (const result of visibleResults) {
-    if (result.stepName !== thumbStep) continue
-    if (!result.sslUrl) continue
-    const key = getResultOriginalKey(result)
-    if (typeof key !== 'string') continue
-    thumbByOriginal.set(key, result.sslUrl)
-  }
-
-  const galleryItems = visibleResults.filter((result) => {
-    const step = result.stepName
-    return step === imageStep || step === videoStep
-  })
-
-  return galleryItems.length === 0 ? (
-    <p className="status" data-testid="gallery-empty">
-      Uploads will appear here once processing completes.
-    </p>
-  ) : (
-    <div className="gallery" data-testid="gallery">
-      {galleryItems.map((item) => {
-        const key =
-          item._id ||
-          item.sslUrl ||
-          item.name ||
-          `${item.assemblyId ?? 'assembly'}-${item.stepName ?? 'step'}-${item.createdAt ?? 0}`
-        const mime = item.mime ?? ''
-        const isVideo = mime.startsWith('video')
-        const originalKey = getResultOriginalKey(item)
-        const posterUrl =
-          isVideo && typeof originalKey === 'string' ? thumbByOriginal.get(originalKey) : null
-        const badge = isVideo ? 'Encoded video' : 'Resized image'
-
-        return (
-          <div className="card" data-assembly-id={item.assemblyId} key={key}>
-            <div className="badge">{badge}</div>
-            {item.sslUrl ? (
-              isVideo ? (
-                // biome-ignore lint/a11y/useMediaCaption: demo clips have no caption tracks
-                <video src={item.sslUrl} controls poster={posterUrl ?? undefined} />
-              ) : (
-                <img src={item.sslUrl} alt={item.name ?? 'Uploaded'} />
-              )
-            ) : (
-              <div className="status">Result pending</div>
-            )}
-            <div className="meta">
-              <div>{item.name ?? 'Untitled'}</div>
-              <div>{item.stepName ?? 'processed'}</div>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 const LocalWeddingUploads = () => {
   const [assemblyId, setAssemblyId] = useState<string | null>(null)
@@ -372,23 +221,7 @@ const LocalWeddingUploads = () => {
     setResults(data.results ?? [])
   }, [])
 
-  useEffect(() => {
-    const handleAssemblyCreated = (assembly: unknown) => {
-      const nextId = resolveAssemblyId(assembly)
-      if (!nextId) return
-      setAssemblyId(nextId)
-      setStage('uploading')
-    }
-    const handleComplete = () => {
-      setStage('processing')
-    }
-    uppy.on('transloadit:assembly-created', handleAssemblyCreated)
-    uppy.on('transloadit:complete', handleComplete)
-    return () => {
-      uppy.off('transloadit:assembly-created', handleAssemblyCreated)
-      uppy.off('transloadit:complete', handleComplete)
-    }
-  }, [uppy])
+  useAssemblyEvents(uppy, setAssemblyId, setStage)
 
   const startUpload = async () => {
     setError(null)
@@ -529,23 +362,7 @@ const CloudWeddingUploads = () => {
     return parseAssemblyStatus(candidate)
   }, [status])
 
-  useEffect(() => {
-    const handleAssemblyCreated = (assembly: unknown) => {
-      const nextId = resolveAssemblyId(assembly)
-      if (!nextId) return
-      setAssemblyId(nextId)
-      setStage('uploading')
-    }
-    const handleComplete = () => {
-      setStage('processing')
-    }
-    uppy.on('transloadit:assembly-created', handleAssemblyCreated)
-    uppy.on('transloadit:complete', handleComplete)
-    return () => {
-      uppy.off('transloadit:assembly-created', handleAssemblyCreated)
-      uppy.off('transloadit:complete', handleComplete)
-    }
-  }, [uppy])
+  useAssemblyEvents(uppy, setAssemblyId, setStage)
 
   useEffect(() => {
     const nextStage = getAssemblyStage(parsedStatus)
@@ -570,7 +387,7 @@ const CloudWeddingUploads = () => {
   }, [assemblyId, parsedStatus, refreshAssembly, results])
 
   const statusOk = parsedStatus && typeof parsedStatus.ok === 'string' ? parsedStatus.ok : 'pending'
-  const galleryResults = filterResults((albumResults ?? results ?? []) as AssemblyResultResponse[])
+  const galleryResults = albumResults ?? results ?? []
 
   const startUpload = async () => {
     setError(null)
@@ -732,25 +549,30 @@ const WeddingLayout = ({
             {error}
           </p>
         )}
-        {assemblyId && (
-          <div className="status">
-            <p data-testid="assembly-id">ID: {assemblyId}</p>
-            <p data-testid="assembly-status">Status: {status}</p>
-          </div>
-        )}
-        {payloadText && (
-          <div className="payload-panel" data-testid="assembly-payload">
-            <div className="payload-header">
-              <span>createAssembly payload</span>
-              <button className="ghost-button" type="button" onClick={() => void handleCopy()}>
-                {copied ? 'Copied' : 'Copy'}
-              </button>
-            </div>
-            <pre className="payload-code">{payloadText}</pre>
-            <p className="payload-note">
-              Secrets are redacted server-side before returning this payload.
-            </p>
-          </div>
+        {(assemblyId || payloadText) && (
+          <details className="developer-details">
+            <summary>Developer details</summary>
+            {assemblyId && (
+              <div className="status">
+                <p data-testid="assembly-id">ID: {assemblyId}</p>
+                <p data-testid="assembly-status">Status: {status}</p>
+              </div>
+            )}
+            {payloadText && (
+              <div className="payload-panel" data-testid="assembly-payload">
+                <div className="payload-header">
+                  <span>createAssembly payload</span>
+                  <button className="ghost-button" type="button" onClick={() => void handleCopy()}>
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <pre className="payload-code">{payloadText}</pre>
+                <p className="payload-note">
+                  Secrets are redacted server-side before returning this payload.
+                </p>
+              </div>
+            )}
+          </details>
         )}
       </section>
       <section className="panel">
