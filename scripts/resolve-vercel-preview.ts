@@ -11,7 +11,7 @@ const githubToken = process.env.GITHUB_TOKEN ?? ''
 const githubRepo = process.env.GITHUB_REPOSITORY ?? ''
 const githubSha = process.env.GITHUB_SHA ?? ''
 const githubEventPath = process.env.GITHUB_EVENT_PATH ?? ''
-const githubHeadRef = process.env.GITHUB_HEAD_REF ?? process.env.GITHUB_REF_NAME ?? ''
+const githubHeadRef = process.env.GITHUB_HEAD_REF || process.env.GITHUB_REF_NAME || ''
 const log = (...args: Parameters<typeof console.error>) => {
   console.error('[resolve-vercel-preview]', ...args)
 }
