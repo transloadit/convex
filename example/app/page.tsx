@@ -16,10 +16,10 @@ export default async function WeddingUploadsPage({
   const hosted = process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_ENV === 'production'
   if (hosted && !convexUrl) {
     return (
-      <main className="page">
-        <section className="panel" role="alert">
-          <h1 className="headline">Gallery temporarily unavailable</h1>
-          <p className="subhead">Uploads are unavailable right now. Please try again later.</p>
+      <main className="page unavailable-message">
+        <section role="alert">
+          <h1>Gallery temporarily unavailable</h1>
+          <p>Uploads are unavailable right now. Please try again later.</p>
         </section>
       </main>
     )

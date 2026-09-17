@@ -39,6 +39,19 @@ summary:focus-visible {
 .page {
   width: 100%;
 }
+.unavailable-message {
+  max-width: 680px;
+  margin: 10vh auto;
+  padding: 24px;
+}
+.unavailable-message h1 {
+  font-size: 36px;
+  font-weight: 400;
+}
+.unavailable-message p {
+  font: 15px / 1.7 var(--ui-font);
+  color: var(--muted);
+}
 .skip-link {
   position: fixed;
   top: -100px;
@@ -487,6 +500,12 @@ summary:focus-visible {
 .button:hover:not(:disabled) {
   background: #323e2c;
 }
+.button.upload-failed {
+  background: #8b382a;
+}
+.button.upload-failed:hover {
+  background: #742e22;
+}
 
 .gallery {
   --row-height: 250px;
@@ -702,4 +721,8 @@ summary:focus-visible {
   color: #fff;
   font-size: 0.9rem;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+}
+.toast-inline {
+  position: static;
+  margin-top: 20px;
 }

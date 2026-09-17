@@ -133,6 +133,15 @@ export const WeddingLayout = ({
   const [uploadOpen, setUploadOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const payloadText = assemblyParams ? JSON.stringify(assemblyParams, null, 2) : null
+  const notifications = toasts && toasts.length > 0 && (
+    <div className={`toast-stack${uploadOpen ? ' toast-inline' : ''}`} role="status">
+      {toasts.map((toast) => (
+        <div className="toast" key={toast.id}>
+          {toast.message}
+        </div>
+      ))}
+    </div>
+  )
   const handleCopy = async () => {
     if (!payloadText || !navigator.clipboard) return
     await navigator.clipboard.writeText(payloadText)
@@ -151,13 +160,20 @@ export const WeddingLayout = ({
           <span className="brand-caption">The wedding album</span>
         </a>
         <button
-          className="button share-button"
+          className={`button share-button${stage === 'error' ? ' upload-failed' : ''}`}
           type="button"
           onClick={() => setUploadOpen(true)}
           data-testid="open-upload"
+          aria-live="polite"
         >
           <Plus />
-          {isUploading ? 'Uploading…' : stage === 'processing' ? 'Preparing…' : 'Share photos'}
+          {stage === 'error'
+            ? 'Upload failed · Retry'
+            : isUploading
+              ? 'Uploading…'
+              : stage === 'processing'
+                ? 'Preparing…'
+                : 'Share photos'}
         </button>
       </header>
 
@@ -166,8 +182,8 @@ export const WeddingLayout = ({
           className="cover-image"
           src={wedding.cover}
           alt=""
-          width="1024"
-          height="768"
+          width="1200"
+          height="896"
           fetchPriority="high"
         />
         <div className="cover-shade" />
@@ -299,16 +315,9 @@ export const WeddingLayout = ({
             )}
           </details>
         )}
+        {uploadOpen && notifications}
       </UploadDialog>
-      {toasts && toasts.length > 0 && (
-        <div className="toast-stack" aria-live="polite">
-          {toasts.map((toast) => (
-            <div className="toast" key={toast.id}>
-              {toast.message}
-            </div>
-          ))}
-        </div>
-      )}
+      {!uploadOpen && notifications}
     </main>
   )
 }

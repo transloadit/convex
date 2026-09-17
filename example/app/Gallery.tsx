@@ -24,7 +24,8 @@ const subscribeToMotionPreference = (onChange: () => void) => {
 const readMotionPreference = () => window.matchMedia(motionPreference).matches
 const slideTransition = { type: spring, visualDuration: 0.3, bounce: 0.2 }
 const isNavigation = (types: string[]) => types.includes('next') || types.includes('previous')
-// React can batch both types. Both layers must agree on one direction and move oppositely.
+// React can batch opposite directions. Prefer next for that ambiguous combination, even if the
+// net movement is backward; both snapshot layers must use the same rule to move oppositely.
 const slideOffset = (types: string[]) => (types.includes('next') ? 100 : -100)
 
 const Media = ({
@@ -55,8 +56,12 @@ const Media = ({
       alt={item.name}
       loading={viewing ? 'eager' : 'lazy'}
       decoding="async"
-      onLoad={(event) =>
-        onDimensions?.(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
+      // An onLoad handler opts out of React's image-loading wait during view transitions.
+      onLoad={
+        onDimensions
+          ? (event) =>
+              onDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
+          : undefined
       }
     />
   )
@@ -274,7 +279,9 @@ export const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
       </p>
       <div className="gallery" data-testid="gallery">
         {items.map((item) => (
-          // Thumbnails only share names when the viewer opens/closes, so navigation stays a slide.
+          // Named thumbnail boundaries leave the tree to share with the viewer, then stay absent
+          // during navigation so it stays a slide. This simple demo remounts thumbnail media;
+          // an archive-scale gallery should virtualize that handoff to avoid remounting every tile.
           <GalleryCard
             key={item.id}
             item={item}
