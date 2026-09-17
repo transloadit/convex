@@ -3,9 +3,7 @@
 import { useAuthActions } from '@convex-dev/auth/react'
 import { useAction, useConvexAuth, useQuery } from 'convex/react'
 import { makeFunctionReference } from 'convex/server'
-import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { galleryRetentionLabel as retentionLabel } from '../lib/gallery'
 import {
   ASSEMBLY_STATUS_COMPLETED,
   type AssemblyOptions,
@@ -22,57 +20,18 @@ import { Providers } from './providers'
 import {
   formatUploadFailure,
   shouldAdvanceStage,
-  stageRank,
   type UploadStage,
   useAssemblyEvents,
   useWeddingUppy,
-  type WeddingUppy,
 } from './useWeddingUppy'
-
-const Dashboard = dynamic(() => import('@uppy/react/dashboard'), {
-  ssr: false,
-})
+import { type Toast, WeddingLayout } from './WeddingLayout'
 
 type WeddingAssemblyOptionsResponse = {
   assemblyOptions: AssemblyOptions
   params?: Record<string, unknown>
 }
 
-type Toast = {
-  id: string
-  message: string
-}
-
 const galleryAlbum = 'wedding-gallery'
-
-const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
-  const steps: Array<{ stage: UploadStage; label: string }> = [
-    { stage: 'creating', label: 'Assembly created' },
-    { stage: 'uploading', label: 'Uploading files' },
-    { stage: 'processing', label: 'Processing & storing' },
-    { stage: 'complete', label: 'Gallery updated' },
-  ]
-  const currentRank = stageRank[stage]
-
-  return (
-    <div className="timeline" data-testid="upload-timeline">
-      {steps.map((step) => {
-        const isActive = currentRank >= stageRank[step.stage]
-        const isCurrent = stage === step.stage
-        return (
-          <div
-            className={`timeline-step${isActive ? ' active' : ''}${isCurrent ? ' current' : ''}`}
-            key={step.stage}
-          >
-            <span className="timeline-dot" />
-            <span className="timeline-label">{step.label}</span>
-          </div>
-        )
-      })}
-      {stage === 'error' && <div className="timeline-error">Upload failed. Try again.</div>}
-    </div>
-  )
-}
 
 const useUploadToasts = (assemblies: AssemblyResponse[] | undefined) => {
   const [toasts, setToasts] = useState<Toast[]>([])
@@ -445,159 +404,6 @@ const CloudWeddingUploads = () => {
     >
       <Gallery results={galleryResults} />
     </WeddingLayout>
-  )
-}
-
-const WeddingLayout = ({
-  uppy,
-  guestName,
-  onGuestNameChange,
-  uploadCode,
-  onUploadCodeChange,
-  isUploading,
-  onUpload,
-  error,
-  assemblyId,
-  assemblyParams,
-  status,
-  stage,
-  toasts,
-  authState,
-  children,
-}: {
-  uppy: WeddingUppy
-  guestName: string
-  onGuestNameChange: (value: string) => void
-  uploadCode: string
-  onUploadCodeChange: (value: string) => void
-  isUploading: boolean
-  onUpload: () => void
-  error: string | null
-  assemblyId: string | null
-  assemblyParams: Record<string, unknown> | null
-  status: string
-  stage: UploadStage
-  toasts?: Toast[]
-  authState?: 'loading' | 'authenticated' | 'guest'
-  children: React.ReactNode
-}) => {
-  const [copied, setCopied] = useState(false)
-  const payloadText = assemblyParams ? JSON.stringify(assemblyParams, null, 2) : null
-
-  const handleCopy = async () => {
-    if (!payloadText) return
-    if (!navigator.clipboard) return
-    await navigator.clipboard.writeText(payloadText)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <main className="page" data-auth-state={authState ?? 'local'} suppressHydrationWarning>
-      <section className="panel">
-        <h1 className="headline">Eden & Nico Wedding Gallery</h1>
-        <p className="subhead">
-          Share your favorite moments — drop photos and short clips below and we’ll add them to the
-          live gallery.
-        </p>
-        {authState && authState !== 'authenticated' && (
-          <p className="status" data-testid="auth-status">
-            {authState === 'loading' ? 'Signing you in...' : 'Signing you in as a guest.'}
-          </p>
-        )}
-        <label className="input">
-          <span>Your name</span>
-          <input
-            value={guestName}
-            onChange={(event) => onGuestNameChange(event.target.value)}
-            placeholder="Guest"
-          />
-        </label>
-        <label className="input">
-          <span>Invite code</span>
-          <input
-            value={uploadCode}
-            onChange={(event) => onUploadCodeChange(event.target.value)}
-            placeholder="Optional if the couple shared one"
-            type="password"
-          />
-        </label>
-        <div data-testid="uppy-dashboard">
-          <Dashboard
-            uppy={uppy}
-            height={360}
-            width="100%"
-            proudlyDisplayPoweredByUppy={false}
-            hideUploadButton
-            note={`Add photos/videos. Gallery shows ${retentionLabel} to limit spam.`}
-          />
-        </div>
-        <div className="cta">
-          <button
-            className="button"
-            type="button"
-            onClick={onUpload}
-            disabled={isUploading || (authState && authState !== 'authenticated')}
-            data-testid="start-upload"
-          >
-            {isUploading ? 'Uploading…' : 'Upload to the gallery'}
-          </button>
-        </div>
-        <UploadTimeline stage={stage} />
-        {error && (
-          <p className="status" data-testid="upload-error">
-            {error}
-          </p>
-        )}
-        {(assemblyId || payloadText) && (
-          <details className="developer-details">
-            <summary>Developer details</summary>
-            {assemblyId && (
-              <div className="status">
-                <p data-testid="assembly-id">ID: {assemblyId}</p>
-                <p data-testid="assembly-status">Status: {status}</p>
-              </div>
-            )}
-            {payloadText && (
-              <div className="payload-panel" data-testid="assembly-payload">
-                <div className="payload-header">
-                  <span>createAssembly payload</span>
-                  <button className="ghost-button" type="button" onClick={() => void handleCopy()}>
-                    {copied ? 'Copied' : 'Copy'}
-                  </button>
-                </div>
-                <pre className="payload-code">{payloadText}</pre>
-                <p className="payload-note">
-                  Secrets are redacted server-side before returning this payload.
-                </p>
-              </div>
-            )}
-          </details>
-        )}
-      </section>
-      <section className="panel">
-        <h2 className="headline">Live gallery</h2>
-        <p className="subhead">
-          Curated highlights processed by Transloadit — resized images and encoded videos.
-        </p>
-        {children}
-        <p className="status">
-          Gallery shows the most recent uploads (retention {retentionLabel}). Files are persisted in
-          R2 via Transloadit’s Cloudflare store robot. Built with{' '}
-          <a href="https://github.com/transloadit/convex">@transloadit/convex</a> and{' '}
-          <a href="https://transloadit.com/">Transloadit</a>.
-        </p>
-      </section>
-      {toasts && toasts.length > 0 && (
-        <div className="toast-stack" aria-live="polite">
-          {toasts.map((toast) => (
-            <div className="toast" key={toast.id}>
-              {toast.message}
-            </div>
-          ))}
-        </div>
-      )}
-    </main>
   )
 }
 

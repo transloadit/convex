@@ -248,6 +248,19 @@ describeE2e('e2e upload flow', () => {
         throw new Error('Missing wedding video fixture for e2e run')
       }
 
+      await browserExpect(page.getByRole('heading', { level: 1 })).toHaveText('Eden & Nico')
+      await browserExpect
+        .poll(() =>
+          page.locator('.cover-image').evaluate((image: HTMLImageElement) => image.naturalWidth),
+        )
+        .toBeGreaterThan(0)
+      const openUpload = page.getByTestId('open-upload')
+      const uploadDialog = page.getByRole('dialog', { name: 'Share your memories' })
+      await browserExpect(uploadDialog).toBeHidden()
+      await openUpload.click()
+      await browserExpect(uploadDialog).toBeVisible()
+      await browserExpect(uploadDialog.getByRole('button', { name: 'Close upload' })).toBeFocused()
+
       await page.waitForSelector('[data-testid="uppy-dashboard"]', {
         state: 'attached',
       })
@@ -262,6 +275,12 @@ describeE2e('e2e upload flow', () => {
         undefined,
         { timeout: 20_000 },
       )
+      // Browsing the album must not discard files already selected in the upload panel.
+      await page.keyboard.press('Escape')
+      await browserExpect(uploadDialog).toBeHidden()
+      await browserExpect(openUpload).toBeFocused()
+      await openUpload.click()
+      await browserExpect(uploadDialog.locator('.uppy-Dashboard-Item')).toHaveCount(3)
       await page.click('[data-testid="start-upload"]')
 
       const readText = async (selector: string) => {
@@ -301,6 +320,10 @@ describeE2e('e2e upload flow', () => {
       const assemblyText = outcome.text
       const assemblyId = assemblyText?.replace('ID:', '').trim() ?? ''
       expect(assemblyId).not.toBe('')
+      // Closing the panel leaves the upload running while guests explore the collection.
+      await uploadDialog.getByRole('button', { name: 'Close upload' }).click()
+      await browserExpect(uploadDialog).toBeHidden()
+      await page.locator('#memories').scrollIntoViewIfNeeded()
 
       const readGalleryReady = async (targetAssemblyId: string) =>
         page.evaluate((assemblyId) => {
@@ -490,6 +513,9 @@ describeE2e('e2e upload flow', () => {
       // Phone-sized viewing and reduced motion must keep every navigation control usable.
       await page.setViewportSize({ width: 390, height: 844 })
       await page.emulateMedia({ reducedMotion: 'reduce' })
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        390,
+      )
       const reducedMotionTransitions = await page.evaluate(
         () => (window as typeof window & { __viewTransitions?: number }).__viewTransitions,
       )
@@ -528,6 +554,17 @@ describeE2e('e2e upload flow', () => {
           (window as typeof window & { __viewTransitionFinished?: Promise<void> })
             .__viewTransitionFinished,
       )
+      await openUpload.click()
+      const uploadBounds = await uploadDialog.boundingBox()
+      expect(uploadBounds?.x).toBe(0)
+      expect(uploadBounds?.width).toBe(390)
+      expect((uploadBounds?.y ?? 0) + (uploadBounds?.height ?? 0)).toBeCloseTo(844, 0)
+      expect(
+        await uploadDialog.evaluate((dialog) => dialog.scrollWidth <= dialog.clientWidth),
+      ).toBe(true)
+      await page.keyboard.press('Escape')
+      await browserExpect(uploadDialog).toBeHidden()
+      await browserExpect(openUpload).toBeFocused()
       expect(
         diagnostics.consoleMessages.filter((message) => message.startsWith('[pageerror]')),
       ).toEqual([])

@@ -1,10 +1,11 @@
 import '@uppy/core/css/style.css'
 import '@uppy/dashboard/css/style.css'
 import './globals.css'
+import { wedding } from '../lib/wedding'
 
 export const metadata = {
-  title: 'Wedding Uploads · Transloadit + Convex',
-  description: 'Guest uploads with Transloadit, Convex, and Uppy',
+  title: `${wedding.names} · Our wedding album`,
+  description: 'One day. All our favourite people. Share and relive every little moment.',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

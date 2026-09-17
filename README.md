@@ -172,6 +172,11 @@ Live demo: `https://convex-demo.transload.it`
 
 For setup, deployment, and verification details, see `CONTRIBUTING.md`.
 
+Customize the names, initials, optional date, and cover path in `example/lib/wedding.ts`.
+The included cover is a compressed copy of the existing wedding photo fixture. The album keeps
+photos in their original proportions and opens uploads in a dialog (a bottom sheet on phones),
+so guests can keep browsing while their files upload.
+
 Photo viewing uses Motion 13.4 `AnimateView` with React 19.3, a keyboard-accessible dialog, and a
 reduced-motion path. See [the wedding archive recommendation](docs/wedding-gallery.md) before using
 the disposable demo for real wedding media, including the proposed Storage/`@transloadit/img` integration.

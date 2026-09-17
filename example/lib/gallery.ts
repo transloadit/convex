@@ -16,6 +16,19 @@ export type GalleryItem = {
   url: string
   kind: 'image' | 'video'
   posterUrl?: string
+  aspectRatio?: number
+}
+
+const getAspectRatio = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object' || !('meta' in raw)) return undefined
+  const meta = raw.meta
+  if (!meta || typeof meta !== 'object' || !('width' in meta) || !('height' in meta))
+    return undefined
+  const { width, height } = meta
+  if (typeof width !== 'number' || typeof height !== 'number' || width <= 0 || height <= 0)
+    return undefined
+  const ratio = width / height
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : undefined
 }
 
 const steps = {
@@ -60,6 +73,7 @@ export const buildGalleryItems = (
         name: result.name ?? 'Wedding moment',
         url: result.sslUrl,
         kind: step.kind,
+        aspectRatio: getAspectRatio(result.raw),
       },
     })
   }
