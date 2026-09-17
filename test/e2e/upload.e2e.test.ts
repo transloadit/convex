@@ -91,12 +91,41 @@ describeE2e('e2e upload flow', () => {
       const state = window as typeof window & {
         __viewTransitions: number
         __viewTransitionFinished?: Promise<void>
+        __viewTransitionTrace: unknown[]
       }
       state.__viewTransitions = 0
+      state.__viewTransitionTrace = []
       document.startViewTransition = (...args) => {
         state.__viewTransitions += 1
+        const id = state.__viewTransitions
+        const trace = (phase: string, error?: unknown) => {
+          state.__viewTransitionTrace.push({
+            id,
+            phase,
+            time: Math.round(performance.now()),
+            media: document.querySelector('dialog .viewer-media')?.firstElementChild?.tagName,
+            width: innerWidth,
+            visibility: document.visibilityState,
+            navigation: Boolean(window.navigation?.transition),
+            reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+            error: error instanceof Error ? error.message : error ? String(error) : undefined,
+          })
+        }
+        trace('start')
         const transition = start(...args)
         state.__viewTransitionFinished = transition.finished
+        transition.updateCallbackDone.then(
+          () => trace('updated'),
+          (error) => trace('update rejected', error),
+        )
+        transition.ready.then(
+          () => trace('ready'),
+          (error) => trace('ready rejected', error),
+        )
+        transition.finished.then(
+          () => trace('finished'),
+          (error) => trace('finish rejected', error),
+        )
         return transition
       }
     })
@@ -412,6 +441,13 @@ describeE2e('e2e upload flow', () => {
       ).toEqual([])
     } catch (error) {
       diagnostics.dump()
+      console.log(
+        'View transition trace:',
+        await page.evaluate(
+          () =>
+            (window as typeof window & { __viewTransitionTrace?: unknown[] }).__viewTransitionTrace,
+        ),
+      )
       const uppyState = await page
         .evaluate(() => {
           const uppy = (window as { __uppy?: DebugUppy }).__uppy
