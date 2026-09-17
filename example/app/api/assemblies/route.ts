@@ -1,21 +1,28 @@
 import { NextResponse } from 'next/server'
 import { runAction, runQuery } from '../../../lib/convex'
+import { isValidGuestName } from '../../../lib/guest-name'
+import { getUploadErrorCode } from '../../../lib/upload-errors'
 
 export async function POST(request: Request) {
-  const payload = (await request.json().catch(() => ({}))) as {
+  const payload = ((await request.json().catch(() => ({}))) ?? {}) as {
     fileCount?: number
     guestName?: string
     uploadCode?: string
   }
   const fileCount = Number.isFinite(payload.fileCount) ? Math.max(1, payload.fileCount ?? 1) : 1
-
-  const response = await runAction('createWeddingAssemblyOptions', {
-    fileCount,
-    guestName: payload.guestName ?? 'Guest',
-    uploadCode: payload.uploadCode,
-  })
-
-  return NextResponse.json(response)
+  if (!isValidGuestName(payload.guestName)) {
+    return NextResponse.json({ error: 'NAME_REQUIRED' }, { status: 400 })
+  }
+  try {
+    const response = await runAction('createWeddingAssemblyOptions', {
+      fileCount,
+      guestName: payload.guestName.trim(),
+      uploadCode: payload.uploadCode,
+    })
+    return NextResponse.json(response)
+  } catch (error) {
+    return NextResponse.json({ error: getUploadErrorCode(error) }, { status: 400 })
+  }
 }
 
 export async function GET(request: Request) {

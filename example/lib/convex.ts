@@ -4,6 +4,7 @@ import { api } from '../../src/component/_generated/api.ts'
 import schema from '../../src/component/schema.ts'
 import { modules } from '../../src/test/nodeModules.ts'
 import { parseDisplayParams } from './assembly-params'
+import { getGuestName, isValidGuestName } from './guest-name'
 import { buildWeddingSteps } from './transloadit-steps'
 
 type Mode = 'local' | 'cloud'
@@ -70,12 +71,13 @@ export const runAction = async (name: string, args: Record<string, unknown>) => 
       throw new Error('Missing TRANSLOADIT_NOTIFY_URL')
     }
     const fileCount = typeof args.fileCount === 'number' ? Math.max(1, args.fileCount) : 1
-    const guestName = typeof args.guestName === 'string' ? args.guestName : 'Guest'
+    if (!isValidGuestName(args.guestName)) throw new Error('NAME_REQUIRED')
+    const guestName = args.guestName.trim()
     const requiredCode = process.env.WEDDING_UPLOAD_CODE
     if (requiredCode) {
       const provided = typeof args.uploadCode === 'string' ? args.uploadCode.trim() : ''
       if (!provided || provided !== requiredCode) {
-        throw new Error('Upload code required.')
+        throw new Error('INVITE_REQUIRED')
       }
     }
 
@@ -165,7 +167,14 @@ export const runQuery = async (name: string, args: Record<string, unknown>) => {
       limit?: number
       stepName?: string
     }
-    return testClient.query(api.lib.listResults, listArgs)
+    const [results, assembly] = await Promise.all([
+      testClient.query(api.lib.listResults, listArgs),
+      testClient.query(api.lib.getAssemblyStatus, { assemblyId: listArgs.assemblyId }),
+    ])
+    return results.map((result) => ({
+      ...result,
+      uploadedBy: getGuestName(assembly?.fields?.guestName),
+    }))
   }
 
   throw new Error(`Unknown query ${name}`)

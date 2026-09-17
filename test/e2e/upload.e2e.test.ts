@@ -260,6 +260,14 @@ describeE2e('e2e upload flow', () => {
       await openUpload.click()
       await browserExpect(uploadDialog).toBeVisible()
       await browserExpect(uploadDialog.getByRole('button', { name: 'Close upload' })).toBeFocused()
+      const guestName = uploadDialog.getByRole('textbox', { name: 'Your name' })
+      await browserExpect(guestName).toHaveValue('')
+      await browserExpect(guestName).toHaveAttribute('placeholder', 'Guest')
+      await uploadDialog.getByTestId('start-upload').click()
+      expect(
+        await guestName.evaluate((input: HTMLInputElement) => input.validity.valueMissing),
+      ).toBe(true)
+      await guestName.fill('Preview Guest')
 
       await page.waitForSelector('[data-testid="uppy-dashboard"]', {
         state: 'attached',
@@ -279,6 +287,16 @@ describeE2e('e2e upload flow', () => {
       await page.keyboard.press('Escape')
       await browserExpect(uploadDialog).toBeHidden()
       await browserExpect(openUpload).toBeFocused()
+      // Locale changes update the existing uploader rather than remounting and losing the files.
+      await page.getByRole('combobox').selectOption('nl')
+      await openUpload.click()
+      await browserExpect(page.getByRole('dialog', { name: 'Deel je herinneringen' })).toBeVisible()
+      await browserExpect(page.getByRole('textbox', { name: 'Je naam' })).toHaveValue(
+        'Preview Guest',
+      )
+      await browserExpect(page.locator('.uppy-Dashboard-Item')).toHaveCount(3)
+      await page.keyboard.press('Escape')
+      await page.getByRole('combobox').selectOption('en')
       await openUpload.click()
       await browserExpect(uploadDialog.locator('.uppy-Dashboard-Item')).toHaveCount(3)
       await page.click('[data-testid="start-upload"]')
@@ -320,9 +338,16 @@ describeE2e('e2e upload flow', () => {
       const assemblyText = outcome.text
       const assemblyId = assemblyText?.replace('ID:', '').trim() ?? ''
       expect(assemblyId).not.toBe('')
-      // Closing the panel leaves the upload running while guests explore the collection.
-      await uploadDialog.getByRole('button', { name: 'Close upload' }).click()
+      await browserExpect(page.getByTestId('upload-success')).toHaveText(
+        '✓3 files successfully added×',
+        { timeout: timeouts.outcome },
+      )
       await browserExpect(uploadDialog).toBeHidden()
+      await browserExpect(openUpload).toBeFocused()
+      if (process.env.E2E_SCREENSHOT_DIR) {
+        mkdirSync(process.env.E2E_SCREENSHOT_DIR, { recursive: true })
+        await page.screenshot({ path: join(process.env.E2E_SCREENSHOT_DIR, 'upload-success.png') })
+      }
       await page.locator('#memories').scrollIntoViewIfNeeded()
 
       const readGalleryReady = async (targetAssemblyId: string) =>
@@ -409,6 +434,9 @@ describeE2e('e2e upload flow', () => {
 
       const cards = page.locator(`[data-testid="gallery"] [data-assembly-id="${assemblyId}"]`)
       await browserExpect(cards).toHaveCount(3)
+      await browserExpect(cards.locator('.gallery-credit')).toHaveText(
+        Array(3).fill('Added by Preview Guest'),
+      )
       const allCards = page.locator('[data-testid="gallery"] [data-assembly-id]')
       const total = await allCards.count()
       const screenshots = process.env.E2E_SCREENSHOT_DIR
@@ -426,6 +454,7 @@ describeE2e('e2e upload flow', () => {
       await photo.click()
       const viewer = page.getByRole('dialog')
       await browserExpect(viewer).toBeVisible()
+      await browserExpect(viewer.locator('.viewer-credit')).toHaveText('Added by Preview Guest')
       await browserExpect(viewer.getByRole('button', { name: 'Close viewer' })).toBeFocused()
       if (transitions !== undefined) {
         await browserExpect
@@ -565,6 +594,50 @@ describeE2e('e2e upload flow', () => {
       await page.keyboard.press('Escape')
       await browserExpect(uploadDialog).toBeHidden()
       await browserExpect(openUpload).toBeFocused()
+      // The uploader is ready for a new batch, and all shipped languages reach Uppy too.
+      await openUpload.click()
+      await guestName.fill('Another Guest')
+      await fileInput.setInputFiles([imagePath])
+      await uploadDialog.getByTestId('start-upload').click()
+      await browserExpect(page.getByTestId('upload-success')).toHaveText(
+        '✓1 file successfully added×',
+        { timeout: timeouts.outcome },
+      )
+      await browserExpect(uploadDialog).toBeHidden()
+      await browserExpect(
+        page.locator('.gallery-credit', { hasText: 'Added by Another Guest' }),
+      ).toHaveCount(1, { timeout: timeouts.results })
+      for (const [locale, browseText] of [
+        ['nl', 'blader naar bestanden'],
+        ['de', 'Dateien durchsuchen'],
+        ['uk', 'оберіть'],
+      ]) {
+        await page.getByRole('combobox').selectOption(locale)
+        await browserExpect(page.locator('html')).toHaveAttribute('lang', locale)
+        await openUpload.click()
+        await browserExpect(page.locator('.uppy-Dashboard-Item')).toHaveCount(0)
+        await browserExpect(
+          page.locator('.upload-dialog').getByRole('button', { name: browseText, exact: true }),
+        ).toBeVisible()
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+          390,
+        )
+        if (process.env.E2E_SCREENSHOT_DIR)
+          await page.screenshot({
+            path: join(process.env.E2E_SCREENSHOT_DIR, `upload-${locale}-mobile.png`),
+          })
+        await page.keyboard.press('Escape')
+      }
+      await page.getByRole('combobox').selectOption('nl')
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await browserExpect(page.locator('html')).toHaveAttribute('lang', 'nl')
+      await browserExpect(openUpload).toHaveText('Foto’s delen')
+      if (useRemote) {
+        await browserExpect(cards.locator('.gallery-credit')).toHaveText(
+          Array(3).fill('Toegevoegd door Preview Guest'),
+          { timeout: 30_000 },
+        )
+      }
       expect(
         diagnostics.consoleMessages.filter((message) => message.startsWith('[pageerror]')),
       ).toEqual([])

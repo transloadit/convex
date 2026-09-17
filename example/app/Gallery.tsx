@@ -2,6 +2,7 @@
 
 import { spring } from 'motion'
 import { AnimateView } from 'motion/react-animate-view'
+import { useTranslations } from 'next-intl'
 import {
   addTransitionType,
   type CSSProperties,
@@ -12,8 +13,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { buildGalleryItems, type GalleryItem } from '../lib/gallery'
-import type { AssemblyResultResponse } from '../lib/transloadit'
+import { buildGalleryItems, type GalleryItem, type GalleryResult } from '../lib/gallery'
 
 const motionPreference = '(prefers-reduced-motion: reduce)'
 const subscribeToMotionPreference = (onChange: () => void) => {
@@ -36,8 +36,9 @@ const Media = ({
   item: GalleryItem
   viewing?: boolean
   onDimensions?: (width: number, height: number) => void
-}) =>
-  item.kind === 'video' ? (
+}) => {
+  const t = useTranslations('viewer')
+  return item.kind === 'video' ? (
     // biome-ignore lint/a11y/useMediaCaption: Guest clips do not have caption tracks.
     <video
       src={item.url}
@@ -45,7 +46,7 @@ const Media = ({
       controls={viewing}
       playsInline
       preload={viewing ? 'metadata' : 'none'}
-      aria-label={item.name}
+      aria-label={item.name || t('moment')}
       onLoadedMetadata={(event) =>
         onDimensions?.(event.currentTarget.videoWidth, event.currentTarget.videoHeight)
       }
@@ -53,7 +54,7 @@ const Media = ({
   ) : (
     <img
       src={item.url}
-      alt={item.name}
+      alt={item.name || t('moment')}
       loading={viewing ? 'eager' : 'lazy'}
       decoding="async"
       // An onLoad handler opts out of React's image-loading wait during view transitions.
@@ -65,6 +66,7 @@ const Media = ({
       }
     />
   )
+}
 
 const GalleryCard = ({
   item,
@@ -77,6 +79,7 @@ const GalleryCard = ({
   animate: boolean
   onSelect: () => void
 }) => {
+  const t = useTranslations('viewer')
   const [ratio, setRatio] = useState(item.aspectRatio ?? 3 / 2)
   const media = (
     <div className="gallery-media">
@@ -98,7 +101,7 @@ const GalleryCard = ({
         type="button"
         className="gallery-open"
         onClick={onSelect}
-        aria-label={`View ${item.name}`}
+        aria-label={t('view', { name: item.name || t('moment') })}
       >
         {animate ? (
           <AnimateView
@@ -114,10 +117,13 @@ const GalleryCard = ({
         )}
         {item.kind === 'video' && (
           <span className="badge">
-            <span aria-hidden="true">▶</span> Video
+            <span aria-hidden="true">▶</span> {t('video')}
           </span>
         )}
       </button>
+      <p className="gallery-credit">
+        {item.uploadedBy ? t('addedBy', { name: item.uploadedBy }) : t('unknownContributor')}
+      </p>
     </div>
   )
 }
@@ -141,6 +147,7 @@ const GalleryViewer = ({
   onNext: () => void
   reducedMotion: boolean
 }) => {
+  const t = useTranslations('viewer')
   const dialogRef = useRef<HTMLDialogElement>(null)
   const titleId = useId()
 
@@ -182,9 +189,14 @@ const GalleryViewer = ({
       }}
     >
       <div className="viewer-toolbar">
-        <p id={titleId}>{item.name}</p>
-        <button type="button" onClick={onClose} aria-label="Close viewer">
-          Close <span aria-hidden="true">×</span>
+        <div className="viewer-caption">
+          <p id={titleId}>{item.name || t('moment')}</p>
+          <span className="viewer-credit">
+            {item.uploadedBy ? t('addedBy', { name: item.uploadedBy }) : t('unknownContributor')}
+          </span>
+        </div>
+        <button type="button" onClick={onClose} aria-label={t('close')}>
+          {t('closeButton')} <span aria-hidden="true">×</span>
         </button>
       </div>
       <div className="viewer-media">
@@ -220,20 +232,19 @@ const GalleryViewer = ({
       </div>
       <div className="viewer-toolbar viewer-navigation">
         <button type="button" onClick={onPrevious} disabled={position === 0}>
-          Previous
+          {t('previous')}
         </button>
-        <span aria-live="polite">
-          {position + 1} / {total}
-        </span>
+        <span aria-live="polite">{t('position', { current: position + 1, total })}</span>
         <button type="button" onClick={onNext} disabled={position === total - 1}>
-          Next
+          {t('next')}
         </button>
       </div>
     </dialog>
   )
 }
 
-export const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
+export const Gallery = ({ results }: { results: GalleryResult[] }) => {
+  const t = useTranslations('album')
   const items = buildGalleryItems(results)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Subscribe to changes too: Motion's hook currently snapshots this preference at mount.
@@ -266,17 +277,15 @@ export const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
         <span className="empty-flower" aria-hidden="true">
           ✳
         </span>
-        <h3>The first memory is yours.</h3>
-        <p>Use Share photos to add your favourite photos and videos from the day.</p>
+        <h3>{t('emptyTitle')}</h3>
+        <p>{t('emptyHint')}</p>
       </div>
     )
   }
 
   return (
     <>
-      <p className="gallery-count">
-        {items.length} {items.length === 1 ? 'memory' : 'memories'} & counting
-      </p>
+      <p className="gallery-count">{t('count', { count: items.length })}</p>
       <div className="gallery" data-testid="gallery">
         {items.map((item) => (
           // Named thumbnail boundaries leave the tree to share with the viewer, then stay absent

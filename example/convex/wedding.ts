@@ -1,9 +1,14 @@
-import { vAssemblyOptions } from '@transloadit/convex'
-import { v } from 'convex/values'
+import {
+  type AssemblyResultResponse,
+  vAssemblyOptions,
+  vAssemblyResultResponse,
+} from '@transloadit/convex'
+import { ConvexError, v } from 'convex/values'
 import { parseDisplayParams } from '../lib/assembly-params'
+import { getGuestName, isValidGuestName } from '../lib/guest-name'
 import { buildWeddingSteps } from '../lib/transloadit-steps'
 import { components, internal } from './_generated/api'
-import { action, internalMutation } from './_generated/server'
+import { action, internalMutation, query } from './_generated/server'
 
 const MAX_UPLOADS_PER_HOUR = 6
 const WINDOW_MS = 60 * 60 * 1000
@@ -43,7 +48,7 @@ export const checkUploadLimit = internalMutation({
       return null
     }
     if (existing.count >= MAX_UPLOADS_PER_HOUR) {
-      throw new Error('Upload limit reached. Try again later.')
+      throw new ConvexError('UPLOAD_LIMIT')
     }
     await ctx.db.patch(existing._id, {
       count: existing.count + 1,
@@ -56,7 +61,7 @@ export const checkUploadLimit = internalMutation({
 export const createWeddingAssemblyOptions = action({
   args: {
     fileCount: v.number(),
-    guestName: v.optional(v.string()),
+    guestName: v.string(),
     uploadCode: v.optional(v.string()),
   },
   returns: v.object({
@@ -66,8 +71,10 @@ export const createWeddingAssemblyOptions = action({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) {
-      throw new Error('Authentication required.')
+      throw new ConvexError('AUTH_REQUIRED')
     }
+
+    if (!isValidGuestName(args.guestName)) throw new ConvexError('NAME_REQUIRED')
 
     await ctx.runMutation(internal.wedding.checkUploadLimit, {
       userId: identity.subject,
@@ -77,7 +84,7 @@ export const createWeddingAssemblyOptions = action({
     if (requiredCode) {
       const provided = args.uploadCode?.trim()
       if (!provided || provided !== requiredCode) {
-        throw new Error('Upload code required.')
+        throw new ConvexError('INVITE_REQUIRED')
       }
     }
 
@@ -89,7 +96,7 @@ export const createWeddingAssemblyOptions = action({
       notifyUrl,
       numExpectedUploadFiles: fileCount,
       fields: {
-        guestName: args.guestName ?? 'Guest',
+        guestName: args.guestName.trim(),
         album: 'wedding-gallery',
         fileCount,
         userId: identity.subject,
@@ -111,5 +118,34 @@ export const createWeddingAssemblyOptions = action({
       assemblyOptions,
       params,
     }
+  },
+})
+
+// Names are persisted in each Assembly's signed fields. Join only the display name, rather than
+// exposing arbitrary Assembly fields or copying wedding-specific metadata into the component.
+export const listGallery = query({
+  args: { limit: v.optional(v.number()) },
+  returns: v.array(
+    v.object({ ...vAssemblyResultResponse.fields, uploadedBy: v.optional(v.string()) }),
+  ),
+  handler: async (ctx, args) => {
+    const results: AssemblyResultResponse[] = await ctx.runQuery(
+      components.transloadit.lib.listAlbumResults,
+      {
+        album: 'wedding-gallery',
+        limit: args.limit ?? 80,
+      },
+    )
+    const names = new Map(
+      await Promise.all(
+        [...new Set(results.map((result) => result.assemblyId))].map(async (assemblyId) => {
+          const assembly = await ctx.runQuery(components.transloadit.lib.getAssemblyStatus, {
+            assemblyId,
+          })
+          return [assemblyId, getGuestName(assembly?.fields?.guestName)] as const
+        }),
+      ),
+    )
+    return results.map((result) => ({ ...result, uploadedBy: names.get(result.assemblyId) }))
   },
 })

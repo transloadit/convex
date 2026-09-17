@@ -1,14 +1,20 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react'
-import { galleryRetentionLabel } from '../lib/gallery'
+import { useLocale, useTranslations } from 'next-intl'
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { uppyLocales } from '../i18n/uppy'
+import { galleryRetentionMs } from '../lib/gallery'
+import { maxGuestNameLength } from '../lib/guest-name'
+import type { UploadErrorCode } from '../lib/upload-errors'
 import { wedding } from '../lib/wedding'
+import { LanguageSwitcher } from './LanguageSwitcher'
 import { stageRank, type UploadStage, type WeddingUppy } from './useWeddingUppy'
 
 const Dashboard = dynamic(() => import('@uppy/react/dashboard'), { ssr: false })
 
-export type Toast = { id: string; message: string }
+export type Toast = { id: string; guestName?: string; fileCount?: number }
+export type UploadSuccess = { id: string; count: number }
 
 const Plus = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -25,6 +31,7 @@ const UploadDialog = ({
   onClose: () => void
   children: ReactNode
 }) => {
+  const t = useTranslations('upload')
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   useLayoutEffect(() => {
@@ -53,46 +60,35 @@ const UploadDialog = ({
     >
       <div className="upload-dialog-heading">
         <div>
-          <p className="eyebrow">Through your eyes</p>
-          <h2 id={titleId}>Share your memories</h2>
+          <p className="eyebrow">{t('eyebrow')}</p>
+          <h2 id={titleId}>{t('title')}</h2>
         </div>
-        <button type="button" className="icon-button" onClick={onClose} aria-label="Close upload">
+        <button type="button" className="icon-button" onClick={onClose} aria-label={t('close')}>
           ×
         </button>
       </div>
-      <p className="upload-intro">
-        The big moments, the little details, the blurry dance-floor photos. We’d love to see them
-        all.
-      </p>
+      <p className="upload-intro">{t('intro')}</p>
       {children}
     </dialog>
   )
 }
 
 const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
-  if (stage === 'idle') return null
-  const steps: Array<{ stage: UploadStage; label: string }> = [
-    { stage: 'creating', label: 'Getting ready' },
-    { stage: 'uploading', label: 'Uploading your memories' },
-    { stage: 'processing', label: 'Preparing photos & videos' },
-    { stage: 'complete', label: 'Added to the album' },
-  ]
+  const t = useTranslations('upload.stages')
+  if (stage === 'idle' || stage === 'complete') return null
+  const steps = ['creating', 'uploading', 'processing', 'complete'] as const
   return (
     <div className="timeline" data-testid="upload-timeline" aria-live="polite">
       {steps.map((step) => (
         <div
-          key={step.stage}
-          className={`timeline-step${stageRank[stage] >= stageRank[step.stage] ? ' active' : ''}${stage === step.stage ? ' current' : ''}`}
+          key={step}
+          className={`timeline-step${stage !== 'error' && stageRank[stage] >= stageRank[step] ? ' active' : ''}${stage === step ? ' current' : ''}`}
         >
           <span className="timeline-dot" />
-          {step.label}
+          {t(step)}
         </div>
       ))}
-      {stage === 'error' && (
-        <div className="timeline-error">
-          Something went wrong. Your files are still here to retry.
-        </div>
-      )}
+      {stage === 'error' && <div className="timeline-error">{t('error')}</div>}
     </div>
   )
 }
@@ -110,6 +106,7 @@ export const WeddingLayout = ({
   assemblyParams,
   status,
   stage,
+  uploadSuccess,
   toasts,
   authState,
   children,
@@ -121,23 +118,57 @@ export const WeddingLayout = ({
   onUploadCodeChange: (value: string) => void
   isUploading: boolean
   onUpload: () => void
-  error: string | null
+  error: UploadErrorCode | null
   assemblyId: string | null
   assemblyParams: Record<string, unknown> | null
   status: string
   stage: UploadStage
+  uploadSuccess?: UploadSuccess | null
   toasts?: Toast[]
   authState?: 'loading' | 'authenticated' | 'guest'
   children: ReactNode
 }) => {
+  const t = useTranslations()
+  const locale = useLocale()
+  const formId = useId()
   const [uploadOpen, setUploadOpen] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [visibleSuccess, setVisibleSuccess] = useState<UploadSuccess | null>(null)
+  useEffect(() => {
+    if (!uploadSuccess) return
+    setUploadOpen(false)
+    setVisibleSuccess(uploadSuccess)
+    const timer = setTimeout(() => setVisibleSuccess(null), 8000)
+    return () => clearTimeout(timer)
+  }, [uploadSuccess])
   const payloadText = assemblyParams ? JSON.stringify(assemblyParams, null, 2) : null
-  const notifications = toasts && toasts.length > 0 && (
+  const notifications = Boolean(visibleSuccess || toasts?.length) && (
     <div className={`toast-stack${uploadOpen ? ' toast-inline' : ''}`} role="status">
-      {toasts.map((toast) => (
+      {visibleSuccess && (
+        <div className="toast toast-success" data-testid="upload-success">
+          <span className="toast-check" aria-hidden="true">
+            ✓
+          </span>
+          <span>{t('upload.success', { count: visibleSuccess.count })}</span>
+          <button
+            type="button"
+            onClick={() => setVisibleSuccess(null)}
+            aria-label={t('upload.dismiss')}
+          >
+            ×
+          </button>
+        </div>
+      )}
+      {toasts?.map((toast) => (
         <div className="toast" key={toast.id}>
-          {toast.message}
+          {toast.fileCount === undefined
+            ? t('notifications.uploadedUnknown', {
+                name: toast.guestName ?? t('notifications.guest'),
+              })
+            : t('notifications.uploaded', {
+                name: toast.guestName ?? t('notifications.guest'),
+                count: toast.fileCount,
+              })}
         </div>
       ))}
     </div>
@@ -152,29 +183,36 @@ export const WeddingLayout = ({
   return (
     <main className="page" data-auth-state={authState ?? 'local'} suppressHydrationWarning>
       <a className="skip-link" href="#memories">
-        Skip to the photos
+        {t('album.skip')}
       </a>
       <header className="album-header">
-        <a className="album-brand" href="#welcome" aria-label={`${wedding.names}, back to the top`}>
-          <span className="monogram">{wedding.initials}</span>
-          <span className="brand-caption">The wedding album</span>
-        </a>
-        <button
-          className={`button share-button${stage === 'error' ? ' upload-failed' : ''}`}
-          type="button"
-          onClick={() => setUploadOpen(true)}
-          data-testid="open-upload"
-          aria-live="polite"
+        <a
+          className="album-brand"
+          href="#welcome"
+          aria-label={t('album.backToTop', { names: wedding.names })}
         >
-          <Plus />
-          {stage === 'error'
-            ? 'Upload failed · Retry'
-            : isUploading
-              ? 'Uploading…'
-              : stage === 'processing'
-                ? 'Preparing…'
-                : 'Share photos'}
-        </button>
+          <span className="monogram">{wedding.initials}</span>
+          <span className="brand-caption">{t('album.brand')}</span>
+        </a>
+        <div className="header-actions">
+          <LanguageSwitcher />
+          <button
+            className={`button share-button${stage === 'error' ? ' upload-failed' : ''}`}
+            type="button"
+            onClick={() => setUploadOpen(true)}
+            data-testid="open-upload"
+            aria-live="polite"
+          >
+            <Plus />
+            {stage === 'error'
+              ? t('upload.retry')
+              : isUploading
+                ? t('upload.uploading')
+                : stage === 'processing'
+                  ? t('upload.preparing')
+                  : t('upload.share')}
+          </button>
+        </div>
       </header>
 
       <section className="album-cover" id="welcome" aria-labelledby="wedding-title">
@@ -188,129 +226,147 @@ export const WeddingLayout = ({
         />
         <div className="cover-shade" />
         <div className="cover-content">
-          <p className="eyebrow">The wedding of</p>
+          <p className="eyebrow">{t('album.weddingOf')}</p>
           <h1 id="wedding-title">{wedding.names}</h1>
           {wedding.date && <p className="wedding-date">{wedding.date}</p>}
-          <p className="cover-message">One day. All our favourite people.</p>
+          <p className="cover-message">{t('album.tagline')}</p>
           <a className="explore-link" href="#memories">
-            Explore the memories <span aria-hidden="true">↓</span>
+            {t('album.explore')} <span aria-hidden="true">↓</span>
           </a>
         </div>
         <span className="cover-note" aria-hidden="true">
-          A little love, from every perspective
+          {t('album.coverNote')}
         </span>
       </section>
 
       <section className="album-collection" id="memories" aria-labelledby="collection-title">
         <div className="collection-heading">
           <div>
-            <p className="eyebrow">The collection</p>
-            <h2 id="collection-title">Every little moment.</h2>
+            <p className="eyebrow">{t('album.collection')}</p>
+            <h2 id="collection-title">{t('album.moments')}</h2>
           </div>
           <p>
-            From the big yes to the last dance.
+            {t('album.collectionIntro')}
             <br />
-            The day, through everyone’s eyes.
+            {t('album.perspectives')}
           </p>
         </div>
         {children}
       </section>
 
       <footer className="album-footer">
-        <span className="footer-signature">With love, {wedding.names}</span>
+        <span className="footer-signature">{t('album.signature', { names: wedding.names })}</span>
         <p>
-          Demo album ·{' '}
-          {galleryRetentionLabel === 'all time'
-            ? 'All uploads'
-            : `Shows uploads from the last ${galleryRetentionLabel}`}
+          {Number.isFinite(galleryRetentionMs)
+            ? t('album.demoRetention', { hours: galleryRetentionMs / 3600000 })
+            : t('album.demoAll')}
           <br />
-          Made with <a href="https://transloadit.com/">Transloadit</a> &{' '}
-          <a href="https://github.com/transloadit/convex">Convex</a>
+          {t.rich('album.credits', {
+            transloadit: (chunks) => <a href="https://transloadit.com/">{chunks}</a>,
+            convex: (chunks) => <a href="https://github.com/transloadit/convex">{chunks}</a>,
+          })}
         </p>
       </footer>
 
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)}>
         {authState && authState !== 'authenticated' && (
           <p className="status" data-testid="auth-status">
-            Getting your upload ready…
+            {t('upload.gettingReady')}
           </p>
         )}
-        <div className="upload-fields">
+        <form
+          id={formId}
+          className="upload-fields"
+          onSubmit={(event) => {
+            event.preventDefault()
+            onUpload()
+          }}
+        >
           <label className="input">
-            <span>Your name</span>
+            <span>{t('upload.name')}</span>
             <input
               value={guestName}
-              onChange={(event) => onGuestNameChange(event.target.value)}
-              placeholder="Guest"
+              disabled={isUploading}
+              onChange={(event) => {
+                event.target.setCustomValidity('')
+                onGuestNameChange(event.target.value)
+              }}
+              onInvalid={(event) =>
+                event.currentTarget.setCustomValidity(t('errors.NAME_REQUIRED'))
+              }
+              placeholder={t('upload.guestPlaceholder')}
+              name="guestName"
+              autoComplete="name"
+              required
+              pattern=".*\S.*"
+              maxLength={maxGuestNameLength}
             />
           </label>
           <label className="input">
             <span>
-              Invite code <span className="optional">if provided</span>
+              {t('upload.inviteCode')} <span className="optional">{t('upload.optional')}</span>
             </span>
             <input
               value={uploadCode}
+              disabled={isUploading}
               onChange={(event) => onUploadCodeChange(event.target.value)}
               type="password"
             />
           </label>
-        </div>
+        </form>
         <div data-testid="uppy-dashboard">
           <Dashboard
             uppy={uppy}
+            disabled={isUploading}
+            locale={uppyLocales[locale]}
             height={280}
             width="100%"
             proudlyDisplayPoweredByUppy={false}
             hideUploadButton
-            note="Up to 12 photos or videos at a time."
+            // Keep retries on our validated submit path so they also close the dialog on success.
+            hideRetryButton
+            note={t('upload.limit')}
           />
         </div>
         <div className="cta">
           <button
             className="button"
-            type="button"
-            onClick={onUpload}
+            type="submit"
+            form={formId}
             disabled={isUploading || (authState && authState !== 'authenticated')}
             data-testid="start-upload"
           >
-            {isUploading ? 'Uploading…' : 'Add to the album'}
+            {isUploading ? t('upload.uploading') : t('upload.add')}
           </button>
           {(isUploading || stage === 'processing') && (
-            <p className="upload-hint">You can keep browsing while we finish.</p>
+            <p className="upload-hint">{t('upload.keepBrowsing')}</p>
           )}
         </div>
         <UploadTimeline stage={stage} />
-        {stage === 'complete' && (
-          <button type="button" className="text-button" onClick={() => setUploadOpen(false)}>
-            Back to the memories <span aria-hidden="true">→</span>
-          </button>
-        )}
         {error && (
           <p className="status upload-error" data-testid="upload-error" role="alert">
-            {error}
+            {t(`errors.${error}`)}
           </p>
         )}
         {(assemblyId || payloadText) && (
           <details className="developer-details">
-            <summary>Developer details</summary>
+            <summary>{t('debug.title')}</summary>
             {assemblyId && (
               <div className="status">
-                <p data-testid="assembly-id">ID: {assemblyId}</p>
-                <p data-testid="assembly-status">Status: {status}</p>
+                <p data-testid="assembly-id">{t('debug.id', { id: assemblyId })}</p>
+                <p data-testid="assembly-status">{t('debug.status', { status })}</p>
               </div>
             )}
             {payloadText && (
               <div className="payload-panel" data-testid="assembly-payload">
                 <div className="payload-header">
-                  <span>createAssembly payload</span>
+                  <span>{t('debug.params')}</span>
                   <button className="ghost-button" type="button" onClick={() => void handleCopy()}>
-                    {copied ? 'Copied' : 'Copy'}
+                    {copied ? t('debug.copied') : t('debug.copy')}
                   </button>
                 </div>
                 <pre className="payload-code">{payloadText}</pre>
-                <p className="payload-note">
-                  Secrets are redacted server-side before returning this payload.
-                </p>
+                <p className="payload-note">{t('debug.redacted')}</p>
               </div>
             )}
           </details>

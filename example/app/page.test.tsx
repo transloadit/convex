@@ -1,7 +1,15 @@
 // @vitest-environment node
+
+import { createTranslator } from 'next-intl'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, test, vi } from 'vitest'
+import en from '../messages/en.json'
 import WeddingUploadsPage from './page'
+
+vi.mock('next-intl/server', () => ({
+  getTranslations: async (namespace: 'album') =>
+    createTranslator({ locale: 'en', messages: en, namespace }),
+}))
 
 vi.mock('./WeddingUploadsApp', () => ({
   default: ({ convexUrl }: { convexUrl?: string | null }) => (

@@ -177,6 +177,14 @@ The included cover is a compressed copy of the existing wedding photo fixture. T
 photos in their original proportions and opens uploads in a dialog (a bottom sheet on phones),
 so guests can keep browsing while their files upload.
 
+Guests enter a required name, stored in the signed Assembly fields and shown beside their photos
+and videos. A fully successful upload closes the dialog and shows the number of files added.
+The globe menu switches between English, Dutch, Ukrainian, and German without discarding selected
+files; the `NEXT_LOCALE` cookie remembers the choice. Like the content site, this uses `next-intl`
+and ICU messages. Edit the complete catalogs in `example/messages/`; `yarn check` verifies their
+keys and formatting. Uppy receives the same locale, with compatibility additions in
+`example/i18n/uppy.ts`. Filenames, guest names, and wedding configuration remain user content.
+
 Photo viewing uses Motion 13.4 `AnimateView` with React 19.3, a keyboard-accessible dialog, and a
 reduced-motion path. See [the wedding archive recommendation](docs/wedding-gallery.md) before using
 the disposable demo for real wedding media, including the proposed Storage/`@transloadit/img` integration.

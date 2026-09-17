@@ -1,0 +1,89 @@
+{
+  "album": {
+    "title": "{names} · Unser Hochzeitsalbum",
+    "description": "Ein Tag. All unsere Lieblingsmenschen. Teilt und erlebt jeden besonderen Moment noch einmal.",
+    "skip": "Zu den Fotos",
+    "backToTop": "{names}, zurück nach oben",
+    "brand": "Das Hochzeitsalbum",
+    "weddingOf": "Die Hochzeit von",
+    "tagline": "Ein Tag. All unsere Lieblingsmenschen.",
+    "explore": "Erinnerungen entdecken",
+    "coverNote": "Ein bisschen Liebe, aus jeder Perspektive",
+    "collection": "Die Sammlung",
+    "moments": "Jeder besondere Moment.",
+    "collectionIntro": "Vom Jawort bis zum letzten Tanz.",
+    "perspectives": "Der Tag, durch eure Augen.",
+    "signature": "Alles Liebe, {names}",
+    "demoRetention": "Demoalbum · {hours, plural, one {Zeigt Uploads der letzten Stunde} other {Zeigt Uploads der letzten # Stunden}}",
+    "demoAll": "Demoalbum · Alle Uploads",
+    "credits": "Erstellt mit <transloadit>Transloadit</transloadit> & <convex>Convex</convex>",
+    "count": "{count, plural, one {# Erinnerung – und es werden mehr} other {# Erinnerungen – und es werden mehr}}",
+    "emptyTitle": "Die erste Erinnerung gehört dir.",
+    "emptyHint": "Füge über Fotos teilen deine liebsten Fotos und Videos des Tages hinzu.",
+    "unavailable": "Die Galerie ist vorübergehend nicht verfügbar",
+    "unavailableHint": "Uploads sind derzeit nicht möglich. Bitte versuche es später erneut."
+  },
+  "language": { "label": "Sprache: {language}" },
+  "upload": {
+    "share": "Fotos teilen",
+    "uploading": "Hochladen…",
+    "preparing": "Verarbeiten…",
+    "retry": "Fehler · Erneut",
+    "eyebrow": "Durch deine Augen",
+    "title": "Teile deine Erinnerungen",
+    "close": "Uploadfenster schließen",
+    "intro": "Die großen Momente, die kleinen Details, die verwackelten Fotos von der Tanzfläche. Wir freuen uns auf alle.",
+    "gettingReady": "Dein Upload wird vorbereitet…",
+    "name": "Dein Name",
+    "guestPlaceholder": "Gast",
+    "inviteCode": "Einladungscode",
+    "optional": "falls vorhanden",
+    "limit": "Bis zu 12 Fotos oder Videos auf einmal.",
+    "add": "Zum Album hinzufügen",
+    "keepBrowsing": "Du kannst währenddessen weiter durch die Galerie stöbern.",
+    "success": "{count, plural, one {# Datei erfolgreich hinzugefügt} other {# Dateien erfolgreich hinzugefügt}}",
+    "dismiss": "Benachrichtigung schließen",
+    "stages": {
+      "creating": "Vorbereiten",
+      "uploading": "Deine Erinnerungen hochladen",
+      "processing": "Fotos und Videos verarbeiten",
+      "complete": "Zum Album hinzugefügt",
+      "error": "Etwas ist schiefgegangen. Öffne das Uploadfenster, um es erneut zu versuchen."
+    }
+  },
+  "viewer": {
+    "moment": "Hochzeitsmoment",
+    "view": "{name} ansehen",
+    "video": "Video",
+    "close": "Bildansicht schließen",
+    "closeButton": "Schließen",
+    "previous": "Zurück",
+    "next": "Weiter",
+    "position": "{current, number} / {total, number}",
+    "addedBy": "Hinzugefügt von {name}",
+    "unknownContributor": "Beitrag von einem unbekannten Gast"
+  },
+  "notifications": {
+    "guest": "Ein Gast",
+    "uploaded": "{name} hat {count, plural, one {# Datei} other {# Dateien}} hinzugefügt",
+    "uploadedUnknown": "{name} hat neue Dateien hinzugefügt"
+  },
+  "errors": {
+    "NAME_REQUIRED": "Bitte gib deinen Namen ein (höchstens 100 Zeichen).",
+    "FILES_REQUIRED": "Wähle mindestens ein Foto oder Video aus.",
+    "AUTH_REQUIRED": "Dein Upload wird vorbereitet. Bitte versuche es gleich noch einmal.",
+    "INVITE_REQUIRED": "Bitte gib den richtigen Einladungscode ein.",
+    "UPLOAD_LIMIT": "Du hast das Uploadlimit erreicht. Bitte versuche es später erneut.",
+    "UPLOAD_FAILED": "Dein Upload konnte nicht abgeschlossen werden. Bitte versuche es erneut.",
+    "STATUS_FAILED": "Wir konnten deinen Upload noch nicht prüfen. Wir versuchen es weiter."
+  },
+  "debug": {
+    "title": "Entwicklerdetails",
+    "id": "ID: {id}",
+    "status": "Status: {status}",
+    "params": "Assembly-Parameter",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "redacted": "Geheime Daten werden auf dem Server ausgeblendet, bevor diese Daten zurückgegeben werden."
+  }
+}

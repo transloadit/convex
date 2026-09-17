@@ -1,9 +1,12 @@
 'use client'
 
-import Uppy, { type UploadResult } from '@uppy/core'
+import Uppy from '@uppy/core'
 import Transloadit from '@uppy/transloadit'
+import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
+import { uppyLocales } from '../i18n/uppy'
 import type { AssemblyOptions } from '../lib/transloadit'
+import { getUploadErrorCode } from '../lib/upload-errors'
 
 export type WeddingUppy = Uppy<Record<string, unknown>, Record<string, unknown>>
 
@@ -31,24 +34,42 @@ const resolveAssemblyId = (assembly: unknown): string | null => {
 }
 
 export const useWeddingUppy = (getAssemblyOptions: () => Promise<AssemblyOptions>): WeddingUppy => {
+  const locale = useLocale()
+  const t = useTranslations('errors')
   const getAssemblyOptionsRef = useRef(getAssemblyOptions)
+  const translateError = useRef(t)
 
   useEffect(() => {
     getAssemblyOptionsRef.current = getAssemblyOptions
-  }, [getAssemblyOptions])
+    translateError.current = t
+  }, [getAssemblyOptions, t])
 
   const [uppy] = useState(() =>
     new Uppy<Record<string, unknown>, Record<string, unknown>>({
       autoProceed: false,
+      locale: uppyLocales[locale],
       restrictions: {
         allowedFileTypes: ['image/*', 'video/*'],
         maxNumberOfFiles: 12,
       },
     }).use(Transloadit, {
       waitForEncoding: true,
-      assemblyOptions: () => getAssemblyOptionsRef.current(),
+      assemblyOptions: async () => {
+        try {
+          return await getAssemblyOptionsRef.current()
+        } catch (error) {
+          // Uppy also shows signing failures in its own informer, outside our error panel.
+          throw Object.assign(new Error(translateError.current(getUploadErrorCode(error))), {
+            cause: error,
+          })
+        }
+      },
     }),
   )
+
+  useEffect(() => {
+    uppy.setOptions({ locale: uppyLocales[locale] })
+  }, [uppy, locale])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -63,27 +84,6 @@ export const useWeddingUppy = (getAssemblyOptions: () => Promise<AssemblyOptions
   }, [uppy])
 
   return uppy
-}
-
-export const formatUploadFailure = (
-  result: UploadResult<Record<string, unknown>, Record<string, unknown>>,
-) => {
-  const failed = result.failed ?? []
-  if (failed.length === 0) return null
-  const summary = failed
-    .map((file) => {
-      const name = file.name ?? file.id
-      const errorValue = file.error as unknown
-      const message =
-        typeof errorValue === 'string'
-          ? errorValue
-          : typeof (errorValue as { message?: unknown })?.message === 'string'
-            ? (errorValue as { message: string }).message
-            : 'Unknown error'
-      return `${name}: ${message}`
-    })
-    .join('; ')
-  return `Upload failed (${failed.length} file${failed.length === 1 ? '' : 's'}). ${summary}`
 }
 
 export const useAssemblyEvents = (

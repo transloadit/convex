@@ -4,6 +4,8 @@ import { useAuthActions } from '@convex-dev/auth/react'
 import { useAction, useConvexAuth, useQuery } from 'convex/react'
 import { makeFunctionReference } from 'convex/server'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { GalleryResult } from '../lib/gallery'
+import { getGuestName, isValidGuestName } from '../lib/guest-name'
 import {
   ASSEMBLY_STATUS_COMPLETED,
   type AssemblyOptions,
@@ -15,25 +17,26 @@ import {
   parseAssemblyStatus,
   pollAssembly,
 } from '../lib/transloadit'
+import { getUploadErrorCode, type UploadErrorCode } from '../lib/upload-errors'
 import { Gallery } from './Gallery'
 import { Providers } from './providers'
 import {
-  formatUploadFailure,
   shouldAdvanceStage,
   type UploadStage,
   useAssemblyEvents,
   useWeddingUppy,
 } from './useWeddingUppy'
-import { type Toast, WeddingLayout } from './WeddingLayout'
+import { type Toast, type UploadSuccess, WeddingLayout } from './WeddingLayout'
 
 type WeddingAssemblyOptionsResponse = {
   assemblyOptions: AssemblyOptions
   params?: Record<string, unknown>
 }
 
-const galleryAlbum = 'wedding-gallery'
-
-const useUploadToasts = (assemblies: AssemblyResponse[] | undefined) => {
+const useUploadToasts = (
+  assemblies: AssemblyResponse[] | undefined,
+  ownAssemblyId: string | null,
+) => {
   const [toasts, setToasts] = useState<Toast[]>([])
   const seen = useRef<Set<string>>(new Set())
   const initialized = useRef(false)
@@ -64,28 +67,25 @@ const useUploadToasts = (assemblies: AssemblyResponse[] | undefined) => {
       if (seen.current.has(id)) return
       seen.current.add(id)
 
+      if (assembly.assemblyId === ownAssemblyId) return
       const fields = assembly.fields ?? {}
-      const guestName = typeof fields.guestName === 'string' ? fields.guestName : 'Guest'
+      const guestName = getGuestName(fields.guestName)
       const fileCount = typeof fields.fileCount === 'number' ? fields.fileCount : undefined
-      const message = fileCount
-        ? `${guestName} uploaded ${fileCount} file${fileCount === 1 ? '' : 's'}`
-        : `${guestName} uploaded new files`
-
-      setToasts((prev) => [...prev, { id, message }])
+      setToasts((prev) => [...prev, { id, guestName, fileCount }])
       const timer = setTimeout(() => {
         setToasts((prev) => prev.filter((toast) => toast.id !== id))
         timers.current.delete(id)
       }, 6000)
       timers.current.set(id, timer)
     })
-  }, [assemblies])
+  }, [assemblies, ownAssemblyId])
 
   return toasts
 }
 
 type WeddingAssemblyArgs = {
   fileCount: number
-  guestName?: string
+  guestName: string
   uploadCode?: string
 }
 
@@ -104,11 +104,9 @@ const listResultsRef = makeFunctionReference<
   { assemblyId: string; stepName?: string; limit?: number },
   AssemblyResultResponse[]
 >('transloadit:listResults')
-const listAlbumResultsRef = makeFunctionReference<
-  'query',
-  { album: string; limit?: number },
-  AssemblyResultResponse[]
->('transloadit:listAlbumResults')
+const listGalleryRef = makeFunctionReference<'query', { limit?: number }, GalleryResult[]>(
+  'wedding:listGallery',
+)
 const getAssemblyStatusRef = makeFunctionReference<
   'query',
   { assemblyId: string },
@@ -124,12 +122,13 @@ const LocalWeddingUploads = () => {
   const [assemblyId, setAssemblyId] = useState<string | null>(null)
   const [assemblyParams, setAssemblyParams] = useState<Record<string, unknown> | null>(null)
   const [status, setStatus] = useState<string>('pending')
-  const [results, setResults] = useState<AssemblyResultResponse[]>([])
+  const [results, setResults] = useState<GalleryResult[]>([])
   const [assemblyStatus, setAssemblyStatus] = useState<AssemblyStatus | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<UploadErrorCode | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [stage, setStage] = useState<UploadStage>('idle')
-  const [guestName, setGuestName] = useState('Guest')
+  const [guestName, setGuestName] = useState('')
+  const [uploadSuccess, setUploadSuccess] = useState<UploadSuccess | null>(null)
   const [uploadCode, setUploadCode] = useState('')
   const assemblyOptionsPromise = useRef<Promise<WeddingAssemblyOptionsResponse> | null>(null)
   const fileCountRef = useRef(0)
@@ -145,12 +144,13 @@ const LocalWeddingUploads = () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         fileCount,
-        guestName,
+        guestName: guestName.trim(),
         uploadCode,
       }),
     }).then(async (response) => {
       if (!response.ok) {
-        throw new Error('Failed to create assembly options')
+        const payload = await response.json().catch(() => ({}))
+        throw new Error(getUploadErrorCode(payload.error))
       }
       return (await response.json()) as WeddingAssemblyOptionsResponse
     })
@@ -162,55 +162,40 @@ const LocalWeddingUploads = () => {
 
   const uppy = useWeddingUppy(getAssemblyOptions)
 
-  const refreshResults = useCallback(async (id: string, refresh = false) => {
-    const params = new URLSearchParams({ assemblyId: id })
-    if (refresh) params.set('refresh', '1')
-    const response = await fetch(`/api/assemblies?${params.toString()}`)
-    if (!response.ok) {
-      throw new Error('Failed to load assembly status')
-    }
-    const data = (await response.json()) as {
-      status: AssemblyResponse | null
-      results: AssemblyResultResponse[]
-    }
-    const parsedStatus = parseAssemblyStatus(data.status?.raw ?? null)
-    setAssemblyStatus(parsedStatus)
-    const ok = parsedStatus && typeof parsedStatus.ok === 'string' ? parsedStatus.ok : 'pending'
-    setStatus(ok)
-    setResults(data.results ?? [])
-  }, [])
-
   useAssemblyEvents(uppy, setAssemblyId, setStage)
 
   const startUpload = async () => {
     setError(null)
+    if (!isValidGuestName(guestName)) {
+      setError('NAME_REQUIRED')
+      setStage('error')
+      return
+    }
     setStage('creating')
     const files = uppy.getFiles()
     if (!files.length) {
-      setError('Select at least one image or video.')
+      setError('FILES_REQUIRED')
       setStage('error')
       return
     }
 
     setIsUploading(true)
+    setAssemblyId(null)
+    setAssemblyStatus(null)
+    setStatus('pending')
     assemblyOptionsPromise.current = null
     fileCountRef.current = files.length
     try {
       const result = await uppy.upload()
-      if (!result) {
-        throw new Error('Upload failed')
+      if (!result || result.failed?.length || !result.successful?.length) {
+        throw new Error('UPLOAD_FAILED')
       }
-      const failure = formatUploadFailure(result)
-      if (failure) {
-        throw new Error(failure)
-      }
-      setStage('processing')
-      if (assemblyId) {
-        await refreshResults(assemblyId, true)
-      }
+      setUploadSuccess({ id: crypto.randomUUID(), count: result.successful.length })
+      setError(null)
+      setStage('complete')
+      uppy.clear()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Upload failed'
-      setError(message)
+      setError(getUploadErrorCode(err))
       setStage('error')
     } finally {
       setIsUploading(false)
@@ -229,13 +214,36 @@ const LocalWeddingUploads = () => {
     !assemblyStatus || !isAssemblyTerminal(assemblyStatus) || results.length === 0
   useEffect(() => {
     if (!assemblyId || !needsPolling) return
+    const request = new AbortController()
     const controller = pollAssembly({
       intervalMs: 4000,
-      refresh: () => refreshResults(assemblyId, true),
-      onError: (err) => setError(err.message),
+      refresh: async () => {
+        const params = new URLSearchParams({ assemblyId, refresh: '1' })
+        const response = await fetch(`/api/assemblies?${params.toString()}`, {
+          signal: request.signal,
+        })
+        if (!response.ok) throw new Error('STATUS_FAILED')
+        const data = (await response.json()) as {
+          status: AssemblyResponse | null
+          results: GalleryResult[]
+        }
+        // A response for the previous batch must not complete or replace the next batch's state.
+        if (request.signal.aborted) return
+        const parsed = parseAssemblyStatus(data.status?.raw ?? null)
+        setAssemblyStatus(parsed)
+        setStatus(parsed && typeof parsed.ok === 'string' ? parsed.ok : 'pending')
+        setResults(data.results ?? [])
+        setError((current) => (current === 'STATUS_FAILED' ? null : current))
+      },
+      onError: () => {
+        if (!request.signal.aborted) setError('STATUS_FAILED')
+      },
     })
-    return () => controller.stop()
-  }, [assemblyId, needsPolling, refreshResults])
+    return () => {
+      controller.stop()
+      request.abort()
+    }
+  }, [assemblyId, needsPolling])
 
   return (
     <WeddingLayout
@@ -251,6 +259,7 @@ const LocalWeddingUploads = () => {
       assemblyParams={assemblyParams}
       status={status}
       stage={stage}
+      uploadSuccess={uploadSuccess}
     >
       <Gallery results={results} />
     </WeddingLayout>
@@ -260,9 +269,10 @@ const LocalWeddingUploads = () => {
 const CloudWeddingUploads = () => {
   const [assemblyParams, setAssemblyParams] = useState<Record<string, unknown> | null>(null)
   const [assemblyId, setAssemblyId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<UploadErrorCode | null>(null)
   const [stage, setStage] = useState<UploadStage>('idle')
-  const [guestName, setGuestName] = useState('Guest')
+  const [guestName, setGuestName] = useState('')
+  const [uploadSuccess, setUploadSuccess] = useState<UploadSuccess | null>(null)
   const [uploadCode, setUploadCode] = useState('')
   const [isUploading, setIsUploading] = useState(false)
   const { signIn } = useAuthActions()
@@ -273,7 +283,7 @@ const CloudWeddingUploads = () => {
   const refreshAssembly = useAction(refreshAssemblyRef)
   const getAssemblyOptions = useCallback(async () => {
     if (!isAuthenticated) {
-      throw new Error('Authentication required.')
+      throw new Error('AUTH_REQUIRED')
     }
     if (assemblyOptionsPromise.current) {
       const cached = await assemblyOptionsPromise.current
@@ -282,7 +292,7 @@ const CloudWeddingUploads = () => {
     const fileCount = Math.max(1, fileCountRef.current || 1)
     const promise = createAssemblyOptions({
       fileCount,
-      guestName,
+      guestName: guestName.trim(),
       uploadCode,
     }) as Promise<WeddingAssemblyOptionsResponse>
     assemblyOptionsPromise.current = promise
@@ -293,15 +303,12 @@ const CloudWeddingUploads = () => {
   const uppy = useWeddingUppy(getAssemblyOptions)
   const status = useQuery(getAssemblyStatusRef, assemblyId ? { assemblyId } : 'skip')
   const results = useQuery(listResultsRef, assemblyId ? { assemblyId } : 'skip')
-  const albumResults = useQuery(listAlbumResultsRef, {
-    album: galleryAlbum,
-    limit: 80,
-  })
+  const albumResults = useQuery(listGalleryRef, { limit: 80 })
   const assemblies = useQuery(listAssembliesRef, {
     status: ASSEMBLY_STATUS_COMPLETED,
     limit: 12,
   })
-  const toasts = useUploadToasts(assemblies ?? undefined)
+  const toasts = useUploadToasts(assemblies ?? undefined, assemblyId)
 
   useEffect(() => {
     if (isLoading || isAuthenticated) return
@@ -335,14 +342,21 @@ const CloudWeddingUploads = () => {
     !parsedStatus || !isAssemblyTerminal(parsedStatus) || (results ?? []).length === 0
   useEffect(() => {
     if (!assemblyId || !needsPolling) return
+    let active = true
     const controller = pollAssembly({
       intervalMs: 8000,
       refresh: async () => {
         await refreshAssembly({ assemblyId })
+        if (active) setError((current) => (current === 'STATUS_FAILED' ? null : current))
       },
-      onError: (err) => setError(err.message),
+      onError: () => {
+        if (active) setError('STATUS_FAILED')
+      },
     })
-    return () => controller.stop()
+    return () => {
+      active = false
+      controller.stop()
+    }
   }, [assemblyId, needsPolling, refreshAssembly])
 
   const statusOk = parsedStatus && typeof parsedStatus.ok === 'string' ? parsedStatus.ok : 'pending'
@@ -350,35 +364,39 @@ const CloudWeddingUploads = () => {
 
   const startUpload = async () => {
     setError(null)
+    if (!isValidGuestName(guestName)) {
+      setError('NAME_REQUIRED')
+      setStage('error')
+      return
+    }
     setStage('creating')
     const files = uppy.getFiles()
     if (!files.length) {
-      setError('Select at least one image or video.')
+      setError('FILES_REQUIRED')
       setStage('error')
       return
     }
     if (!isAuthenticated) {
-      setError('Signing you in...')
+      setError('AUTH_REQUIRED')
       setStage('error')
       return
     }
 
     setIsUploading(true)
+    setAssemblyId(null)
     assemblyOptionsPromise.current = null
     fileCountRef.current = files.length
     try {
       const result = await uppy.upload()
-      if (!result) {
-        throw new Error('Upload failed')
+      if (!result || result.failed?.length || !result.successful?.length) {
+        throw new Error('UPLOAD_FAILED')
       }
-      const failure = formatUploadFailure(result)
-      if (failure) {
-        throw new Error(failure)
-      }
-      setStage('processing')
+      setUploadSuccess({ id: crypto.randomUUID(), count: result.successful.length })
+      setError(null)
+      setStage('complete')
+      uppy.clear()
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Upload failed'
-      setError(message)
+      setError(getUploadErrorCode(err))
       setStage('error')
     } finally {
       setIsUploading(false)
@@ -399,6 +417,7 @@ const CloudWeddingUploads = () => {
       assemblyParams={assemblyParams}
       status={statusOk}
       stage={stage}
+      uploadSuccess={uploadSuccess}
       toasts={toasts}
       authState={isLoading ? 'loading' : isAuthenticated ? 'authenticated' : 'guest'}
     >

@@ -1,3 +1,4 @@
+import { getTranslations } from 'next-intl/server'
 import WeddingUploadsApp from './WeddingUploadsApp'
 
 export const dynamic = 'force-dynamic'
@@ -15,11 +16,12 @@ export default async function WeddingUploadsPage({
   // must not start guest authentication against a guessed host or fall back to local upload mode.
   const hosted = process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_ENV === 'production'
   if (hosted && !convexUrl) {
+    const t = await getTranslations('album')
     return (
       <main className="page unavailable-message">
         <section role="alert">
-          <h1>Gallery temporarily unavailable</h1>
-          <p>Uploads are unavailable right now. Please try again later.</p>
+          <h1>{t('unavailable')}</h1>
+          <p>{t('unavailableHint')}</p>
         </section>
       </main>
     )
