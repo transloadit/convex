@@ -36,9 +36,9 @@
     "deploy:cloud": "node scripts/deploy-cloud.ts",
     "demo:cleanup": "node scripts/cleanup-demo.ts",
     "demo:media": "node scripts/generate-demo-media.ts",
-    "example:dev": "yarn build && node ./node_modules/next/dist/bin/next dev example",
-    "example:build": "yarn build && node ./node_modules/next/dist/bin/next build example",
-    "example:start": "yarn build && node ./node_modules/next/dist/bin/next start example",
+    "example:dev": "yarn build && cd example && next dev",
+    "example:build": "yarn build && cd example && next build",
+    "example:start": "yarn build && cd example && next start",
     "lint": "biome check .",
     "format": "biome format . --write",
     "check": "yarn format && yarn lint && yarn typecheck && yarn test",
@@ -46,7 +46,7 @@
     "template:ensure": "node scripts/ensure-template.ts",
     "tunnel": "node scripts/start-webhook-tunnel.ts",
     "r2:lifecycle": "node scripts/ensure-r2-lifecycle.ts",
-    "typecheck:example": "next typegen example && tsc --noEmit -p example/tsconfig.json"
+    "typecheck:example": "cd example && next typegen && tsc --noEmit -p tsconfig.json"
   },
   "files": [
     "dist",
@@ -101,6 +101,7 @@
     "@types/react-dom": "^19.3.0",
     "@uppy/core": "^6.0.1",
     "@uppy/dashboard": "^6.0.0",
+    "@uppy/locales": "^5.2.0",
     "@uppy/react": "^6.0.0",
     "@uppy/transloadit": "^6.0.0",
     "convex": "^1.45.0",
@@ -110,6 +111,7 @@
     "jsdom": "^30.0.1",
     "motion": "^13.4.0",
     "next": "^16.3.5",
+    "next-intl": "^4.14.5",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "typescript": "^7.0.2",

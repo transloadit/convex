@@ -1,0 +1,99 @@
+{
+  "album": {
+    "title": "{names} · Ons trouwalbum",
+    "description": "Eén dag. Al onze liefste mensen. Deel en herbeleef elk bijzonder moment.",
+    "skip": "Naar de foto’s",
+    "backToTop": "{names}, terug naar boven",
+    "brand": "Het trouwalbum",
+    "weddingOf": "De bruiloft van",
+    "tagline": "Eén dag. Al onze liefste mensen.",
+    "explore": "Bekijk de herinneringen",
+    "coverNote": "Een beetje liefde, vanuit elk perspectief",
+    "collection": "De verzameling",
+    "moments": "Elk bijzonder moment.",
+    "collectionIntro": "Van het jawoord tot de laatste dans.",
+    "perspectives": "De dag, door ieders ogen.",
+    "signature": "Liefs, {names}",
+    "demoRetention": "Demoalbum · {hours, plural, one {Toont uploads van het afgelopen uur} other {Toont uploads van de afgelopen # uur}}",
+    "demoAll": "Demoalbum · Alle uploads",
+    "credits": "Gemaakt met <transloadit>Transloadit</transloadit> & <convex>Convex</convex>",
+    "count": "{count, plural, one {# herinnering, en er komen er meer} other {# herinneringen, en er komen er meer}}",
+    "emptyTitle": "De eerste herinnering is van jou.",
+    "emptyHint": "Voeg via Foto’s delen je favoriete foto’s en video’s van de dag toe.",
+    "unavailable": "De galerij is tijdelijk niet beschikbaar",
+    "unavailableHint": "Uploaden is momenteel niet mogelijk. Probeer het later opnieuw."
+  },
+  "language": { "label": "Taal: {language}" },
+  "access": {
+    "eyebrow": "Je bent uitgenodigd",
+    "intro": "Onze dag, door ieders ogen. Vul je naam in om het album te openen.",
+    "enter": "Open het album",
+    "entering": "Een momentje…",
+    "leave": "Album verlaten",
+    "footnote": "Een plek om onze herinneringen te delen en opnieuw te beleven."
+  },
+  "upload": {
+    "share": "Foto’s delen",
+    "uploading": "Uploaden…",
+    "preparing": "Verwerken…",
+    "retry": "Mislukt · Opnieuw",
+    "eyebrow": "Door jouw ogen",
+    "title": "Deel je herinneringen",
+    "close": "Uploadvenster sluiten",
+    "intro": "De grote momenten, de kleine details, de bewogen foto’s van de dansvloer. We zien ze graag allemaal.",
+    "gettingReady": "We maken je upload klaar…",
+    "name": "Je naam",
+    "guestPlaceholder": "Gast",
+    "inviteCode": "Uitnodigingscode",
+    "optional": "indien ontvangen",
+    "limit": "Maximaal 12 foto’s of video’s tegelijk.",
+    "add": "Toevoegen aan het album",
+    "keepBrowsing": "Je kunt ondertussen de galerij bekijken.",
+    "success": "{count, plural, one {# bestand succesvol toegevoegd} other {# bestanden succesvol toegevoegd}}",
+    "dismiss": "Melding sluiten",
+    "stages": {
+      "creating": "Klaarmaken",
+      "uploading": "Je herinneringen uploaden",
+      "processing": "Foto’s en video’s verwerken",
+      "complete": "Toegevoegd aan het album",
+      "error": "Er ging iets mis. Open het uploadvenster om het opnieuw te proberen."
+    }
+  },
+  "viewer": {
+    "moment": "Trouwherinnering",
+    "view": "Bekijk {name}",
+    "video": "Video",
+    "close": "Fotoviewer sluiten",
+    "closeButton": "Sluiten",
+    "previous": "Vorige",
+    "next": "Volgende",
+    "position": "{current, number} / {total, number}",
+    "addedBy": "Toegevoegd door {name}",
+    "unknownContributor": "Toegevoegd door een onbekende gast"
+  },
+  "notifications": {
+    "guest": "Een gast",
+    "uploaded": "{name} heeft {count, plural, one {# bestand} other {# bestanden}} toegevoegd",
+    "uploadedUnknown": "{name} heeft nieuwe bestanden toegevoegd"
+  },
+  "errors": {
+    "ACCESS_REQUIRED": "Vul je naam en uitnodigingscode opnieuw in om het album te openen.",
+    "LOGIN_FAILED": "Het album kon niet worden geopend. Probeer het opnieuw.",
+    "NAME_REQUIRED": "Vul je naam in (maximaal 100 tekens).",
+    "FILES_REQUIRED": "Selecteer minstens één foto of video.",
+    "AUTH_REQUIRED": "Je upload wordt klaargemaakt. Probeer het zo nog eens.",
+    "INVITE_REQUIRED": "Vul de juiste uitnodigingscode in.",
+    "UPLOAD_LIMIT": "Je hebt de uploadlimiet bereikt. Probeer het later opnieuw.",
+    "UPLOAD_FAILED": "Je upload kon niet worden afgerond. Probeer het opnieuw.",
+    "STATUS_FAILED": "We konden je upload nog niet controleren. We blijven het proberen."
+  },
+  "debug": {
+    "title": "Ontwikkelaarsdetails",
+    "id": "ID: {id}",
+    "status": "Status: {status}",
+    "params": "Assembly-parameters",
+    "copy": "Kopiëren",
+    "copied": "Gekopieerd",
+    "redacted": "Geheime gegevens worden op de server afgeschermd voordat deze gegevens worden teruggestuurd."
+  }
+}

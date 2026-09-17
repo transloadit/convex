@@ -75,12 +75,16 @@ export R2_PUBLIC_URL=...   # optional public URL prefix
 The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default: 24) to discourage
 spam/abuse. The demo bucket auto-expires objects after 1 day via an R2 lifecycle rule (reapply with
 `yarn r2:lifecycle` or override with `R2_RETENTION_DAYS`). If you set `WEDDING_UPLOAD_CODE` on the
-Convex deployment, guests must enter the passcode before uploads can start.
+Convex deployment, guests must enter the code and a name before viewing or uploading. Without a
+code, entering a name is sufficient. Set the variable in your local environment for local development.
+Changing the code invalidates existing album access; guests must enter the new code to continue.
+Cloud browser tests accept `E2E_WEDDING_UPLOAD_CODE` when testing a code-protected preview.
 
 Raw `R2_*` credentials are a local QA convenience: inline signed Assembly instructions are sent to
 the browser. For any guest-facing deployment, use named Transloadit Template credentials and omit
 raw storage keys. The diagnostic panel is redacted, but redaction does not hide the instructions
-Uppy must send. An upload code does not make gallery reads private.
+Uppy must send. Album queries require a guest session, but existing R2 links remain public to anyone
+who has them. Search engines receive `noindex` on every page; this is separate from access control.
 
 The [wedding archive recommendation](docs/wedding-gallery.md) lists the separate storage, originals,
 privacy, moderation, and backup work required before importing real wedding media.
@@ -97,7 +101,7 @@ For a public demo, deploy the `example/` app and point it at a stable Convex dep
    - `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`
    - `TRANSLOADIT_NOTIFY_URL` (set to `https://<deployment>.convex.site/transloadit/webhook`)
    - R2 credentials (see above)
-   - `WEDDING_UPLOAD_CODE` (optional passcode for uploads)
+   - `WEDDING_UPLOAD_CODE` (optional invitation code for viewing and uploading)
 4. Trigger the Vercel deploy hook (or deploy manually).
 
 To deploy a stable Convex backend for the demo (once per environment), run:

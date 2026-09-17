@@ -1,5 +1,7 @@
 import { type AssemblyResultResponse, getResultOriginalKey } from './transloadit'
 
+export type GalleryResult = AssemblyResultResponse & { uploadedBy?: string }
+
 const retentionHours = Number.parseFloat(process.env.NEXT_PUBLIC_GALLERY_RETENTION_HOURS ?? '24')
 export const galleryRetentionMs =
   Number.isFinite(retentionHours) && retentionHours > 0
@@ -16,6 +18,20 @@ export type GalleryItem = {
   url: string
   kind: 'image' | 'video'
   posterUrl?: string
+  aspectRatio?: number
+  uploadedBy?: string
+}
+
+const getAspectRatio = (raw: unknown) => {
+  if (!raw || typeof raw !== 'object' || !('meta' in raw)) return undefined
+  const meta = raw.meta
+  if (!meta || typeof meta !== 'object' || !('width' in meta) || !('height' in meta))
+    return undefined
+  const { width, height } = meta
+  if (typeof width !== 'number' || typeof height !== 'number' || width <= 0 || height <= 0)
+    return undefined
+  const ratio = width / height
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : undefined
 }
 
 const steps = {
@@ -29,7 +45,7 @@ const steps = {
 
 // Keep Assembly/result shapes at the boundary so the viewer can also consume Storage assets.
 export const buildGalleryItems = (
-  results: AssemblyResultResponse[],
+  results: GalleryResult[],
   { now = Date.now(), retentionMs = galleryRetentionMs } = {},
 ): GalleryItem[] => {
   const media = new Map<string, { item: GalleryItem; stored: boolean }>()
@@ -57,9 +73,11 @@ export const buildGalleryItems = (
       item: {
         id,
         assemblyId: result.assemblyId,
-        name: result.name ?? 'Wedding moment',
+        name: result.name ?? '',
         url: result.sslUrl,
         kind: step.kind,
+        aspectRatio: getAspectRatio(result.raw),
+        uploadedBy: result.uploadedBy,
       },
     })
   }

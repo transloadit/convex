@@ -66,8 +66,10 @@ const runCommand = async (
   args: string[],
   env: NodeJS.ProcessEnv,
   label: string,
+  cwd?: string,
 ) => {
   const child = spawn(command, args, {
+    cwd,
     env,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -145,15 +147,18 @@ export const startExampleApp = async ({ env }: ExampleAppOptions): Promise<Examp
     await runCommand('yarn', ['build'], nextEnv, 'Package build')
 
     const nextCli = resolve('node_modules/next/dist/bin/next')
-    await runCommand('node', [nextCli, 'build', 'example', '--webpack'], nextEnv, 'Next build')
-    child = spawn(
+    await runCommand(
       'node',
-      [nextCli, 'start', 'example', '--hostname', '127.0.0.1', '--port', `${port}`],
-      {
-        env: nextEnv,
-        stdio: ['ignore', 'pipe', 'pipe'],
-      },
+      [nextCli, 'build', '--webpack'],
+      nextEnv,
+      'Next build',
+      resolve('example'),
     )
+    child = spawn('node', [nextCli, 'start', '--hostname', '127.0.0.1', '--port', `${port}`], {
+      cwd: resolve('example'),
+      env: nextEnv,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
 
     const url = `http://127.0.0.1:${port}`
     const logs: string[] = []

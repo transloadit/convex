@@ -1,0 +1,99 @@
+{
+  "album": {
+    "title": "{names} · Our wedding album",
+    "description": "One day. All our favorite people. Share and relive every little moment.",
+    "skip": "Skip to the photos",
+    "backToTop": "{names}, back to the top",
+    "brand": "The wedding album",
+    "weddingOf": "The wedding of",
+    "tagline": "One day. All our favorite people.",
+    "explore": "Explore the memories",
+    "coverNote": "A little love, from every perspective",
+    "collection": "The collection",
+    "moments": "Every little moment.",
+    "collectionIntro": "From the big yes to the last dance.",
+    "perspectives": "The day, through everyone’s eyes.",
+    "signature": "With love, {names}",
+    "demoRetention": "Demo album · {hours, plural, one {Shows uploads from the last hour} other {Shows uploads from the last # hours}}",
+    "demoAll": "Demo album · All uploads",
+    "credits": "Made with <transloadit>Transloadit</transloadit> & <convex>Convex</convex>",
+    "count": "{count, plural, one {# memory & counting} other {# memories & counting}}",
+    "emptyTitle": "The first memory is yours.",
+    "emptyHint": "Use Share photos to add your favorite photos and videos from the day.",
+    "unavailable": "Gallery temporarily unavailable",
+    "unavailableHint": "Uploads are unavailable right now. Please try again later."
+  },
+  "language": { "label": "Language: {language}" },
+  "access": {
+    "eyebrow": "You’re invited",
+    "intro": "Our day, through everyone’s eyes. Tell us your name to open the album.",
+    "enter": "Open the album",
+    "entering": "Just a moment…",
+    "leave": "Leave the album",
+    "footnote": "A little place to share and relive our memories."
+  },
+  "upload": {
+    "share": "Share photos",
+    "uploading": "Uploading…",
+    "preparing": "Preparing…",
+    "retry": "Upload failed · Retry",
+    "eyebrow": "Through your eyes",
+    "title": "Share your memories",
+    "close": "Close upload",
+    "intro": "The big moments, the little details, the blurry dance-floor photos. We’d love to see them all.",
+    "gettingReady": "Getting your upload ready…",
+    "name": "Your name",
+    "guestPlaceholder": "Guest",
+    "inviteCode": "Invite code",
+    "optional": "if provided",
+    "limit": "Up to 12 photos or videos at a time.",
+    "add": "Add to the album",
+    "keepBrowsing": "You can keep browsing while we finish.",
+    "success": "{count, plural, one {# file successfully added} other {# files successfully added}}",
+    "dismiss": "Dismiss notification",
+    "stages": {
+      "creating": "Getting ready",
+      "uploading": "Uploading your memories",
+      "processing": "Preparing photos & videos",
+      "complete": "Added to the album",
+      "error": "Something went wrong. Open the uploader to retry."
+    }
+  },
+  "viewer": {
+    "moment": "Wedding moment",
+    "view": "View {name}",
+    "video": "Video",
+    "close": "Close viewer",
+    "closeButton": "Close",
+    "previous": "Previous",
+    "next": "Next",
+    "position": "{current, number} / {total, number}",
+    "addedBy": "Added by {name}",
+    "unknownContributor": "Contributor unknown"
+  },
+  "notifications": {
+    "guest": "A guest",
+    "uploaded": "{name} added {count, plural, one {# file} other {# files}}",
+    "uploadedUnknown": "{name} added new files"
+  },
+  "errors": {
+    "ACCESS_REQUIRED": "Please enter your name and invitation code again to open the album.",
+    "LOGIN_FAILED": "We couldn’t open the album. Please try again.",
+    "NAME_REQUIRED": "Please enter your name (up to 100 characters).",
+    "FILES_REQUIRED": "Select at least one photo or video.",
+    "AUTH_REQUIRED": "Your upload is getting ready. Please try again in a moment.",
+    "INVITE_REQUIRED": "Please enter the correct invite code.",
+    "UPLOAD_LIMIT": "You’ve reached the upload limit. Please try again later.",
+    "UPLOAD_FAILED": "Your upload could not be completed. Please try again.",
+    "STATUS_FAILED": "We couldn’t check your upload yet. We’ll keep trying."
+  },
+  "debug": {
+    "title": "Developer details",
+    "id": "ID: {id}",
+    "status": "Status: {status}",
+    "params": "Assembly parameters",
+    "copy": "Copy",
+    "copied": "Copied",
+    "redacted": "Secrets are redacted server-side before returning this payload."
+  }
+}

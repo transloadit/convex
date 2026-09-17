@@ -31,13 +31,17 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
   // Deploy the actual example against the packed module. Maintaining a second backend here hid
   // drift in auth, signing, dependencies, and webhook handling from cloud verification.
   const convexFiles = (await readdir(join(repoRoot, 'example/convex'), { withFileTypes: true }))
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+    .filter(
+      (entry) => entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts'),
+    )
     .map((entry) => `convex/${entry.name}`)
   for (const file of [
     ...convexFiles,
     'lib/r2.ts',
     'lib/transloadit-steps.ts',
     'lib/assembly-params.ts',
+    'lib/guest-name.ts',
+    'lib/album-access.ts',
   ]) {
     await mkdir(join(projectDir, file, '..'), { recursive: true })
     await writeFile(join(projectDir, file), await readFile(join(repoRoot, 'example', file)))
