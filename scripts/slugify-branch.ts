@@ -1,7 +1,7 @@
 const raw =
-  process.env.GITHUB_HEAD_REF ??
-  process.env.GITHUB_REF_NAME ??
-  process.env.VERCEL_GIT_COMMIT_REF ??
+  process.env.GITHUB_HEAD_REF ||
+  process.env.GITHUB_REF_NAME ||
+  process.env.VERCEL_GIT_COMMIT_REF ||
   ''
 
 const slug = raw

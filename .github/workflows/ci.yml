@@ -7,6 +7,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   pack:
     name: Build package
@@ -118,7 +122,7 @@ jobs:
             missing+=("TRANSLOADIT_SECRET")
           fi
           if [ -z "${TRANSLOADIT_R2_CREDENTIALS}" ]; then
-            if [ -z "${R2_BUCKET}" ] || [ -z "${R2_ACCESS_KEY_ID}" ] || [ -z "${R2_SECRET_ACCESS_KEY}" ] || ([ -z "${R2_HOST}" ] && [ -z "${R2_ACCOUNT_ID}" ]) || [ -z "${R2_PUBLIC_URL}" ]; then
+            if [ -z "${R2_BUCKET}" ] || [ -z "${R2_ACCESS_KEY_ID}" ] || [ -z "${R2_SECRET_ACCESS_KEY}" ] || { [ -z "${R2_HOST}" ] && [ -z "${R2_ACCOUNT_ID}" ]; } || [ -z "${R2_PUBLIC_URL}" ]; then
               missing+=("TRANSLOADIT_R2_CREDENTIALS (or R2_* variables)")
             fi
           fi
@@ -163,8 +167,9 @@ jobs:
   convex-qa:
     name: Convex deployment QA
     if: >
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.ref != 'refs/heads/main' &&
+      (github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -178,12 +183,11 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - name: Compute preview deployment name
-        if: github.event_name == 'pull_request'
         id: preview_name
         run: |
-          echo "name=$(node scripts/slugify-branch.ts)" >> "$GITHUB_OUTPUT"
-      - name: Deploy Convex preview (PR)
-        if: github.event_name == 'pull_request'
+          preview_name="$(node scripts/slugify-branch.ts)"
+          echo "name=${preview_name}" >> "$GITHUB_OUTPUT"
+      - name: Deploy Convex preview
         run: |
           timeout --foreground 12m node scripts/deploy-cloud.ts >> "$GITHUB_ENV"
         env:
@@ -199,32 +203,6 @@ jobs:
           R2_HOST: ${{ secrets.R2_HOST }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-      - name: Deploy Convex stable (main)
-        if: github.ref == 'refs/heads/main'
-        run: |
-          timeout --foreground 12m node scripts/deploy-cloud.ts >> "$GITHUB_ENV"
-        env:
-          CI_OUTPUT: "1"
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
-          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
-          TRANSLOADIT_R2_CREDENTIALS: ${{ secrets.TRANSLOADIT_R2_CREDENTIALS }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_HOST: ${{ secrets.R2_HOST }}
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-      - name: Set stable demo URL (main)
-        if: github.ref == 'refs/heads/main'
-        run: |
-          if [ -z "${E2E_REMOTE_APP_URL}" ]; then
-            echo "E2E_REMOTE_APP_URL missing" >&2
-            exit 1
-          fi
-          echo "E2E_REMOTE_APP_URL=${E2E_REMOTE_APP_URL}" >> "$GITHUB_ENV"
-        env:
-          E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
       - name: Resolve Vercel preview URL
         if: env.E2E_REMOTE_APP_URL == ''
         run: |
@@ -243,10 +221,6 @@ jobs:
           if [ -z "${E2E_REMOTE_APP_URL}" ]; then
             missing+=("E2E_REMOTE_APP_URL")
           fi
-          if [ -z "${E2E_REMOTE_CONVEX_URL}" ] && [ -n "${E2E_REMOTE_CONVEX_URL_STABLE}" ]; then
-            echo "E2E_REMOTE_CONVEX_URL=${E2E_REMOTE_CONVEX_URL_STABLE}" >> "$GITHUB_ENV"
-            E2E_REMOTE_CONVEX_URL="${E2E_REMOTE_CONVEX_URL_STABLE}"
-          fi
           if [ -z "${VERCEL_PROTECTION_BYPASS}" ]; then
             missing+=("VERCEL_PROTECTION_BYPASS")
           fi
@@ -263,9 +237,7 @@ jobs:
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
           E2E_REMOTE_CONVEX_URL: ${{ env.E2E_REMOTE_CONVEX_URL }}
-          E2E_REMOTE_CONVEX_URL_STABLE: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
-          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
           CONVEX_PREVIEW_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
       - name: Run cloud verification
         run: timeout --foreground 12m yarn verify:cloud
@@ -277,9 +249,13 @@ jobs:
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
 
   deploy-example:
-    name: Deploy example (Vercel)
+    name: Deploy and verify production example
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    concurrency:
+      group: convex-production
+      cancel-in-progress: false
     needs:
       - pack
       - biome
@@ -287,7 +263,6 @@ jobs:
       - unit
       - example
       - browser
-      - convex-qa
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -313,12 +288,16 @@ jobs:
           R2_HOST: ${{ secrets.R2_HOST }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-      - name: Trigger Vercel deploy hook
-        run: |
-          if [ -z "${VERCEL_DEPLOY_HOOK}" ]; then
-            echo "VERCEL_DEPLOY_HOOK missing" >&2
-            exit 1
-          fi
-          curl -fsSL -X POST "${VERCEL_DEPLOY_HOOK}"
+      - name: Deploy Vercel and wait for the new production build
+        run: timeout --foreground 8m node scripts/deploy-vercel.ts
         env:
+          GITHUB_TOKEN: ${{ github.token }}
           VERCEL_DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+      - name: Verify the live production gallery
+        run: timeout --foreground 12m yarn verify:cloud
+        env:
+          E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
+          E2E_REMOTE_CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
+          PLAYWRIGHT_SKIP_INSTALL: "1"
+          PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
+          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
