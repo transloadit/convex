@@ -1,11 +1,30 @@
 'use client'
 
 import { spring } from 'motion'
-import { useReducedMotion } from 'motion/react'
 import { AnimateView } from 'motion/react-animate-view'
-import { startTransition, useId, useLayoutEffect, useRef, useState } from 'react'
+import {
+  addTransitionType,
+  startTransition,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import { buildGalleryItems, type GalleryItem } from '../lib/gallery'
 import type { AssemblyResultResponse } from '../lib/transloadit'
+
+const motionPreference = '(prefers-reduced-motion: reduce)'
+const subscribeToMotionPreference = (onChange: () => void) => {
+  const query = window.matchMedia(motionPreference)
+  query.addEventListener('change', onChange)
+  return () => query.removeEventListener('change', onChange)
+}
+const readMotionPreference = () => window.matchMedia(motionPreference).matches
+const slideTransition = { type: spring, visualDuration: 0.3, bounce: 0.2 }
+const isNavigation = (types: string[]) => types.includes('next') || types.includes('previous')
+// React can batch both types. Both layers must agree on one direction and move oppositely.
+const slideOffset = (types: string[]) => (types.includes('next') ? 100 : -100)
 
 const Media = ({ item, viewing = false }: { item: GalleryItem; viewing?: boolean }) =>
   item.kind === 'video' ? (
@@ -57,11 +76,7 @@ const GalleryViewer = ({
     }
   }, [])
 
-  const media = (
-    <div className="viewer-media">
-      <Media key={item.id} item={item} viewing />
-    </div>
-  )
+  const media = <Media key={item.id} item={item} viewing />
 
   return (
     <dialog
@@ -91,13 +106,37 @@ const GalleryViewer = ({
           Close <span aria-hidden="true">×</span>
         </button>
       </div>
-      {reducedMotion ? (
-        media
-      ) : (
-        <AnimateView name={name} transition={{ type: spring, duration: 0.45, bounce: 0.12 }}>
-          {media}
-        </AnimateView>
-      )}
+      <div className="viewer-media">
+        {reducedMotion ? (
+          media
+        ) : (
+          <AnimateView
+            key={item.id}
+            name={name}
+            transition={{ type: spring, duration: 0.45, bounce: 0.12 }}
+            enter={(types) =>
+              isNavigation(types)
+                ? {
+                    opacity: 1,
+                    transform: [`translateX(${slideOffset(types)}%)`, 'translateX(0%)'],
+                    transition: slideTransition,
+                  }
+                : {}
+            }
+            exit={(types) =>
+              isNavigation(types)
+                ? {
+                    opacity: 0,
+                    transform: `translateX(${-slideOffset(types)}%)`,
+                    transition: slideTransition,
+                  }
+                : {}
+            }
+          >
+            {media}
+          </AnimateView>
+        )}
+      </div>
       <div className="viewer-toolbar viewer-navigation">
         <button type="button" onClick={onPrevious} disabled={position === 0}>
           Previous
@@ -116,11 +155,26 @@ const GalleryViewer = ({
 export const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
   const items = buildGalleryItems(results)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const reducedMotion = useReducedMotion() ?? false
+  // Subscribe to changes too: Motion's hook currently snapshots this preference at mount.
+  const reducedMotion = useSyncExternalStore(
+    subscribeToMotionPreference,
+    readMotionPreference,
+    () => true,
+  )
   const instanceId = useId()
   const position = items.findIndex((item) => item.id === selectedId)
   const selected = items[position]
   const select = (id: string | null) => startTransition(() => setSelectedId(id))
+  const navigate = (direction: 'next' | 'previous') => {
+    startTransition(() => {
+      addTransitionType(direction)
+      setSelectedId((currentId) => {
+        const currentPosition = items.findIndex((item) => item.id === currentId)
+        if (currentPosition === -1) return currentId
+        return items[currentPosition + (direction === 'next' ? 1 : -1)]?.id ?? currentId
+      })
+    })
+  }
   // Encode every character so arbitrary filenames cannot collide or become invalid CSS names.
   const transitionName = (id: string) =>
     `photo-${Array.from(`${instanceId}-${id}`, (char) => char.codePointAt(0)?.toString(16)).join('-')}`
@@ -150,14 +204,16 @@ export const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
                 onClick={() => select(item.id)}
                 aria-label={`View ${item.name}`}
               >
-                {selected?.id === item.id ? (
-                  <div className="gallery-media gallery-placeholder" />
-                ) : reducedMotion ? (
+                {/* While viewing, thumbnails must not share names with the slides: otherwise
+                    Next/Previous morph to and from the grid instead of sliding across the viewer. */}
+                {selected || reducedMotion ? (
                   media
                 ) : (
                   <AnimateView
                     name={transitionName(item.id)}
                     transition={{ type: spring, duration: 0.45, bounce: 0.12 }}
+                    enter={{ opacity: 1, transition: { type: false, duration: 0 } }}
+                    exit={{ opacity: 0, transition: { type: false, duration: 0 } }}
                   >
                     {media}
                   </AnimateView>
@@ -177,8 +233,8 @@ export const Gallery = ({ results }: { results: AssemblyResultResponse[] }) => {
           total={items.length}
           reducedMotion={reducedMotion}
           onClose={() => select(null)}
-          onPrevious={() => select(items[Math.max(0, position - 1)]?.id ?? null)}
-          onNext={() => select(items[Math.min(items.length - 1, position + 1)]?.id ?? null)}
+          onPrevious={() => navigate('previous')}
+          onNext={() => navigate('next')}
         />
       )}
     </>

@@ -92,11 +92,14 @@ describeE2e('e2e upload flow', () => {
         __viewTransitions: number
         __viewTransitionFinished?: Promise<void>
         __viewTransitionTrace: unknown[]
+        __viewSlideFrames: { layer: string; transforms: string[] }[]
       }
       state.__viewTransitions = 0
       state.__viewTransitionTrace = []
+      state.__viewSlideFrames = []
       document.startViewTransition = (...args) => {
         state.__viewTransitions += 1
+        state.__viewSlideFrames = []
         const id = state.__viewTransitions
         const trace = (phase: string, error?: unknown) => {
           state.__viewTransitionTrace.push({
@@ -119,7 +122,23 @@ describeE2e('e2e upload flow', () => {
           (error) => trace('update rejected', error),
         )
         transition.ready.then(
-          () => trace('ready'),
+          () => {
+            trace('ready')
+            // Inspect the browser's actual animation layers after Motion has configured them.
+            requestAnimationFrame(() => {
+              state.__viewSlideFrames = document.getAnimations().flatMap(({ effect }) => {
+                if (!(effect instanceof KeyframeEffect) || !effect.pseudoElement) return []
+                return [
+                  {
+                    layer: effect.pseudoElement,
+                    transforms: effect
+                      .getKeyframes()
+                      .map((frame) => String(frame.transform ?? 'none')),
+                  },
+                ]
+              })
+            })
+          },
           (error) => trace('ready rejected', error),
         )
         transition.finished.then(
@@ -405,6 +424,58 @@ describeE2e('e2e upload flow', () => {
       if (screenshots) {
         await page.screenshot({ path: join(screenshots, 'viewer-desktop.png') })
       }
+      const photoTitle = await viewer.locator('.viewer-toolbar p').textContent()
+      for (const direction of ['next', 'previous', 'batched next'] as const) {
+        const before = await page.evaluate(
+          () => (window as typeof window & { __viewTransitions: number }).__viewTransitions,
+        )
+        if (direction !== 'previous') {
+          if (direction === 'batched next') {
+            await viewer.evaluate((dialog) => {
+              for (const key of ['ArrowRight', 'ArrowLeft', 'ArrowRight']) {
+                dialog.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+              }
+            })
+          } else {
+            await page.keyboard.press('ArrowRight')
+          }
+          await browserExpect(viewer.locator('.viewer-toolbar p')).not.toHaveText(photoTitle ?? '')
+        } else {
+          await viewer.getByRole('button', { name: 'Previous' }).click()
+          await browserExpect(viewer.locator('.viewer-toolbar p')).toHaveText(photoTitle ?? '')
+        }
+        if (before !== undefined) {
+          await browserExpect
+            .poll(() =>
+              page.evaluate(
+                () => (window as typeof window & { __viewTransitions: number }).__viewTransitions,
+              ),
+            )
+            .toBeGreaterThan(before)
+          const frames = await page.evaluate(async () => {
+            const state = window as typeof window & {
+              __viewTransitionFinished?: Promise<void>
+              __viewSlideFrames: { layer: string; transforms: string[] }[]
+            }
+            await state.__viewTransitionFinished
+            return state.__viewSlideFrames
+          })
+          const incoming = direction === 'previous' ? '-100' : '100'
+          const outgoing = direction === 'previous' ? '100' : '-100'
+          expect(frames).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                layer: expect.stringContaining('::view-transition-new('),
+                transforms: [`translateX(${incoming}%)`, 'translateX(0%)'],
+              }),
+              expect.objectContaining({
+                layer: expect.stringContaining('::view-transition-old('),
+                transforms: expect.arrayContaining([`translateX(${outgoing}%)`]),
+              }),
+            ]),
+          )
+        }
+      }
       await page.keyboard.press('Escape')
       await browserExpect(viewer).toHaveCount(0)
       await browserExpect(photo).toBeFocused()
@@ -419,6 +490,9 @@ describeE2e('e2e upload flow', () => {
       // Phone-sized viewing and reduced motion must keep every navigation control usable.
       await page.setViewportSize({ width: 390, height: 844 })
       await page.emulateMedia({ reducedMotion: 'reduce' })
+      const reducedMotionTransitions = await page.evaluate(
+        () => (window as typeof window & { __viewTransitions?: number }).__viewTransitions,
+      )
       await allCards.first().getByRole('button').click()
       await browserExpect(viewer).toBeVisible()
       await browserExpect(viewer.getByRole('button', { name: 'Previous' })).toBeDisabled()
@@ -432,6 +506,11 @@ describeE2e('e2e upload flow', () => {
       }
       await viewer.getByRole('button', { name: 'Close viewer' }).click()
       await browserExpect(viewer).toHaveCount(0)
+      expect(
+        await page.evaluate(
+          () => (window as typeof window & { __viewTransitions?: number }).__viewTransitions,
+        ),
+      ).toBe(reducedMotionTransitions)
 
       await cards
         .filter({ has: page.locator('video') })

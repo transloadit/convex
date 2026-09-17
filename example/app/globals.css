@@ -205,10 +205,6 @@ body {
   border-radius: 12px;
 }
 
-.gallery-placeholder {
-  background: #e8ddcf;
-}
-
 .gallery-open .badge {
   background: rgba(255, 250, 244, 0.9);
 }
@@ -275,8 +271,11 @@ body {
 
 .viewer-media img,
 .viewer-media video {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  min-width: 0;
   min-height: 0;
   object-fit: contain;
 }
