@@ -291,6 +291,31 @@ describeE2e('e2e upload flow', () => {
         }
         if (remoteConvexUrl) {
           expect(connectedHosts.has(new URL(remoteConvexUrl).host)).toBe(true)
+
+          // A returning guest may still have a valid JWT for a session that no longer admits
+          // them. End only this test's server session, retaining its browser storage.
+          const previousToken = await page.evaluate(
+            () =>
+              Object.entries(localStorage).find(([key]) => key.startsWith('__convexAuthJWT_'))?.[1],
+          )
+          if (!previousToken) throw new Error('The test guest did not receive a session token')
+          await page.goto('about:blank')
+          const previousSession = new ConvexHttpClient(remoteConvexUrl, { logger: false })
+          previousSession.setAuth(previousToken)
+          await previousSession.action(makeFunctionReference<'action'>('auth:signOut'), {})
+          await page.goto(serverUrl, { waitUntil: 'domcontentloaded' })
+          await browserExpect(entry).toBeVisible()
+          await browserExpect(enter).toBeEnabled()
+          await entryName.fill('Preview Guest')
+          if (await invitation.isVisible()) {
+            const code = process.env.E2E_WEDDING_UPLOAD_CODE || process.env.WEDDING_UPLOAD_CODE
+            if (!code)
+              throw new Error('Set E2E_WEDDING_UPLOAD_CODE to re-enter this protected album')
+            await invitation.fill(code)
+          }
+          await enter.click()
+          await browserExpect(entry).toBeHidden({ timeout: 30_000 })
+          await browserExpect(page.getByTestId('open-upload')).toBeVisible()
         }
       }
 
@@ -661,9 +686,16 @@ describeE2e('e2e upload flow', () => {
         { timeout: timeouts.outcome },
       )
       await browserExpect(uploadDialog).toBeHidden()
+      const secondAssemblyId = (await readText('[data-testid="assembly-id"]'))
+        ?.replace('ID:', '')
+        .trim()
+      expect(secondAssemblyId).toBeTruthy()
+      expect(secondAssemblyId).not.toBe(assemblyId)
       await browserExpect(
-        page.locator('.gallery-credit', { hasText: 'Added by Another Guest' }),
-      ).toHaveCount(1, { timeout: timeouts.results })
+        page.locator(
+          `[data-testid="gallery"] [data-assembly-id="${secondAssemblyId}"] .gallery-credit`,
+        ),
+      ).toHaveText(['Added by Another Guest'], { timeout: timeouts.results })
       for (const [locale, browseText] of [
         ['nl', 'blader naar bestanden'],
         ['de', 'Dateien durchsuchen'],

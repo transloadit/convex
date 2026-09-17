@@ -1,6 +1,6 @@
 'use client'
 
-import { useAuthActions } from '@convex-dev/auth/react'
+import { useAuthActions, useAuthToken } from '@convex-dev/auth/react'
 import { useConvexAuth, useQuery } from 'convex/react'
 import { makeFunctionReference } from 'convex/server'
 import { useTranslations } from 'next-intl'
@@ -114,6 +114,7 @@ const EntryForm = ({
 
 export const CloudAlbumGate = ({ children }: GateProps) => {
   const { signIn, signOut } = useAuthActions()
+  const token = useAuthToken()
   const { isAuthenticated, isLoading } = useConvexAuth()
   const settings = useQuery(settingsRef, {})
   const guest = useQuery(viewerRef, isAuthenticated ? {} : 'skip')
@@ -136,7 +137,11 @@ export const CloudAlbumGate = ({ children }: GateProps) => {
         setBusy(true)
         setError(null)
         try {
-          await signIn('guest', { guestName: name, uploadCode: code })
+          // Replacing one token with another while already authenticated can leave the
+          // Convex connection using the old session. Clear it before re-entering the album.
+          if (token !== null) await signOut()
+          const result = await signIn('guest', { guestName: name, uploadCode: code })
+          if (!result.signingIn) setError('LOGIN_FAILED')
         } catch (error) {
           const reason = getUploadErrorCode(error)
           setError(reason === 'UPLOAD_FAILED' ? 'LOGIN_FAILED' : reason)
