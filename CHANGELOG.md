@@ -1,5 +1,12 @@
 # @transloadit/convex
 
+## 0.2.1
+
+### Patch Changes
+
+- Align client metadata fields with the backend's object validator and refresh generated Convex bindings.
+  This preserves typechecking after deploying the example or regenerating component types.
+
 ## 0.2.0
 
 ### Minor Changes
