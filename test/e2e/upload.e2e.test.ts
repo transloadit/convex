@@ -76,6 +76,13 @@ describeE2e('e2e upload flow', () => {
   test('uploads wedding photos and videos', async () => {
     const browser = await chromium.launch(chromiumChannel ? { channel: chromiumChannel } : {})
     const page = await browser.newPage()
+    const localStatusRequests: number[] = []
+    page.on('request', (request) => {
+      const url = new URL(request.url())
+      if (!useRemote && url.pathname === '/api/assemblies' && request.method() === 'GET') {
+        localStatusRequests.push(Date.now())
+      }
+    })
     const connectedHosts = new Set<string>()
     page.on('websocket', (socket) => connectedHosts.add(new URL(socket.url()).host))
     await page.addInitScript(() => {
@@ -320,6 +327,14 @@ describeE2e('e2e upload flow', () => {
       }
 
       await waitForAssemblyMedia(assemblyId)
+
+      if (!useRemote && localStatusRequests.length > 0) {
+        const pollingDuration = Date.now() - localStatusRequests[0]
+        // One initial poll, one explicit refresh after upload, and the four-second polling cadence.
+        expect(localStatusRequests.length).toBeLessThanOrEqual(
+          2 + Math.ceil(pollingDuration / 4000),
+        )
+      }
 
       const cards = page.locator(`[data-testid="gallery"] [data-assembly-id="${assemblyId}"]`)
       await browserExpect(cards).toHaveCount(3)
