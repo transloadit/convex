@@ -18,6 +18,8 @@ export const deployVercel = async ({
   hook,
   fetcher = fetch,
   pause = () => new Promise((resolve) => setTimeout(resolve, 5000)),
+  // CI's outer eight-minute timeout bounds total time, including API retries. This attempt limit
+  // ends normal polling earlier; slow requests deliberately remain subject to that hard timeout.
   attempts = 72,
 }: DeployOptions) => {
   const root = 'https://api.github.com/repos/' + repository
@@ -27,12 +29,13 @@ export const deployVercel = async ({
       let response: Response
       try {
         response = await fetcher(root + path, { headers, signal: AbortSignal.timeout(15_000) })
+        if (response.ok) return (await response.json()) as T
       } catch {
+        // Transport errors can contain request details. Keep credentials and hook URLs out of CI logs.
         if (attempt === 2) throw new Error('GitHub deployment lookup failed after three attempts')
         await pause()
         continue
       }
-      if (response.ok) return (await response.json()) as T
       if ((response.status === 429 || response.status >= 500) && attempt < 2) {
         await pause()
         continue
@@ -57,6 +60,7 @@ export const deployVercel = async ({
     method: 'POST',
     signal: AbortSignal.timeout(15_000),
   }).catch(() => {
+    // Do not attach the original error: the hook URL itself is a deployment credential.
     throw new Error('Vercel deploy hook request failed')
   })
   if (!response.ok) throw new Error('Vercel deploy hook failed: HTTP ' + response.status)

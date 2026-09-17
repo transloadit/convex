@@ -11,6 +11,7 @@ const harness = (
   options: {
     stale?: boolean
     transient?: boolean
+    bodyFailure?: boolean
     denied?: boolean
     failed?: boolean
     superseded?: boolean
@@ -36,6 +37,15 @@ const harness = (
       reads += 1
       if (options.denied) return json({ message: 'Forbidden' }, 403)
       if (options.transient && reads === 1) return json({ message: 'Unavailable' }, 503)
+      if (options.bodyFailure && reads === 1) {
+        return new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.error(new TypeError('Connection reset while reading response'))
+            },
+          }),
+        )
+      }
       if (triggered && ++triggeredReads === 1) return json([deployment(10)])
       return json(triggered ? [deployment(20), deployment(10)] : [deployment(10)])
     }
@@ -95,6 +105,12 @@ describe('production deployment verification', () => {
     const { run, fetcher } = harness({ denied: true })
     await expect(run()).rejects.toThrow(/403/)
     expect(fetcher.mock.calls.some(([url]) => url === hook)).toBe(false)
+  })
+
+  test('retries transport failures while consuming a successful response body', async () => {
+    const { run, fetcher } = harness({ bodyFailure: true })
+    expect(await run()).toBe(20)
+    expect(fetcher.mock.calls.filter(([url]) => url === hook)).toHaveLength(1)
   })
 
   test('reports failure of the new build even when an older build succeeded', async () => {
