@@ -1,7 +1,7 @@
 import type { AssemblyStatus } from '@transloadit/zod/v3/assemblyStatus'
 import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template'
 import { actionGeneric, mutationGeneric, queryGeneric } from 'convex/server'
-import { v } from 'convex/values'
+import { type ObjectType, v } from 'convex/values'
 import type { ComponentApi } from '../component/_generated/component.ts'
 import {
   type AssemblyOptions,
@@ -199,7 +199,7 @@ export class TransloaditClient {
 
   async storeAssemblyMetadata(
     ctx: RunMutationCtx,
-    args: { assemblyId: string; userId?: string; fields?: unknown },
+    args: ObjectType<typeof vStoreAssemblyMetadataArgs>,
   ) {
     return ctx.runMutation(this.component.lib.storeAssemblyMetadata, args)
   }

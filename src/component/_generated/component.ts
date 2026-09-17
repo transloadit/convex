@@ -10,175 +10,223 @@
 
 import type { FunctionReference } from "convex/server";
 
-export type ComponentApi<Name extends string | undefined = string | undefined> = {
-  lib: {
-    upsertAssembly: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        assemblyId: string;
-        status?: string;
-        ok?: string;
-        message?: string;
-        templateId?: string;
-        notifyUrl?: string;
-        numExpectedUploadFiles?: number;
-        fields?: any;
-        uploads?: any;
-        results?: any;
-        error?: any;
-        raw?: any;
-        userId?: string;
-      },
-      string,
-      Name
-    >;
-    replaceResultsForAssembly: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        assemblyId: string;
-        results: Array<{ stepName: string; result: any }>;
-      },
-      null,
-      Name
-    >;
-    createAssembly: FunctionReference<
-      "action",
-      "internal",
-      {
-        config: { authKey: string; authSecret: string };
-        templateId?: string;
-        steps?: any;
-        fields?: any;
-        notifyUrl?: string;
-        numExpectedUploadFiles?: number;
-        expires?: string;
-        additionalParams?: any;
-        userId?: string;
-      },
-      { assemblyId: string; data: any },
-      Name
-    >;
-    createAssemblyOptions: FunctionReference<
-      "action",
-      "internal",
-      {
-        config: { authKey: string; authSecret: string };
-        templateId?: string;
-        steps?: any;
-        fields?: any;
-        notifyUrl?: string;
-        numExpectedUploadFiles?: number;
-        expires?: string;
-        additionalParams?: any;
-        userId?: string;
-      },
-      { params: string; signature: string; fields?: any },
-      Name
-    >;
-    handleWebhook: FunctionReference<
-      "action",
-      "internal",
-      {
-        payload: any;
-        rawBody?: string;
-        signature?: string;
-        verifySignature?: boolean;
-        config?: { authSecret: string };
-      },
-      {
-        assemblyId: string;
-        resultCount: number;
-        ok?: string;
-        status?: string;
-      },
-      Name
-    >;
-    processWebhook: FunctionReference<
-      "action",
-      "internal",
-      {
-        payload: any;
-        rawBody?: string;
-        signature?: string;
-        verifySignature?: boolean;
-        authSecret?: string;
-      },
-      {
-        assemblyId: string;
-        resultCount: number;
-        ok?: string;
-        status?: string;
-      },
-      Name
-    >;
-    queueWebhook: FunctionReference<
-      "action",
-      "internal",
-      {
-        payload: any;
-        rawBody?: string;
-        signature?: string;
-        verifySignature?: boolean;
-        config?: { authSecret: string };
-      },
-      { assemblyId: string; queued: boolean },
-      Name
-    >;
-    refreshAssembly: FunctionReference<
-      "action",
-      "internal",
-      { assemblyId: string; config?: { authKey: string; authSecret: string } },
-      {
-        assemblyId: string;
-        resultCount: number;
-        ok?: string;
-        status?: string;
-      },
-      Name
-    >;
-    getAssemblyStatus: FunctionReference<
-      "query",
-      "internal",
-      { assemblyId: string },
-      any,
-      Name
-    >;
-    listAssemblies: FunctionReference<
-      "query",
-      "internal",
-      { status?: string; userId?: string; limit?: number },
-      Array<any>,
-      Name
-    >;
-    listResults: FunctionReference<
-      "query",
-      "internal",
-      { assemblyId: string; stepName?: string; limit?: number },
-      Array<any>,
-      Name
-    >;
-    listAlbumResults: FunctionReference<
-      "query",
-      "internal",
-      { album: string; limit?: number },
-      Array<any>,
-      Name
-    >;
-    purgeAlbum: FunctionReference<
-      "mutation",
-      "internal",
-      { album: string; deleteAssemblies?: boolean },
-      { deletedResults: number; deletedAssemblies: number },
-      Name
-    >;
-    storeAssemblyMetadata: FunctionReference<
-      "mutation",
-      "internal",
-      { assemblyId: string; userId?: string; fields?: any },
-      any,
-      Name
-    >;
+/**
+ * A utility for referencing a Convex component's exposed API.
+ *
+ * Useful when expecting a parameter like `components.myComponent`.
+ * Usage:
+ * ```ts
+ * async function myFunction(ctx: QueryCtx, component: ComponentApi) {
+ *   return ctx.runQuery(component.someFile.someQuery, { ...args });
+ * }
+ * ```
+ */
+export type ComponentApi<Name extends string | undefined = string | undefined> =
+  {
+    lib: {
+      createAssembly: FunctionReference<
+        "action",
+        "internal",
+        {
+          additionalParams?: Record<string, any>;
+          config: { authKey: string; authSecret: string };
+          expires?: string;
+          fields?: Record<string, any>;
+          notifyUrl?: string;
+          numExpectedUploadFiles?: number;
+          steps?: Record<string, any>;
+          templateId?: string;
+          userId?: string;
+        },
+        { assemblyId: string; data: any },
+        Name
+      >;
+      createAssemblyOptions: FunctionReference<
+        "action",
+        "internal",
+        {
+          additionalParams?: Record<string, any>;
+          config: { authKey: string; authSecret: string };
+          expires?: string;
+          fields?: Record<string, any>;
+          notifyUrl?: string;
+          numExpectedUploadFiles?: number;
+          steps?: Record<string, any>;
+          templateId?: string;
+          userId?: string;
+        },
+        { fields?: Record<string, any>; params: string; signature: string },
+        Name
+      >;
+      getAssemblyStatus: FunctionReference<
+        "query",
+        "internal",
+        { assemblyId: string },
+        {
+          _creationTime: number;
+          _id: string;
+          assemblyId: string;
+          createdAt: number;
+          error?: any;
+          fields?: Record<string, any>;
+          message?: string;
+          notifyUrl?: string;
+          numExpectedUploadFiles?: number;
+          ok?: string;
+          raw?: any;
+          results?: Record<string, Array<any>>;
+          status?: string;
+          templateId?: string;
+          updatedAt: number;
+          uploads?: Array<any>;
+          userId?: string;
+        } | null,
+        Name
+      >;
+      handleWebhook: FunctionReference<
+        "action",
+        "internal",
+        {
+          config?: { authSecret: string };
+          payload: any;
+          rawBody?: string;
+          signature?: string;
+          verifySignature?: boolean;
+        },
+        {
+          assemblyId: string;
+          ok?: string;
+          resultCount: number;
+          status?: string;
+        },
+        Name
+      >;
+      listAlbumResults: FunctionReference<
+        "query",
+        "internal",
+        { album: string; limit?: number },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          album?: string;
+          assemblyId: string;
+          createdAt: number;
+          mime?: string;
+          name?: string;
+          raw: any;
+          resultId?: string;
+          size?: number;
+          sslUrl?: string;
+          stepName: string;
+          userId?: string;
+        }>,
+        Name
+      >;
+      listAssemblies: FunctionReference<
+        "query",
+        "internal",
+        { limit?: number; status?: string; userId?: string },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          assemblyId: string;
+          createdAt: number;
+          error?: any;
+          fields?: Record<string, any>;
+          message?: string;
+          notifyUrl?: string;
+          numExpectedUploadFiles?: number;
+          ok?: string;
+          raw?: any;
+          results?: Record<string, Array<any>>;
+          status?: string;
+          templateId?: string;
+          updatedAt: number;
+          uploads?: Array<any>;
+          userId?: string;
+        }>,
+        Name
+      >;
+      listResults: FunctionReference<
+        "query",
+        "internal",
+        { assemblyId: string; limit?: number; stepName?: string },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          album?: string;
+          assemblyId: string;
+          createdAt: number;
+          mime?: string;
+          name?: string;
+          raw: any;
+          resultId?: string;
+          size?: number;
+          sslUrl?: string;
+          stepName: string;
+          userId?: string;
+        }>,
+        Name
+      >;
+      purgeAlbum: FunctionReference<
+        "mutation",
+        "internal",
+        { album: string; deleteAssemblies?: boolean },
+        { deletedAssemblies: number; deletedResults: number },
+        Name
+      >;
+      queueWebhook: FunctionReference<
+        "action",
+        "internal",
+        {
+          config?: { authSecret: string };
+          payload: any;
+          rawBody?: string;
+          signature?: string;
+          verifySignature?: boolean;
+        },
+        { assemblyId: string; queued: boolean },
+        Name
+      >;
+      refreshAssembly: FunctionReference<
+        "action",
+        "internal",
+        {
+          assemblyId: string;
+          config?: { authKey: string; authSecret: string };
+        },
+        {
+          assemblyId: string;
+          ok?: string;
+          resultCount: number;
+          status?: string;
+        },
+        Name
+      >;
+      storeAssemblyMetadata: FunctionReference<
+        "mutation",
+        "internal",
+        { assemblyId: string; fields?: Record<string, any>; userId?: string },
+        {
+          _creationTime: number;
+          _id: string;
+          assemblyId: string;
+          createdAt: number;
+          error?: any;
+          fields?: Record<string, any>;
+          message?: string;
+          notifyUrl?: string;
+          numExpectedUploadFiles?: number;
+          ok?: string;
+          raw?: any;
+          results?: Record<string, Array<any>>;
+          status?: string;
+          templateId?: string;
+          updatedAt: number;
+          uploads?: Array<any>;
+          userId?: string;
+        } | null,
+        Name
+      >;
+    };
   };
-};

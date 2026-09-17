@@ -408,6 +408,13 @@ describeE2e('e2e upload flow', () => {
       await page.keyboard.press('Escape')
       await browserExpect(viewer).toHaveCount(0)
       await browserExpect(photo).toBeFocused()
+      // The dialog disappears before Chrome finishes capturing its exit animation. Resizing during
+      // that capture can stall the native transition, so finish it before the separate phone case.
+      await page.evaluate(
+        () =>
+          (window as typeof window & { __viewTransitionFinished?: Promise<void> })
+            .__viewTransitionFinished,
+      )
 
       // Phone-sized viewing and reduced motion must keep every navigation control usable.
       await page.setViewportSize({ width: 390, height: 844 })
@@ -436,6 +443,12 @@ describeE2e('e2e upload flow', () => {
         .poll(() => viewer.locator('video').evaluate((video: HTMLVideoElement) => video.readyState))
         .toBeGreaterThanOrEqual(1)
       await page.keyboard.press('Escape')
+      await browserExpect(viewer).toHaveCount(0)
+      await page.evaluate(
+        () =>
+          (window as typeof window & { __viewTransitionFinished?: Promise<void> })
+            .__viewTransitionFinished,
+      )
       expect(
         diagnostics.consoleMessages.filter((message) => message.startsWith('[pageerror]')),
       ).toEqual([])
