@@ -76,6 +76,13 @@ describeE2e('e2e upload flow', () => {
   test('uploads wedding photos and videos', async () => {
     const browser = await chromium.launch(chromiumChannel ? { channel: chromiumChannel } : {})
     const page = await browser.newPage()
+    const localStatusRequests: number[] = []
+    page.on('request', (request) => {
+      const url = new URL(request.url())
+      if (!useRemote && url.pathname === '/api/assemblies' && request.method() === 'GET') {
+        localStatusRequests.push(Date.now())
+      }
+    })
     const connectedHosts = new Set<string>()
     page.on('websocket', (socket) => connectedHosts.add(new URL(socket.url()).host))
     await page.addInitScript(() => {
@@ -84,12 +91,41 @@ describeE2e('e2e upload flow', () => {
       const state = window as typeof window & {
         __viewTransitions: number
         __viewTransitionFinished?: Promise<void>
+        __viewTransitionTrace: unknown[]
       }
       state.__viewTransitions = 0
+      state.__viewTransitionTrace = []
       document.startViewTransition = (...args) => {
         state.__viewTransitions += 1
+        const id = state.__viewTransitions
+        const trace = (phase: string, error?: unknown) => {
+          state.__viewTransitionTrace.push({
+            id,
+            phase,
+            time: Math.round(performance.now()),
+            media: document.querySelector('dialog .viewer-media')?.firstElementChild?.tagName,
+            width: innerWidth,
+            visibility: document.visibilityState,
+            navigation: Boolean(window.navigation?.transition),
+            reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
+            error: error instanceof Error ? error.message : error ? String(error) : undefined,
+          })
+        }
+        trace('start')
         const transition = start(...args)
         state.__viewTransitionFinished = transition.finished
+        transition.updateCallbackDone.then(
+          () => trace('updated'),
+          (error) => trace('update rejected', error),
+        )
+        transition.ready.then(
+          () => trace('ready'),
+          (error) => trace('ready rejected', error),
+        )
+        transition.finished.then(
+          () => trace('finished'),
+          (error) => trace('finish rejected', error),
+        )
         return transition
       }
     })
@@ -321,6 +357,14 @@ describeE2e('e2e upload flow', () => {
 
       await waitForAssemblyMedia(assemblyId)
 
+      if (!useRemote && localStatusRequests.length > 0) {
+        const pollingDuration = Date.now() - localStatusRequests[0]
+        // One initial poll, one explicit refresh after upload, and the four-second polling cadence.
+        expect(localStatusRequests.length).toBeLessThanOrEqual(
+          2 + Math.ceil(pollingDuration / 4000),
+        )
+      }
+
       const cards = page.locator(`[data-testid="gallery"] [data-assembly-id="${assemblyId}"]`)
       await browserExpect(cards).toHaveCount(3)
       const allCards = page.locator('[data-testid="gallery"] [data-assembly-id]')
@@ -397,6 +441,13 @@ describeE2e('e2e upload flow', () => {
       ).toEqual([])
     } catch (error) {
       diagnostics.dump()
+      console.log(
+        'View transition trace:',
+        await page.evaluate(
+          () =>
+            (window as typeof window & { __viewTransitionTrace?: unknown[] }).__viewTransitionTrace,
+        ),
+      )
       const uppyState = await page
         .evaluate(() => {
           const uppy = (window as { __uppy?: DebugUppy }).__uppy

@@ -266,17 +266,17 @@ const LocalWeddingUploads = () => {
     }
   }, [assemblyStatus, stage])
 
+  const needsPolling =
+    !assemblyStatus || !isAssemblyTerminal(assemblyStatus) || results.length === 0
   useEffect(() => {
-    if (!assemblyId) return
+    if (!assemblyId || !needsPolling) return
     const controller = pollAssembly({
       intervalMs: 4000,
       refresh: () => refreshResults(assemblyId, true),
-      isTerminal: () => (assemblyStatus ? isAssemblyTerminal(assemblyStatus) : false),
-      shouldContinue: () => results.length === 0,
       onError: (err) => setError(err.message),
     })
     return () => controller.stop()
-  }, [assemblyId, assemblyStatus, refreshResults, results.length])
+  }, [assemblyId, needsPolling, refreshResults])
 
   return (
     <WeddingLayout
@@ -372,19 +372,19 @@ const CloudWeddingUploads = () => {
     }
   }, [parsedStatus, stage])
 
+  const needsPolling =
+    !parsedStatus || !isAssemblyTerminal(parsedStatus) || (results ?? []).length === 0
   useEffect(() => {
-    if (!assemblyId) return
+    if (!assemblyId || !needsPolling) return
     const controller = pollAssembly({
       intervalMs: 8000,
       refresh: async () => {
         await refreshAssembly({ assemblyId })
       },
-      isTerminal: () => (parsedStatus ? isAssemblyTerminal(parsedStatus) : false),
-      shouldContinue: () => (results ?? []).length === 0,
       onError: (err) => setError(err.message),
     })
     return () => controller.stop()
-  }, [assemblyId, parsedStatus, refreshAssembly, results])
+  }, [assemblyId, needsPolling, refreshAssembly])
 
   const statusOk = parsedStatus && typeof parsedStatus.ok === 'string' ? parsedStatus.ok : 'pending'
   const galleryResults = albumResults ?? results ?? []
