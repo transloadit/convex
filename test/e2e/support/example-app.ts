@@ -98,7 +98,7 @@ export const startExampleApp = async ({ env }: ExampleAppOptions): Promise<Examp
   const tunnel = await startTunnel(port)
   const notifyUrl = tunnel.info.notifyUrl ?? `${tunnel.info.url}/transloadit/webhook`
 
-  const nextEnv = {
+  const nextEnv: NodeJS.ProcessEnv = {
     ...process.env,
     NEXT_TELEMETRY_DISABLED: '1',
     TRANSLOADIT_NOTIFY_URL: notifyUrl,
@@ -109,39 +109,24 @@ export const startExampleApp = async ({ env }: ExampleAppOptions): Promise<Examp
     nextEnv.CONVEX_URL = ''
   }
 
-  await runCommand('yarn', ['build'], nextEnv, 'Package build')
-
-  const nextCli = resolve('node_modules/next/dist/bin/next')
-  await runCommand('node', [nextCli, 'build', 'example', '--webpack'], nextEnv, 'Next build')
-  const child = spawn(
-    'node',
-    [nextCli, 'start', 'example', '--hostname', '127.0.0.1', '--port', `${port}`],
-    {
-      env: nextEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    },
-  )
-
-  const url = `http://127.0.0.1:${port}`
-  const logs: string[] = []
-  await waitForReady(url, child, logs)
-
+  let child: ReturnType<typeof spawn> | null = null
   const close = async () => {
-    if (child.exitCode === null) {
-      child.kill()
+    const server = child
+    if (server && server.exitCode === null && server.signalCode === null) {
+      server.kill()
       await new Promise((resolvePromise) => {
         const fallback = setTimeout(() => {
-          child.kill('SIGKILL')
+          server.kill('SIGKILL')
           resolvePromise(null)
         }, 3000)
-        child.once('exit', () => {
+        server.once('exit', () => {
           clearTimeout(fallback)
           resolvePromise(null)
         })
       })
     }
 
-    if (tunnel.process.exitCode === null) {
+    if (tunnel.process.exitCode === null && tunnel.process.signalCode === null) {
       tunnel.process.kill()
       await new Promise((resolvePromise) => {
         const fallback = setTimeout(() => {
@@ -156,5 +141,27 @@ export const startExampleApp = async ({ env }: ExampleAppOptions): Promise<Examp
     }
   }
 
-  return { url, notifyUrl, close }
+  try {
+    await runCommand('yarn', ['build'], nextEnv, 'Package build')
+
+    const nextCli = resolve('node_modules/next/dist/bin/next')
+    await runCommand('node', [nextCli, 'build', 'example', '--webpack'], nextEnv, 'Next build')
+    child = spawn(
+      'node',
+      [nextCli, 'start', 'example', '--hostname', '127.0.0.1', '--port', `${port}`],
+      {
+        env: nextEnv,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
+
+    const url = `http://127.0.0.1:${port}`
+    const logs: string[] = []
+    await waitForReady(url, child, logs)
+
+    return { url, notifyUrl, close }
+  } catch (error) {
+    await close()
+    throw error
+  }
 }

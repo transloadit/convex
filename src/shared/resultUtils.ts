@@ -50,7 +50,10 @@ export const getResultUrl = (result: TransloaditResult) => {
   return undefined
 }
 
-export const getResultOriginalKey = (result: TransloaditResult) => {
+export const getResultOriginalKey = (
+  result: TransloaditResult,
+  { allowNameFallback = true }: { allowNameFallback?: boolean } = {},
+) => {
   const raw = (result as TransloaditResult & { raw?: unknown }).raw
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
     const rawRecord = raw as Record<string, unknown>
@@ -58,12 +61,21 @@ export const getResultOriginalKey = (result: TransloaditResult) => {
     if (typeof originalId === 'string' && originalId.length > 0) {
       return originalId
     }
+    if (
+      Array.isArray(originalId) &&
+      originalId.length > 0 &&
+      originalId.every((id) => typeof id === 'string' && id.length > 0)
+    ) {
+      return originalId.length === 1 ? (originalId[0] as string) : JSON.stringify(originalId)
+    }
+    if (!allowNameFallback) return null
     const originalBase = rawRecord.original_basename
     if (typeof originalBase === 'string' && originalBase.length > 0) {
       return originalBase
     }
   }
 
+  if (!allowNameFallback) return null
   if (result.name) return result.name
   if (result.resultId) return result.resultId
   if (result._id) return result._id

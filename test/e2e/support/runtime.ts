@@ -17,6 +17,9 @@ export const getRuntimeConfig = (): RuntimeConfig => {
   const useRemote = mode === 'cloud'
   const remoteAppUrl = process.env.E2E_REMOTE_APP_URL ?? process.env.E2E_APP_URL ?? ''
   const shouldRun = useRemote || Boolean(authKey && authSecret)
+  if (!shouldRun) {
+    throw new Error('Local upload verification requires TRANSLOADIT_KEY and TRANSLOADIT_SECRET.')
+  }
   return {
     authKey,
     authSecret,

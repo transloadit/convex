@@ -1,9 +1,3 @@
-export const weddingStepNames = {
-  image: 'images_resized',
-  video: 'videos_encoded',
-  videoThumbs: 'videos_thumbs',
-}
-
 export type {
   AssemblyOptions,
   AssemblyResponse,

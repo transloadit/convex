@@ -5,11 +5,19 @@ them out.
 
 ## Development
 
+Use Node.js 24.15+ or 26+ and the Yarn version pinned in `package.json`:
+
+```bash
+npm install --global corepack@0.36.0
+corepack enable
+yarn install --immutable
+```
+
 ```bash
 yarn check
 ```
 
-This runs format, lint, typecheck, and unit tests. For the full verification suite:
+This runs format, lint, module and example typechecks, and unit tests. For the full verification suite:
 
 ```bash
 yarn verify
@@ -24,13 +32,16 @@ export TRANSLOADIT_KEY=...
 export TRANSLOADIT_SECRET=...
 export TRANSLOADIT_R2_CREDENTIALS=...
 
-# Get a public webhook URL (cloudflared is auto-downloaded if needed)
-yarn tunnel --once
+# Keep this running in another terminal (cloudflared is downloaded if needed).
+yarn tunnel --port 3000
 # Set TRANSLOADIT_NOTIFY_URL to the printed notifyUrl
 export TRANSLOADIT_NOTIFY_URL=...
 
 yarn example:dev
 ```
+
+Node 26 does not bundle Corepack. The bootstrap above installs it explicitly on both supported
+Node versions. Keep the tunnel running for uploads; `--once` prints a URL and stops the tunnel.
 
 If you want the API routes to talk to an existing Convex deployment (bypassing Convex Auth), set:
 
@@ -66,6 +77,14 @@ spam/abuse. The demo bucket auto-expires objects after 1 day via an R2 lifecycle
 `yarn r2:lifecycle` or override with `R2_RETENTION_DAYS`). If you set `WEDDING_UPLOAD_CODE` on the
 Convex deployment, guests must enter the passcode before uploads can start.
 
+Raw `R2_*` credentials are a local QA convenience: inline signed Assembly instructions are sent to
+the browser. For any guest-facing deployment, use named Transloadit Template credentials and omit
+raw storage keys. The diagnostic panel is redacted, but redaction does not hide the instructions
+Uppy must send. An upload code does not make gallery reads private.
+
+The [wedding archive recommendation](docs/wedding-gallery.md) lists the separate storage, originals,
+privacy, moderation, and backup work required before importing real wedding media.
+
 ## Demo deployment (Vercel + stable Convex)
 
 For a public demo, deploy the `example/` app and point it at a stable Convex deployment.
@@ -97,6 +116,22 @@ Use the printed deployment URL (e.g. `https://<deployment>.convex.cloud`) as the
 
 The stable demo URL is the Vercel production URL (e.g. `https://convex-demo.transload.it`) and
 should be stored in the GitHub Actions secret `E2E_REMOTE_APP_URL`.
+
+## Branch previews
+
+Convex assigns a host such as `https://loyal-trout-380.convex.cloud`; a Git branch name is not a
+Convex hostname. After CI first deploys a branch backend, use its printed `Deployment URL` for a
+Vercel `NEXT_PUBLIC_CONVEX_URL` variable scoped to that preview branch, then redeploy the frontend:
+
+```bash
+vercel env add NEXT_PUBLIC_CONVEX_URL preview --git-branch <branch> --project convex --scope transloadit-com
+```
+
+Subsequent CI runs reuse the named Convex preview and preserve its URL. A hosted app with no
+configured backend shows an unavailable state instead of leaving guest sign-in pending forever.
+Cloud browser QA opens the ordinary preview URL without a `convexUrl` override and checks that
+it connects to the deployment created by CI. Configure the branch variable before that check can
+pass for a new branch.
 
 ## Demo cleanup (Convex + R2)
 
@@ -154,6 +189,13 @@ Notes:
   credentials.
 - `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`.
 - Set `TRANSLOADIT_DEBUG=1` to enable verbose verify logs.
+- Local upload verification fails explicitly if Transloadit credentials are missing.
+- The browser flow also checks decoded photos, video metadata, native view transitions, keyboard
+  navigation, focus restoration, and phone-sized reduced-motion viewing. Set `E2E_SCREENSHOT_DIR`
+  to a local directory to retain gallery/viewer screenshots.
+- macOS tunnel bootstrap extracts the official cloudflared archive automatically.
+- Cloud QA deploys the checked-in `example/convex` sources against the packed module and uses the
+  root dependency versions; it no longer maintains a separate generated implementation.
 
 ## Component test helpers
 

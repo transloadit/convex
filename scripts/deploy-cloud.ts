@@ -63,7 +63,8 @@ const deployCloud = async () => {
     }
     const deployArgs = ['convex', 'deploy', '--typecheck', 'disable', '--yes']
     if (previewName) {
-      deployArgs.push('--preview-create', previewName)
+      // Keep the assigned URL stable for the Vercel branch preview and existing guest sessions.
+      deployArgs.push('--preview-name', previewName)
     }
 
     const deployOutput = run('npx', deployArgs, {

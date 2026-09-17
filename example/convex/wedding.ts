@@ -1,5 +1,6 @@
 import { vAssemblyOptions } from '@transloadit/convex'
 import { v } from 'convex/values'
+import { parseDisplayParams } from '../lib/assembly-params'
 import { buildWeddingSteps } from '../lib/transloadit-steps'
 import { components, internal } from './_generated/api'
 import { action, internalMutation } from './_generated/server'
@@ -104,8 +105,7 @@ export const createWeddingAssemblyOptions = action({
       },
     })
 
-    const parsedParams = safeParseParams(assemblyOptions.params)
-    const params = redactSecrets(parsedParams ?? assemblyArgs)
+    const params = parseDisplayParams(assemblyOptions.params)
 
     return {
       assemblyOptions,
@@ -113,30 +113,3 @@ export const createWeddingAssemblyOptions = action({
     }
   },
 })
-
-const safeParseParams = (value: string) => {
-  try {
-    return JSON.parse(value) as Record<string, unknown>
-  } catch (error) {
-    console.warn('Failed to parse Transloadit params', error)
-    return null
-  }
-}
-
-const secretKeys = new Set(['secret', 'key', 'credentials', 'authSecret', 'authKey'])
-
-const redactSecrets = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map((item) => redactSecrets(item))
-  }
-  if (value && typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>).map(([key, val]) => {
-      if (secretKeys.has(key)) {
-        return [key, '***']
-      }
-      return [key, redactSecrets(val)]
-    })
-    return Object.fromEntries(entries)
-  }
-  return value
-}

@@ -5,6 +5,7 @@
     "strict": true,
     "target": "ESNext",
     "lib": ["ES2021", "DOM"],
+    "types": ["node"],
     "forceConsistentCasingInFileNames": true,
     "allowSyntheticDefaultImports": true,
     "jsx": "react-jsx",
@@ -23,5 +24,5 @@
     "outDir": "./dist",
     "skipLibCheck": true
   },
-  "include": ["./src/**/*", "./scripts/**/*.ts"]
+  "include": ["./src/**/*", "./scripts/**/*.ts", "./test/e2e/**/*.ts", "./vitest*.config.ts"]
 }

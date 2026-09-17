@@ -53,7 +53,7 @@ const videoSpec = {
   file: 'wedding-video-01.mp4',
   prompt:
     'A couple slow dancing at their wedding reception, gentle swaying, warm string lights, cinematic but realistic, smooth motion, shallow depth of field.',
-  duration: '5',
+  duration: '5' as const,
   sourceImage: 'wedding-photo-01.png',
 }
 
