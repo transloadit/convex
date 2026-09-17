@@ -4,6 +4,11 @@ import { v } from 'convex/values'
 
 export default defineSchema({
   ...authTables,
+  albumGuests: defineTable({
+    userId: v.id('users'),
+    name: v.string(),
+    version: v.string(),
+  }).index('by_user', ['userId']),
   uploadLimits: defineTable({
     userId: v.string(),
     windowStart: v.number(),

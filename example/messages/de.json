@@ -24,6 +24,14 @@
     "unavailableHint": "Uploads sind derzeit nicht möglich. Bitte versuche es später erneut."
   },
   "language": { "label": "Sprache: {language}" },
+  "access": {
+    "eyebrow": "Du bist eingeladen",
+    "intro": "Unser Tag, durch eure Augen. Gib deinen Namen ein, um das Album zu öffnen.",
+    "enter": "Album öffnen",
+    "entering": "Einen Moment…",
+    "leave": "Album verlassen",
+    "footnote": "Ein kleiner Ort, um unsere Erinnerungen zu teilen und neu zu erleben."
+  },
   "upload": {
     "share": "Fotos teilen",
     "uploading": "Hochladen…",
@@ -69,6 +77,8 @@
     "uploadedUnknown": "{name} hat neue Dateien hinzugefügt"
   },
   "errors": {
+    "ACCESS_REQUIRED": "Gib deinen Namen und Einladungscode erneut ein, um das Album zu öffnen.",
+    "LOGIN_FAILED": "Das Album konnte nicht geöffnet werden. Bitte versuche es erneut.",
     "NAME_REQUIRED": "Bitte gib deinen Namen ein (höchstens 100 Zeichen).",
     "FILES_REQUIRED": "Wähle mindestens ein Foto oder Video aus.",
     "AUTH_REQUIRED": "Dein Upload wird vorbereitet. Bitte versuche es gleich noch einmal.",

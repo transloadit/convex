@@ -185,6 +185,7 @@ export const vStoreAssemblyMetadataArgs = {
 
 export const vRefreshAssemblyArgs = {
   assemblyId: v.string(),
+  expectedFields: v.optional(v.record(v.string(), v.string())),
   config: v.optional(
     v.object({
       authKey: v.string(),

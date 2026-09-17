@@ -1,6 +1,6 @@
 import { buildWebhookQueueArgs } from '@transloadit/convex'
 import { httpRouter } from 'convex/server'
-import { api } from './_generated/api'
+import { internal } from './_generated/api'
 import { httpAction } from './_generated/server'
 import { auth } from './auth'
 
@@ -24,7 +24,7 @@ http.route({
       requireSignature: false,
     })
 
-    await ctx.runAction(api.transloadit.queueWebhook, args)
+    await ctx.runAction(internal.transloadit.queueWebhook, args)
 
     return new Response(null, { status: 202 })
   }),

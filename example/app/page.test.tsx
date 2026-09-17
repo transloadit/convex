@@ -26,7 +26,7 @@ describe('gallery deployment connection', () => {
     vi.stubEnv('NEXT_PUBLIC_CONVEX_URL', undefined)
     vi.stubEnv('CONVEX_URL', undefined)
 
-    const html = renderToStaticMarkup(await WeddingUploadsPage({}))
+    const html = renderToStaticMarkup(await WeddingUploadsPage())
     expect(html).toContain('Gallery temporarily unavailable')
     expect(html).not.toContain('data-testid="gallery"')
     expect(html).not.toContain('refresh-gallery.convex.cloud')
@@ -37,7 +37,7 @@ describe('gallery deployment connection', () => {
     vi.stubEnv('VERCEL_GIT_COMMIT_REF', 'refresh-gallery')
     vi.stubEnv('NEXT_PUBLIC_CONVEX_URL', 'https://actual-preview.convex.cloud')
 
-    const html = renderToStaticMarkup(await WeddingUploadsPage({}))
+    const html = renderToStaticMarkup(await WeddingUploadsPage())
     expect(html).toContain('data-convex-url="https://actual-preview.convex.cloud"')
   })
 
@@ -46,7 +46,7 @@ describe('gallery deployment connection', () => {
     vi.stubEnv('NEXT_PUBLIC_CONVEX_URL', undefined)
     vi.stubEnv('CONVEX_URL', undefined)
 
-    const html = renderToStaticMarkup(await WeddingUploadsPage({}))
+    const html = renderToStaticMarkup(await WeddingUploadsPage())
     expect(html).toContain('data-testid="gallery"')
     expect(html).not.toContain('data-convex-url')
   })

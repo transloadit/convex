@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { expect as browserExpect, chromium } from '@playwright/test'
+import { ConvexHttpClient } from 'convex/browser'
+import { makeFunctionReference } from 'convex/server'
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
 import { attachBrowserDiagnostics } from './support/diagnostics.js'
 import { startExampleApp } from './support/example-app.js'
@@ -52,6 +54,7 @@ describeE2e('e2e upload flow', () => {
     app = await startExampleApp({
       env: {
         E2E_MODE: 'local',
+        WEDDING_UPLOAD_CODE: 'browser-invitation-test',
         TRANSLOADIT_KEY: authKey,
         TRANSLOADIT_SECRET: authSecret,
         TRANSLOADIT_R2_CREDENTIALS: process.env.TRANSLOADIT_R2_CREDENTIALS,
@@ -178,6 +181,59 @@ describeE2e('e2e upload flow', () => {
         waitUntil: 'domcontentloaded',
       })
 
+      const entry = page.getByTestId('album-entry')
+      await browserExpect(entry).toBeVisible()
+      await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
+      await browserExpect(page.locator('.cover-image')).toHaveCount(0)
+      expect(navigation?.headers()['x-robots-tag']).toContain('noindex')
+      await browserExpect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
+      if (useRemote && remoteConvexUrl) {
+        const unauthenticated = new ConvexHttpClient(remoteConvexUrl)
+        await expect(
+          unauthenticated.query(makeFunctionReference<'query'>('wedding:listGallery'), {}),
+        ).rejects.toThrow('ACCESS_REQUIRED')
+      } else if (!useRemote) {
+        const response = await page.request.get(`${serverUrl}/api/assemblies?assemblyId=private`)
+        expect(response.status()).toBe(401)
+      }
+      const enter = entry.getByTestId('enter-album')
+      await browserExpect(enter).toBeEnabled()
+      const entryName = entry.getByRole('textbox', { name: 'Your name' })
+      await browserExpect(entryName).toHaveValue('')
+      await browserExpect(entryName).toHaveAttribute('placeholder', 'Guest')
+      await enter.click()
+      expect(
+        await entryName.evaluate((input: HTMLInputElement) => input.validity.valueMissing),
+      ).toBe(true)
+      if (process.env.E2E_SCREENSHOT_DIR) {
+        mkdirSync(process.env.E2E_SCREENSHOT_DIR, { recursive: true })
+        await page.screenshot({ path: join(process.env.E2E_SCREENSHOT_DIR, 'entry-desktop.png') })
+        await page.setViewportSize({ width: 320, height: 740 })
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(320)
+        await page.screenshot({ path: join(process.env.E2E_SCREENSHOT_DIR, 'entry-mobile.png') })
+        await page.setViewportSize({ width: 1280, height: 720 })
+      }
+      await entryName.fill('Preview Guest')
+      const invitation = entry.getByLabel('Invite code')
+      if (!useRemote) {
+        await browserExpect(invitation).toBeVisible()
+        await invitation.fill('wrong-code')
+        await enter.click()
+        await browserExpect(entry.getByRole('alert')).toHaveText(
+          'Please enter the correct invite code.',
+        )
+        await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
+      }
+      if (await invitation.isVisible()) {
+        const code = useRemote
+          ? process.env.E2E_WEDDING_UPLOAD_CODE || process.env.WEDDING_UPLOAD_CODE
+          : 'browser-invitation-test'
+        if (!code) throw new Error('Set E2E_WEDDING_UPLOAD_CODE to test this code-protected album')
+        await invitation.fill(code)
+      }
+      await enter.click()
+      await browserExpect(entry).toBeHidden({ timeout: 60_000 })
+
       if (useRemote) {
         try {
           await page.waitForSelector('[data-auth-state="authenticated"]', {
@@ -261,8 +317,9 @@ describeE2e('e2e upload flow', () => {
       await browserExpect(uploadDialog).toBeVisible()
       await browserExpect(uploadDialog.getByRole('button', { name: 'Close upload' })).toBeFocused()
       const guestName = uploadDialog.getByRole('textbox', { name: 'Your name' })
-      await browserExpect(guestName).toHaveValue('')
+      await browserExpect(guestName).toHaveValue('Preview Guest')
       await browserExpect(guestName).toHaveAttribute('placeholder', 'Guest')
+      await guestName.fill('')
       await uploadDialog.getByTestId('start-upload').click()
       expect(
         await guestName.evaluate((input: HTMLInputElement) => input.validity.valueMissing),
@@ -632,11 +689,33 @@ describeE2e('e2e upload flow', () => {
       await page.reload({ waitUntil: 'domcontentloaded' })
       await browserExpect(page.locator('html')).toHaveAttribute('lang', 'nl')
       await browserExpect(openUpload).toHaveText('Foto’s delen')
+      await openUpload.click()
+      await browserExpect(page.getByRole('textbox', { name: 'Je naam' })).toHaveValue(
+        'Preview Guest',
+      )
+      await page.keyboard.press('Escape')
       if (useRemote) {
         await browserExpect(cards.locator('.gallery-credit')).toHaveText(
           Array(3).fill('Toegevoegd door Preview Guest'),
           { timeout: 30_000 },
         )
+      }
+      await page.getByRole('button', { name: 'Album verlaten' }).click()
+      await browserExpect(entry).toBeVisible()
+      await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
+      // A crafted invitation URL cannot send credentials to a backend of its choice.
+      const craftedUrl = new URL(serverUrl)
+      craftedUrl.searchParams.set('convexUrl', 'https://example.invalid')
+      await page.goto(craftedUrl.toString(), { waitUntil: 'domcontentloaded' })
+      await browserExpect(entry).toBeVisible()
+      await browserExpect(entry.getByTestId('enter-album')).toBeEnabled()
+      await browserExpect(entry.getByRole('textbox', { name: 'Je naam' })).toHaveValue('')
+      await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
+      if (!useRemote) {
+        const response = await page.request.get(
+          `${serverUrl}/api/assemblies?assemblyId=${assemblyId}`,
+        )
+        expect(response.status()).toBe(401)
       }
       expect(
         diagnostics.consoleMessages.filter((message) => message.startsWith('[pageerror]')),

@@ -194,6 +194,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         {
           assemblyId: string;
           config?: { authKey: string; authSecret: string };
+          expectedFields?: Record<string, string>;
         },
         {
           assemblyId: string;

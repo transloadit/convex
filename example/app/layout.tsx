@@ -7,16 +7,21 @@ import { wedding } from '../lib/wedding'
 
 export async function generateMetadata() {
   const t = await getTranslations('album')
-  return { title: t('title', { names: wedding.names }), description: t('description') }
+  return {
+    title: t('title', { names: wedding.names }),
+    description: t('description'),
+    robots: {
+      index: false,
+      follow: false,
+      googleBot: { index: false, follow: false, noimageindex: true },
+    },
+  }
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const locale = await getLocale()
   return (
     <html lang={locale}>
-      <head>
-        <link rel="preload" as="image" href={wedding.cover} fetchPriority="high" />
-      </head>
       <body>
         <AlbumIntlProvider initialLocale={locale}>{children}</AlbumIntlProvider>
       </body>

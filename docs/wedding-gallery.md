@@ -9,8 +9,9 @@ affect the wedding archive.
 
 - Resumable Uppy uploads of photos and videos, with signed Transloadit Assembly options.
 - Image resizing, video encoding, video posters, and export to Cloudflare R2.
-- Convex status/results, live gallery updates, and anonymous guest sessions.
-- An optional upload code and a small per-session upload limit.
+- Convex status/results, live gallery updates, and named guest sessions.
+- Required name entry, an optional invitation code for viewing and uploading, and a small per-session upload limit.
+- Editable contributor names on uploads, four interface languages, and search-engine exclusion.
 - A Motion `AnimateView` photo viewer with keyboard navigation and reduced-motion support.
 
 The [Motion announcement](https://x.com/motiondotdev/status/2100212174413062260) introduces
@@ -24,8 +25,8 @@ An animation library handles presentation; it does not provide albums, access co
 | --- | --- | --- |
 | Retention | The UI defaults to 24 hours; the demo R2 lifecycle deletes objects after one day. | Separate bucket/workspace with explicit permanent retention. Setting the gallery retention to zero only removes the UI cutoff; it cannot undo bucket deletion. Exclude it from demo cleanup. |
 | Originals | Processing persists resized photos, encoded videos, and posters. | Preserve untouched originals and checksums as well as viewing derivatives. Keep an independent backup and demonstrate a restore. |
-| Viewing privacy | Gallery queries and media links are public. An upload code controls uploads only. | Invite-only album reads, server-side membership checks, private storage, and authorized delivery/downloads. Protect thumbnails and video URLs too. |
-| Backend authorization | Guest signing is limited to the wedding action and cleanup is internal. Gallery/status queries and refresh remain public. | Add membership/ownership checks to every read, refresh, edit, and delivery path. Keep signed Steps/Templates fixed. Use named Template credentials: raw R2 keys in inline instructions are visible to the uploader even when the diagnostic display is redacted. |
+| Viewing privacy | Album queries require a named guest session and the invitation code when configured. Direct media links remain public. | Configure a strong invitation code, private storage, and authorized delivery/downloads. Protect thumbnails and video URLs too. Without a code, anyone can enter a name. |
+| Backend authorization | Album reads require admission; status/results/refresh require ownership. Signing uses a fixed wedding action; ingestion and cleanup are internal. Logout and code changes revoke album access. | Extend membership checks to future editing and delivery paths. Names are self-reported. Use named Template credentials: raw R2 keys in inline instructions are visible to the uploader even when the diagnostic display is redacted. |
 | Ingestion | Guest batches are capped at 12 files; authenticated sessions have a six-batch hourly limit. | Separate owner/photographer bulk import with resumability, deduplication, progress, and retry/reconciliation. Keep tighter guest limits, including file size and total storage quotas. |
 | Organization | One demo album and a small capped result query. | Persistent asset records, pagination, photographer/our photos/guest collections, capture dates and time zones, contributor credit, and stable ordering. |
 | Moderation | Successful uploads appear immediately. | Owner approval/hide/delete, a recoverable trash state, and upload acknowledgements. Explain who can see submitted files. |

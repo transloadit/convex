@@ -4,11 +4,13 @@ import {
   vAssemblyResultResponse,
 } from '@transloadit/convex'
 import { ConvexError, v } from 'convex/values'
+import { album } from '../lib/album-access'
 import { parseDisplayParams } from '../lib/assembly-params'
 import { getGuestName, isValidGuestName } from '../lib/guest-name'
 import { buildWeddingSteps } from '../lib/transloadit-steps'
 import { components, internal } from './_generated/api'
 import { action, internalMutation, query } from './_generated/server'
+import { requireGuest } from './guests'
 
 const MAX_UPLOADS_PER_HOUR = 6
 const WINDOW_MS = 60 * 60 * 1000
@@ -62,31 +64,19 @@ export const createWeddingAssemblyOptions = action({
   args: {
     fileCount: v.number(),
     guestName: v.string(),
-    uploadCode: v.optional(v.string()),
   },
   returns: v.object({
     assemblyOptions: vAssemblyOptions,
     params: v.any(),
   }),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity()
-    if (!identity) {
-      throw new ConvexError('AUTH_REQUIRED')
-    }
+    const guest = await ctx.runQuery(internal.guests.requireViewer, {})
 
     if (!isValidGuestName(args.guestName)) throw new ConvexError('NAME_REQUIRED')
 
     await ctx.runMutation(internal.wedding.checkUploadLimit, {
-      userId: identity.subject,
+      userId: guest.userId,
     })
-
-    const requiredCode = process.env.WEDDING_UPLOAD_CODE
-    if (requiredCode) {
-      const provided = args.uploadCode?.trim()
-      if (!provided || provided !== requiredCode) {
-        throw new ConvexError('INVITE_REQUIRED')
-      }
-    }
 
     const steps = buildWeddingSteps()
     const notifyUrl = requireEnv('TRANSLOADIT_NOTIFY_URL')
@@ -97,11 +87,11 @@ export const createWeddingAssemblyOptions = action({
       numExpectedUploadFiles: fileCount,
       fields: {
         guestName: args.guestName.trim(),
-        album: 'wedding-gallery',
+        album,
         fileCount,
-        userId: identity.subject,
+        userId: guest.userId,
       },
-      userId: identity.subject,
+      userId: guest.userId,
     }
 
     const assemblyOptions = await ctx.runAction(components.transloadit.lib.createAssemblyOptions, {
@@ -129,10 +119,11 @@ export const listGallery = query({
     v.object({ ...vAssemblyResultResponse.fields, uploadedBy: v.optional(v.string()) }),
   ),
   handler: async (ctx, args) => {
+    await requireGuest(ctx)
     const results: AssemblyResultResponse[] = await ctx.runQuery(
       components.transloadit.lib.listAlbumResults,
       {
-        album: 'wedding-gallery',
+        album,
         limit: args.limit ?? 80,
       },
     )

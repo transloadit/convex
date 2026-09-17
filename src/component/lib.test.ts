@@ -11,6 +11,37 @@ process.env.TRANSLOADIT_KEY = 'test-key'
 process.env.TRANSLOADIT_SECRET = 'test-secret'
 
 describe('Transloadit component lib', () => {
+  test('checks expected upload fields before persisting a refreshed assembly', async () => {
+    const t = convexTest(schema, modules)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        Response.json({
+          assembly_id: 'scoped',
+          ok: 'ASSEMBLY_COMPLETED',
+          fields: { album: 'private-album', userId: 'another-user' },
+          results: { images: [{ id: 'photo', ssl_url: 'https://example.com/private.jpg' }] },
+        }),
+      ),
+    )
+    try {
+      await expect(
+        t.action(api.lib.refreshAssembly, {
+          assemblyId: 'scoped',
+          expectedFields: { album: 'wedding-gallery', userId: 'guest' },
+        }),
+      ).rejects.toThrow('expected fields')
+      expect(await t.query(api.lib.getAssemblyStatus, { assemblyId: 'scoped' })).toBeNull()
+      expect(await t.query(api.lib.listResults, { assemblyId: 'scoped' })).toEqual([])
+      await t.action(api.lib.refreshAssembly, {
+        assemblyId: 'scoped',
+        expectedFields: { album: 'private-album', userId: 'another-user' },
+      })
+      expect(await t.query(api.lib.listResults, { assemblyId: 'scoped' })).toHaveLength(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
   test.each(['handleWebhook', 'queueWebhook'] as const)(
     '%s persists only the signed body, even if the separate payload is changed',
     async (method) => {

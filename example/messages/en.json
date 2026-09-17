@@ -24,6 +24,14 @@
     "unavailableHint": "Uploads are unavailable right now. Please try again later."
   },
   "language": { "label": "Language: {language}" },
+  "access": {
+    "eyebrow": "You’re invited",
+    "intro": "Our day, through everyone’s eyes. Tell us your name to open the album.",
+    "enter": "Open the album",
+    "entering": "Just a moment…",
+    "leave": "Leave the album",
+    "footnote": "A little place to share and relive our memories."
+  },
   "upload": {
     "share": "Share photos",
     "uploading": "Uploading…",
@@ -69,6 +77,8 @@
     "uploadedUnknown": "{name} added new files"
   },
   "errors": {
+    "ACCESS_REQUIRED": "Please enter your name and invitation code again to open the album.",
+    "LOGIN_FAILED": "We couldn’t open the album. Please try again.",
     "NAME_REQUIRED": "Please enter your name (up to 100 characters).",
     "FILES_REQUIRED": "Select at least one photo or video.",
     "AUTH_REQUIRED": "Your upload is getting ready. Please try again in a moment.",

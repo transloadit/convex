@@ -88,6 +88,81 @@ summary:focus-visible {
   gap: 16px;
   min-width: 0;
 }
+.leave-album {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--accent);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.leave-album:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.album-entry {
+  min-height: 100svh;
+  display: grid;
+  place-items: center;
+  padding: 90px 24px 50px;
+  background: radial-gradient(ellipse at 50% 20%, #e9eddf80, transparent 65%);
+}
+.entry-language {
+  position: absolute;
+  top: 24px;
+  right: 32px;
+}
+.entry-card {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+.entry-monogram {
+  display: inline-grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  border: 1px solid #bfc6b0;
+  border-radius: 50%;
+  font-size: 29px;
+  letter-spacing: -2px;
+  margin-bottom: 32px;
+}
+.entry-card h1 {
+  font-size: clamp(44px, 9vw, 64px);
+  font-weight: 400;
+  letter-spacing: -3px;
+  line-height: 1.1;
+  margin: 0;
+}
+.entry-intro {
+  font: 14px / 1.9 var(--ui-font);
+  color: var(--muted);
+  margin: 24px auto 32px;
+  max-width: 340px;
+}
+.entry-card form {
+  text-align: left;
+}
+.entry-submit {
+  width: 100%;
+  margin-top: 8px;
+  gap: 24px;
+}
+.entry-error {
+  color: #8b382a;
+  font: 13px / 1.6 var(--ui-font);
+}
+.entry-footnote {
+  color: var(--muted);
+  font: 11px / 1.8 var(--ui-font);
+  margin: 26px 0 0;
+}
 .language-picker {
   position: relative;
   display: inline-flex;
@@ -166,6 +241,10 @@ summary:focus-visible {
   font: 10px / 1.5 var(--ui-font);
   letter-spacing: 2.4px;
   text-transform: uppercase;
+}
+.entry-card .eyebrow {
+  color: var(--accent);
+  margin-bottom: 12px;
 }
 .cover-content h1 {
   margin: 0;
@@ -327,7 +406,6 @@ summary:focus-visible {
 }
 .upload-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
 }
 .optional {
@@ -362,11 +440,11 @@ summary:focus-visible {
 @media (max-width: 640px) {
   .album-header {
     height: 72px;
-    padding: 0 20px;
-    gap: 12px;
+    padding: 0 12px;
+    gap: 8px;
   }
   .header-actions {
-    gap: 12px;
+    gap: 8px;
   }
   .share-button {
     padding-inline: 12px;

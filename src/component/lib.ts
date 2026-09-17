@@ -445,6 +445,13 @@ export const refreshAssembly = action({
       throw transloaditError('status', `HTTP ${response.status}: ${JSON.stringify(payload)}`)
     }
 
+    // App wrappers can restrict refreshes before any status/results are persisted.
+    for (const [field, expected] of Object.entries(args.expectedFields ?? {})) {
+      if (getFieldString(payload.fields, field) !== expected) {
+        throw transloaditError('status', 'Assembly does not match the expected fields')
+      }
+    }
+
     return applyAssemblyStatus(ctx, payload)
   },
 })

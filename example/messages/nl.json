@@ -24,6 +24,14 @@
     "unavailableHint": "Uploaden is momenteel niet mogelijk. Probeer het later opnieuw."
   },
   "language": { "label": "Taal: {language}" },
+  "access": {
+    "eyebrow": "Je bent uitgenodigd",
+    "intro": "Onze dag, door ieders ogen. Vul je naam in om het album te openen.",
+    "enter": "Open het album",
+    "entering": "Een momentje…",
+    "leave": "Album verlaten",
+    "footnote": "Een plek om onze herinneringen te delen en opnieuw te beleven."
+  },
   "upload": {
     "share": "Foto’s delen",
     "uploading": "Uploaden…",
@@ -69,6 +77,8 @@
     "uploadedUnknown": "{name} heeft nieuwe bestanden toegevoegd"
   },
   "errors": {
+    "ACCESS_REQUIRED": "Vul je naam en uitnodigingscode opnieuw in om het album te openen.",
+    "LOGIN_FAILED": "Het album kon niet worden geopend. Probeer het opnieuw.",
     "NAME_REQUIRED": "Vul je naam in (maximaal 100 tekens).",
     "FILES_REQUIRED": "Selecteer minstens één foto of video.",
     "AUTH_REQUIRED": "Je upload wordt klaargemaakt. Probeer het zo nog eens.",

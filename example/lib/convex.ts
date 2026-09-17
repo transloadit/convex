@@ -3,6 +3,7 @@ import { convexTest } from 'convex-test'
 import { api } from '../../src/component/_generated/api.ts'
 import schema from '../../src/component/schema.ts'
 import { modules } from '../../src/test/nodeModules.ts'
+import { album } from './album-access'
 import { parseDisplayParams } from './assembly-params'
 import { getGuestName, isValidGuestName } from './guest-name'
 import { buildWeddingSteps } from './transloadit-steps'
@@ -73,13 +74,7 @@ export const runAction = async (name: string, args: Record<string, unknown>) => 
     const fileCount = typeof args.fileCount === 'number' ? Math.max(1, args.fileCount) : 1
     if (!isValidGuestName(args.guestName)) throw new Error('NAME_REQUIRED')
     const guestName = args.guestName.trim()
-    const requiredCode = process.env.WEDDING_UPLOAD_CODE
-    if (requiredCode) {
-      const provided = typeof args.uploadCode === 'string' ? args.uploadCode.trim() : ''
-      if (!provided || provided !== requiredCode) {
-        throw new Error('INVITE_REQUIRED')
-      }
-    }
+    if (typeof args.userId !== 'string') throw new Error('ACCESS_REQUIRED')
 
     const assemblyOptions = await testClient.action(api.lib.createAssemblyOptions, {
       steps: buildWeddingSteps(),
@@ -87,8 +82,9 @@ export const runAction = async (name: string, args: Record<string, unknown>) => 
       numExpectedUploadFiles: fileCount,
       fields: {
         guestName,
-        album: 'wedding-gallery',
+        album,
         fileCount,
+        userId: args.userId,
       },
       config,
     })
@@ -130,9 +126,9 @@ export const runAction = async (name: string, args: Record<string, unknown>) => 
     })
   }
   if (name === 'refreshAssembly') {
-    const refreshArgs = args as { assemblyId: string }
     return testClient.action(api.lib.refreshAssembly, {
-      ...refreshArgs,
+      assemblyId: args.assemblyId as string,
+      expectedFields: { album, userId: args.userId as string },
       config,
     })
   }
@@ -157,9 +153,12 @@ export const runQuery = async (name: string, args: Record<string, unknown>) => {
   }
 
   if (name === 'getAssemblyStatus') {
-    return testClient.query(api.lib.getAssemblyStatus, {
+    const assembly = await testClient.query(api.lib.getAssemblyStatus, {
       assemblyId: args.assemblyId as string,
     })
+    return assembly?.fields?.album === album && assembly.fields.userId === args.userId
+      ? assembly
+      : null
   }
   if (name === 'listResults') {
     const listArgs = args as {
@@ -168,9 +167,14 @@ export const runQuery = async (name: string, args: Record<string, unknown>) => {
       stepName?: string
     }
     const [results, assembly] = await Promise.all([
-      testClient.query(api.lib.listResults, listArgs),
+      testClient.query(api.lib.listResults, {
+        assemblyId: listArgs.assemblyId,
+        limit: listArgs.limit,
+        stepName: listArgs.stepName,
+      }),
       testClient.query(api.lib.getAssemblyStatus, { assemblyId: listArgs.assemblyId }),
     ])
+    if (assembly?.fields?.album !== album || assembly.fields.userId !== args.userId) return []
     return results.map((result) => ({
       ...result,
       uploadedBy: getGuestName(assembly?.fields?.guestName),

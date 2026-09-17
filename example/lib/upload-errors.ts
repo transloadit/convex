@@ -4,6 +4,8 @@ export const uploadErrorCodes = [
   'NAME_REQUIRED',
   'FILES_REQUIRED',
   'AUTH_REQUIRED',
+  'ACCESS_REQUIRED',
+  'LOGIN_FAILED',
   'INVITE_REQUIRED',
   'UPLOAD_LIMIT',
   'UPLOAD_FAILED',

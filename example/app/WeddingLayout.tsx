@@ -97,8 +97,7 @@ export const WeddingLayout = ({
   uppy,
   guestName,
   onGuestNameChange,
-  uploadCode,
-  onUploadCodeChange,
+  onLeave,
   isUploading,
   onUpload,
   error,
@@ -114,8 +113,7 @@ export const WeddingLayout = ({
   uppy: WeddingUppy
   guestName: string
   onGuestNameChange: (value: string) => void
-  uploadCode: string
-  onUploadCodeChange: (value: string) => void
+  onLeave: () => void
   isUploading: boolean
   onUpload: () => void
   error: UploadErrorCode | null
@@ -196,6 +194,26 @@ export const WeddingLayout = ({
         </a>
         <div className="header-actions">
           <LanguageSwitcher />
+          <button
+            type="button"
+            className="leave-album"
+            onClick={onLeave}
+            disabled={isUploading}
+            aria-label={t('access.leave')}
+            title={t('access.leave')}
+          >
+            <svg
+              width="19"
+              height="19"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <path d="M10 4H4v16h6M13 7l5 5-5 5M8 12h12" />
+            </svg>
+          </button>
           <button
             className={`button share-button${stage === 'error' ? ' upload-failed' : ''}`}
             type="button"
@@ -300,17 +318,6 @@ export const WeddingLayout = ({
               required
               pattern=".*\S.*"
               maxLength={maxGuestNameLength}
-            />
-          </label>
-          <label className="input">
-            <span>
-              {t('upload.inviteCode')} <span className="optional">{t('upload.optional')}</span>
-            </span>
-            <input
-              value={uploadCode}
-              disabled={isUploading}
-              onChange={(event) => onUploadCodeChange(event.target.value)}
-              type="password"
             />
           </label>
         </form>

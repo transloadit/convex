@@ -1,6 +1,5 @@
 'use client'
 
-import { useAuthActions } from '@convex-dev/auth/react'
 import { useAction, useConvexAuth, useQuery } from 'convex/react'
 import { makeFunctionReference } from 'convex/server'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -18,6 +17,7 @@ import {
   pollAssembly,
 } from '../lib/transloadit'
 import { getUploadErrorCode, type UploadErrorCode } from '../lib/upload-errors'
+import { CloudAlbumGate, LocalAlbumGate } from './AlbumGate'
 import { Gallery } from './Gallery'
 import { Providers } from './providers'
 import {
@@ -86,7 +86,6 @@ const useUploadToasts = (
 type WeddingAssemblyArgs = {
   fileCount: number
   guestName: string
-  uploadCode?: string
 }
 
 const createWeddingAssemblyOptionsRef = makeFunctionReference<
@@ -96,7 +95,7 @@ const createWeddingAssemblyOptionsRef = makeFunctionReference<
 >('wedding:createWeddingAssemblyOptions')
 const listAssembliesRef = makeFunctionReference<
   'query',
-  { status?: string; userId?: string; limit?: number },
+  { status?: string; limit?: number },
   AssemblyResponse[]
 >('transloadit:listAssemblies')
 const listResultsRef = makeFunctionReference<
@@ -118,7 +117,13 @@ const refreshAssemblyRef = makeFunctionReference<
   { assemblyId: string; resultCount: number; ok?: string; status?: string }
 >('transloadit:refreshAssembly')
 
-const LocalWeddingUploads = () => {
+const LocalWeddingUploads = ({
+  initialName,
+  onLeave,
+}: {
+  initialName: string
+  onLeave: () => void
+}) => {
   const [assemblyId, setAssemblyId] = useState<string | null>(null)
   const [assemblyParams, setAssemblyParams] = useState<Record<string, unknown> | null>(null)
   const [status, setStatus] = useState<string>('pending')
@@ -127,9 +132,8 @@ const LocalWeddingUploads = () => {
   const [error, setError] = useState<UploadErrorCode | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [stage, setStage] = useState<UploadStage>('idle')
-  const [guestName, setGuestName] = useState('')
+  const [guestName, setGuestName] = useState(initialName)
   const [uploadSuccess, setUploadSuccess] = useState<UploadSuccess | null>(null)
-  const [uploadCode, setUploadCode] = useState('')
   const assemblyOptionsPromise = useRef<Promise<WeddingAssemblyOptionsResponse> | null>(null)
   const fileCountRef = useRef(0)
 
@@ -145,7 +149,6 @@ const LocalWeddingUploads = () => {
       body: JSON.stringify({
         fileCount,
         guestName: guestName.trim(),
-        uploadCode,
       }),
     }).then(async (response) => {
       if (!response.ok) {
@@ -158,7 +161,7 @@ const LocalWeddingUploads = () => {
     const resolved = await promise
     setAssemblyParams(resolved.params ?? null)
     return resolved.assemblyOptions
-  }, [guestName, uploadCode])
+  }, [guestName])
 
   const uppy = useWeddingUppy(getAssemblyOptions)
 
@@ -250,8 +253,7 @@ const LocalWeddingUploads = () => {
       uppy={uppy}
       guestName={guestName}
       onGuestNameChange={setGuestName}
-      uploadCode={uploadCode}
-      onUploadCodeChange={setUploadCode}
+      onLeave={onLeave}
       isUploading={isUploading}
       onUpload={() => void startUpload()}
       error={error}
@@ -266,16 +268,20 @@ const LocalWeddingUploads = () => {
   )
 }
 
-const CloudWeddingUploads = () => {
+const CloudWeddingUploads = ({
+  initialName,
+  onLeave,
+}: {
+  initialName: string
+  onLeave: () => void
+}) => {
   const [assemblyParams, setAssemblyParams] = useState<Record<string, unknown> | null>(null)
   const [assemblyId, setAssemblyId] = useState<string | null>(null)
   const [error, setError] = useState<UploadErrorCode | null>(null)
   const [stage, setStage] = useState<UploadStage>('idle')
-  const [guestName, setGuestName] = useState('')
+  const [guestName, setGuestName] = useState(initialName)
   const [uploadSuccess, setUploadSuccess] = useState<UploadSuccess | null>(null)
-  const [uploadCode, setUploadCode] = useState('')
   const [isUploading, setIsUploading] = useState(false)
-  const { signIn } = useAuthActions()
   const { isAuthenticated, isLoading } = useConvexAuth()
   const assemblyOptionsPromise = useRef<Promise<WeddingAssemblyOptionsResponse> | null>(null)
   const fileCountRef = useRef(0)
@@ -293,13 +299,12 @@ const CloudWeddingUploads = () => {
     const promise = createAssemblyOptions({
       fileCount,
       guestName: guestName.trim(),
-      uploadCode,
     }) as Promise<WeddingAssemblyOptionsResponse>
     assemblyOptionsPromise.current = promise
     const resolved = await promise
     setAssemblyParams(resolved.params ?? null)
     return resolved.assemblyOptions
-  }, [createAssemblyOptions, guestName, uploadCode, isAuthenticated])
+  }, [createAssemblyOptions, guestName, isAuthenticated])
   const uppy = useWeddingUppy(getAssemblyOptions)
   const status = useQuery(getAssemblyStatusRef, assemblyId ? { assemblyId } : 'skip')
   const results = useQuery(listResultsRef, assemblyId ? { assemblyId } : 'skip')
@@ -309,18 +314,6 @@ const CloudWeddingUploads = () => {
     limit: 12,
   })
   const toasts = useUploadToasts(assemblies ?? undefined, assemblyId)
-
-  useEffect(() => {
-    if (isLoading || isAuthenticated) return
-    let cancelled = false
-    void signIn('anonymous').catch((error) => {
-      if (cancelled) return
-      console.warn('Convex auth sign-in failed', error)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [isLoading, isAuthenticated, signIn])
 
   const parsedStatus = useMemo(() => {
     const candidate =
@@ -408,8 +401,7 @@ const CloudWeddingUploads = () => {
       uppy={uppy}
       guestName={guestName}
       onGuestNameChange={setGuestName}
-      uploadCode={uploadCode}
-      onUploadCodeChange={setUploadCode}
+      onLeave={onLeave}
       isUploading={isUploading}
       onUpload={() => void startUpload()}
       error={error}
@@ -427,43 +419,23 @@ const CloudWeddingUploads = () => {
 }
 
 export default function WeddingUploadsClient({ convexUrl }: { convexUrl?: string | null }) {
-  const [isHydrated, setIsHydrated] = useState(false)
-  const [resolvedConvexUrl, setResolvedConvexUrl] = useState<string | null>(() => {
-    if (convexUrl) return convexUrl
-    if (typeof window === 'undefined') return null
-    const params = new URLSearchParams(window.location.search)
-    return params.get('convexUrl')
-  })
-
-  useEffect(() => {
-    setIsHydrated(true)
-  }, [])
-
-  useEffect(() => {
-    if (convexUrl) {
-      setResolvedConvexUrl(convexUrl)
-      return
-    }
-    if (resolvedConvexUrl) {
-      return
-    }
-    const params = new URLSearchParams(window.location.search)
-    const fromQuery = params.get('convexUrl')
-    if (fromQuery) {
-      setResolvedConvexUrl(fromQuery)
-    }
-  }, [convexUrl, resolvedConvexUrl])
-  if (!isHydrated) {
-    return null
-  }
-  const hasConvex = Boolean(resolvedConvexUrl)
-  if (!hasConvex) {
-    return <LocalWeddingUploads />
+  if (!convexUrl) {
+    return (
+      <LocalAlbumGate>
+        {(guest, onLeave) => (
+          <LocalWeddingUploads key={guest.userId} initialName={guest.name} onLeave={onLeave} />
+        )}
+      </LocalAlbumGate>
+    )
   }
 
   return (
-    <Providers convexUrl={resolvedConvexUrl ?? ''}>
-      <CloudWeddingUploads />
+    <Providers convexUrl={convexUrl}>
+      <CloudAlbumGate>
+        {(guest, onLeave) => (
+          <CloudWeddingUploads key={guest.userId} initialName={guest.name} onLeave={onLeave} />
+        )}
+      </CloudAlbumGate>
     </Providers>
   )
 }

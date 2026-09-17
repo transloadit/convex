@@ -165,7 +165,7 @@ For status parsing and polling helpers, see `docs/advanced.md`.
 ## Example app (Next.js + Uppy wedding gallery)
 
 The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on
-the client and Convex Auth (anonymous sign-in) to create assemblies securely. Uploads are stored via
+the client and Convex Auth with a required guest name to enter the album. Uploads are stored via
 Transloadit directly into Cloudflare R2.
 
 Live demo: `https://convex-demo.transload.it`
@@ -177,8 +177,16 @@ The included cover is a compressed copy of the existing wedding photo fixture. T
 photos in their original proportions and opens uploads in a dialog (a bottom sheet on phones),
 so guests can keep browsing while their files upload.
 
-Guests enter a required name, stored in the signed Assembly fields and shown beside their photos
-and videos. A fully successful upload closes the dialog and shows the number of files added.
+Guests first enter their name and, when configured, the `WEDDING_UPLOAD_CODE` invitation code.
+The server checks access for album reads and uploads; changing the code requires guests to sign in
+again. The login name prefills the editable upload name, which is stored in signed Assembly fields
+and shown beside photos and videos. A fully successful upload closes the dialog and shows the number
+of files added. The entrance and album send `noindex` directives to search engines.
+
+Without an invitation code, anyone can enter a name to access the album. Names are self-reported,
+not verified identities. Existing R2 media URLs remain public to anyone who has the link; fully
+private media requires private storage and authorized delivery too. The in-memory session API is
+only available in local development; hosted albums use Convex Auth.
 The globe menu switches between English, Dutch, Ukrainian, and German without discarding selected
 files; the `NEXT_LOCALE` cookie remembers the choice. Like the content site, this uses `next-intl`
 and ICU messages. Edit the complete catalogs in `example/messages/`; `yarn check` verifies their
