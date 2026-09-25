@@ -51,7 +51,7 @@ const fakeConvex = (rows: Row[]) => {
           deletionAttempts: row.attempts,
         })),
         isDone: pending.length <= numItems,
-        continueCursor: page.at(-1)?.assetId ?? cursor ?? '',
+        continueCursor: page[page.length - 1]?.assetId ?? cursor ?? '',
       }
     },
     completeStorageDeletion: async ({ assetId }) => {
