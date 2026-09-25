@@ -21,11 +21,12 @@
       "sha256": "fc33ff930b66f020a5ba85d95885cc73e29f953371f0c69668782299c86d757a"
     },
     {
-      "path": "/tmp/viewer-react-thumbhash-20260925.tgz",
-      "bytes": 76718,
-      "sha256": "d93bc69345eb9bf32d8f5163d7d281717b18a3574adb9acfa5b1834c88a441e4",
-      "kind": "preview from an uncommitted SDK follow-up (Image placeholder=\"blur\"), not a release candidate",
-      "created_at": "2026-09-25T15:29:10Z"
+      "path": "/tmp/viewer-react-3631c94.tgz",
+      "head": "3631c94a5b989cca81455789c9b775cca81ed624",
+      "bytes": 76509,
+      "sha256": "db82f7facb2e110be04f14b871373ad51488b1c58f0d2e935ca3b083e64aa31d",
+      "kind": "clean pushed SDK head with Image placeholder=\"blur\", not a published release",
+      "created_at": "2026-09-25T17:39:00Z"
     },
     {
       "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-final/transloadit-zod.tgz",

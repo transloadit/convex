@@ -2319,7 +2319,7 @@ __metadata:
 
 "@transloadit/viewer@file:./vendor/sdk-preview/transloadit-viewer.tgz::locator=%40transloadit%2Fconvex%40workspace%3A.":
   version: 0.0.2
-  resolution: "@transloadit/viewer@file:./vendor/sdk-preview/transloadit-viewer.tgz#./vendor/sdk-preview/transloadit-viewer.tgz::hash=7c45c3&locator=%40transloadit%2Fconvex%40workspace%3A."
+  resolution: "@transloadit/viewer@file:./vendor/sdk-preview/transloadit-viewer.tgz#./vendor/sdk-preview/transloadit-viewer.tgz::hash=b860c3&locator=%40transloadit%2Fconvex%40workspace%3A."
   dependencies:
     "@noble/ciphers": "npm:^1.3.0"
     "@transloadit/utils": "npm:^4.9.0"
@@ -2336,7 +2336,7 @@ __metadata:
       optional: true
     react-dom:
       optional: true
-  checksum: 10c0/361c4aca3ae829d6d2d9e94777e7d35a41dac97e57d8566eac7cae06fcc89f20d424854800711b4954167d77d3fc86b8d47934d60028f73a59de5a108b93056a
+  checksum: 10c0/c289eaba15b12eb3221324eeb2c6a7a6e118ca7af164ac69201ec92af0b9fd9a9c9a975c9a33f757722bab33e7815189f666ee424e54509160cbe6b9f4a935ac
   languageName: node
   linkType: hard
 
