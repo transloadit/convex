@@ -42,6 +42,7 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
     'lib/assembly-params.ts',
     'lib/guest-name.ts',
     'lib/album-access.ts',
+    'lib/storage.ts',
   ]) {
     await mkdir(join(projectDir, file, '..'), { recursive: true })
     await writeFile(join(projectDir, file), await readFile(join(repoRoot, 'example', file)))

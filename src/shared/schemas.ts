@@ -1,4 +1,5 @@
 import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template'
+import { paginationOptsValidator, paginationResultValidator } from 'convex/server'
 import { type Infer, v } from 'convex/values'
 
 export const vAssemblyFields = {
@@ -31,6 +32,144 @@ export const vAssemblyResultFields = {
   mime: v.optional(v.string()),
   raw: v.any(),
   createdAt: v.number(),
+}
+
+/** Canonical Storage receipt, unchanged from the Assembly result (snake_case, as the SDKs use). */
+export const vStoredAsset = v.object({
+  workspace: v.string(),
+  asset_id: v.string(),
+  version_id: v.string(),
+  path: v.string(),
+  size: v.number(),
+  mime: v.union(v.string(), v.null()),
+  md5hash: v.optional(v.string()),
+  sha256: v.optional(v.string()),
+  width: v.optional(v.number()),
+  height: v.optional(v.number()),
+  thumbhash: v.optional(v.string()),
+  has_alpha: v.optional(v.boolean()),
+})
+
+export const vStoredAssetFields = {
+  asset: vStoredAsset,
+  // Provenance of the verified Assembly result that produced this version.
+  assemblyId: v.string(),
+  stepName: v.string(),
+  resultId: v.string(),
+  originalId: v.optional(v.union(v.string(), v.array(v.union(v.string(), v.null())))),
+  // Copied from the Assembly's signed fields. Not ownership proof on its own: bind these to the
+  // application's server-created upload record before granting access.
+  album: v.optional(v.string()),
+  userId: v.optional(v.string()),
+  uploadId: v.optional(v.string()),
+  createdAt: v.number(),
+  // Deletion ledger: a requested deletion hides the row immediately and keeps it until the
+  // Storage deletion is confirmed, so failed deletions remain retryable.
+  deletionRequestedAt: v.optional(v.number()),
+  deletionAttempts: v.optional(v.number()),
+  deletionError: v.optional(v.string()),
+}
+
+export const vStoredAssetRow = v.object({
+  _id: v.id('storedAssets'),
+  _creationTime: v.number(),
+  ...vStoredAssetFields,
+})
+
+export type StoredAssetRow = Infer<typeof vStoredAssetRow>
+
+export const vStoredAssetResponse = v.object({
+  _id: v.string(),
+  _creationTime: v.number(),
+  ...vStoredAssetFields,
+})
+
+export type StoredAssetResponse = Infer<typeof vStoredAssetResponse>
+
+export const vStoredAssetPage = paginationResultValidator(vStoredAssetRow)
+export const vStoredAssetResponsePage = paginationResultValidator(vStoredAssetResponse)
+
+/** Enables Storage receipt ingestion; results from any other Workspace fail verification. */
+export const vStorageConfig = v.object({ workspace: v.string() })
+
+export type StorageConfig = Infer<typeof vStorageConfig>
+
+export const vListStoredAssetsArgs = {
+  album: v.string(),
+  paginationOpts: paginationOptsValidator,
+}
+
+export const vGetStoredAssetArgs = {
+  workspace: v.string(),
+  assetId: v.string(),
+  versionId: v.string(),
+}
+
+export const vListStoredAssetsForAssemblyArgs = {
+  assemblyId: v.string(),
+  limit: v.optional(v.number()),
+}
+
+export const vRegisterStoredAssetsArgs = {
+  album: v.optional(v.string()),
+  userId: v.optional(v.string()),
+  uploadId: v.optional(v.string()),
+  assets: v.array(
+    v.object({
+      asset: vStoredAsset,
+      assemblyId: v.string(),
+      stepName: v.string(),
+      resultId: v.string(),
+      originalId: v.optional(v.union(v.string(), v.array(v.union(v.string(), v.null())))),
+    }),
+  ),
+}
+
+export const vRegisterStoredAssetsResponse = v.object({
+  inserted: v.number(),
+  existing: v.number(),
+})
+
+export const vRequestStoredAssetDeletionArgs = {
+  album: v.string(),
+  createdBefore: v.number(),
+  limit: v.optional(v.number()),
+}
+
+export const vStoredAssetReference = v.object({ workspace: v.string(), assetId: v.string() })
+
+export type StoredAssetReference = Infer<typeof vStoredAssetReference>
+
+export const vRequestStoredAssetDeletionResponse = v.object({
+  requested: v.array(vStoredAssetReference),
+  hasMore: v.boolean(),
+})
+
+export const vListStoredAssetDeletionsArgs = {
+  limit: v.optional(v.number()),
+}
+
+export const vStoredAssetDeletion = v.object({
+  workspace: v.string(),
+  assetId: v.string(),
+  paths: v.array(v.string()),
+  rows: v.number(),
+  deletionRequestedAt: v.number(),
+  deletionAttempts: v.number(),
+  deletionError: v.optional(v.string()),
+})
+
+export type StoredAssetDeletion = Infer<typeof vStoredAssetDeletion>
+
+export const vCompleteStoredAssetDeletionArgs = {
+  workspace: v.string(),
+  assetId: v.string(),
+}
+
+export const vFailStoredAssetDeletionArgs = {
+  workspace: v.string(),
+  assetId: v.string(),
+  error: v.string(),
 }
 
 export const vAssembly = v.object({
@@ -111,6 +250,7 @@ export const vWebhookArgs = {
   signature: v.optional(v.string()),
   verifySignature: v.optional(v.boolean()),
   authSecret: v.optional(v.string()),
+  storage: v.optional(vStorageConfig),
 }
 
 export const vPublicWebhookArgs = {
@@ -131,6 +271,7 @@ export type WebhookActionArgs = Infer<typeof vWebhookActionArgs>
 export const vWebhookResponse = v.object({
   assemblyId: v.string(),
   resultCount: v.number(),
+  storedAssetCount: v.optional(v.number()),
   ok: v.optional(v.string()),
   status: v.optional(v.string()),
 })
@@ -186,6 +327,7 @@ export const vStoreAssemblyMetadataArgs = {
 export const vRefreshAssemblyArgs = {
   assemblyId: v.string(),
   expectedFields: v.optional(v.record(v.string(), v.string())),
+  storage: v.optional(vStorageConfig),
   config: v.optional(
     v.object({
       authKey: v.string(),
@@ -196,6 +338,7 @@ export const vRefreshAssemblyArgs = {
 
 export const vHandleWebhookArgs = {
   ...vPublicWebhookArgs,
+  storage: v.optional(vStorageConfig),
   config: v.optional(
     v.object({
       authSecret: v.string(),

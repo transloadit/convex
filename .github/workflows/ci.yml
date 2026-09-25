@@ -203,6 +203,7 @@ jobs:
           R2_HOST: ${{ secrets.R2_HOST }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
       - name: Resolve Vercel preview URL
         if: env.E2E_REMOTE_APP_URL == ''
         run: |
@@ -288,6 +289,7 @@ jobs:
           R2_HOST: ${{ secrets.R2_HOST }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
       - name: Deploy Vercel and wait for the new production build
         run: timeout --foreground 8m node scripts/deploy-vercel.ts
         env:

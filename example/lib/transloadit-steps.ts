@@ -1,6 +1,7 @@
 import { robotCloudflareStoreInstructionsSchema } from '@transloadit/zod/v3/robots/cloudflare-store'
 import { robotFileFilterInstructionsSchema } from '@transloadit/zod/v3/robots/file-filter'
 import { robotImageResizeInstructionsSchema } from '@transloadit/zod/v3/robots/image-resize'
+import { robotTransloaditStoreInstructionsSchema } from '@transloadit/zod/v3/robots/transloadit-store'
 import { robotUploadHandleInstructionsSchema } from '@transloadit/zod/v3/robots/upload-handle'
 import { robotVideoEncodeInstructionsSchema } from '@transloadit/zod/v3/robots/video-encode'
 import { robotVideoThumbsInstructionsSchema } from '@transloadit/zod/v3/robots/video-thumbs'
@@ -15,6 +16,7 @@ const tpl = (value: string) => '$' + '{' + value + '}'
 type RobotCloudflareStoreInput = z.input<typeof robotCloudflareStoreInstructionsSchema>
 type RobotFileFilterInput = z.input<typeof robotFileFilterInstructionsSchema>
 type RobotImageResizeInput = z.input<typeof robotImageResizeInstructionsSchema>
+type RobotTransloaditStoreInput = z.input<typeof robotTransloaditStoreInstructionsSchema>
 type RobotUploadHandleInput = z.input<typeof robotUploadHandleInstructionsSchema>
 type RobotVideoEncodeInput = z.input<typeof robotVideoEncodeInstructionsSchema>
 type RobotVideoThumbsInput = z.input<typeof robotVideoThumbsInstructionsSchema>
@@ -36,11 +38,26 @@ const buildStoreStep = (use: string, r2: R2Config): RobotCloudflareStoreInput =>
   return step
 }
 
-const buildUploadStep = (): RobotUploadHandleInput => {
+const buildUploadStep = ({ thumbhash = false } = {}): RobotUploadHandleInput => {
   const step: RobotUploadHandleInput = {
     robot: '/upload/handle',
+    // Storage receipts carry the ThumbHash that the original upload Step extracts.
+    ...(thumbhash ? { output_meta: { thumbhash: true } } : {}),
   }
   robotUploadHandleInstructionsSchema.parse(step)
+  return step
+}
+
+// Originals go to the upload's server-chosen prefix. Duplicate names within one batch are renamed;
+// the receipt records the final path, so nothing relies on the requested filename.
+const buildStorageStep = (use: string, prefix: string): RobotTransloaditStoreInput => {
+  const step: RobotTransloaditStoreInput = {
+    robot: '/transloadit/store',
+    use,
+    path: `${prefix}${tpl('file.url_name')}`,
+    conflict_strategy: 'rename',
+  }
+  robotTransloaditStoreInstructionsSchema.parse(step)
   return step
 }
 
@@ -89,11 +106,15 @@ const buildVideoThumbsStep = (use: string): RobotVideoThumbsInput => {
   return step
 }
 
-export const buildWeddingSteps = (): TransloaditSteps => {
+export const buildWeddingSteps = ({
+  storagePrefix,
+}: {
+  storagePrefix?: string
+} = {}): TransloaditSteps => {
   const r2 = readR2ConfigFromEnv(process.env)
 
   return {
-    ':original': buildUploadStep(),
+    ':original': buildUploadStep({ thumbhash: Boolean(storagePrefix) }),
     images_filtered: buildFilterStep(':original', '^image'),
     videos_filtered: buildFilterStep(':original', '^video'),
     images_resized: buildResizeStep('images_filtered'),
@@ -102,5 +123,7 @@ export const buildWeddingSteps = (): TransloaditSteps => {
     images_output: buildStoreStep('images_resized', r2),
     videos_thumbs_output: buildStoreStep('videos_thumbs', r2),
     videos_output: buildStoreStep('videos_encoded', r2),
+    // Photos only for now: video keeps its R2 path until private playback is designed.
+    ...(storagePrefix ? { images_stored: buildStorageStep('images_filtered', storagePrefix) } : {}),
   }
 }

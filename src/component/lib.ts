@@ -7,28 +7,51 @@ import { transloaditError } from '../shared/errors.ts'
 import { getResultUrl } from '../shared/resultUtils.ts'
 import {
   type ProcessWebhookResult,
+  type StorageConfig,
   vAssembly,
   vAssemblyBaseArgs,
   vAssemblyIdArgs,
   vAssemblyOptions,
   vAssemblyResult,
+  vCompleteStoredAssetDeletionArgs,
   vCreateAssemblyReturn,
+  vFailStoredAssetDeletionArgs,
+  vGetStoredAssetArgs,
   vHandleWebhookArgs,
   vListAlbumResultsArgs,
   vListAssembliesArgs,
   vListResultsArgs,
+  vListStoredAssetDeletionsArgs,
+  vListStoredAssetsArgs,
+  vListStoredAssetsForAssemblyArgs,
   vPurgeAlbumArgs,
   vPurgeAlbumResponse,
   vQueueWebhookResponse,
   vRefreshAssemblyArgs,
+  vRegisterStoredAssetsArgs,
+  vRegisterStoredAssetsResponse,
   vReplaceResultsArgs,
+  vRequestStoredAssetDeletionArgs,
+  vRequestStoredAssetDeletionResponse,
   vStoreAssemblyMetadataArgs,
+  vStoredAssetDeletion,
+  vStoredAssetPage,
+  vStoredAssetRow,
   vTransloaditConfig,
   vUpsertAssemblyArgs,
   vWebhookArgs,
   vWebhookResponse,
 } from '../shared/schemas.ts'
-import { action, internalAction, internalMutation, mutation, query } from './_generated/server.ts'
+import { selectStoredAssets } from '../shared/storedAssets.ts'
+import type { Doc } from './_generated/dataModel.ts'
+import {
+  action,
+  internalAction,
+  internalMutation,
+  type MutationCtx,
+  mutation,
+  query,
+} from './_generated/server.ts'
 import {
   buildTransloaditParams,
   flattenResults,
@@ -49,6 +72,12 @@ type InternalApi = {
       'internal',
       Record<string, unknown>,
       unknown
+    >
+    registerStoredAssets: FunctionReference<
+      'mutation',
+      'internal',
+      Record<string, unknown>,
+      { inserted: number; existing: number }
     >
     processWebhook: FunctionReference<
       'action',
@@ -135,11 +164,19 @@ const buildSignedAssemblyUrl = async (
 const applyAssemblyStatus = async (
   ctx: Pick<import('./_generated/server.ts').ActionCtx, 'runMutation'>,
   payload: AssemblyStatus,
+  storage?: StorageConfig,
 ) => {
   const assemblyId = resolveAssemblyId(payload)
   if (!assemblyId) {
     throw transloaditError('webhook', 'Webhook payload missing assembly_id')
   }
+
+  // Verify every Storage receipt before persisting anything: one invalid or cross-Workspace record
+  // fails the whole status update. Unfinished or failed Assemblies register no assets.
+  const storedAssets =
+    storage && payload.ok === 'ASSEMBLY_COMPLETED' && typeof payload.error !== 'string'
+      ? selectStoredAssets(payload, storage)
+      : []
 
   const results = flattenResults(payload.results ?? undefined)
 
@@ -166,13 +203,35 @@ const applyAssemblyStatus = async (
     results,
   })
 
+  if (storedAssets.length > 0) {
+    await ctx.runMutation(internal.lib.registerStoredAssets, {
+      album: getFieldString(payload.fields, 'album'),
+      userId: getFieldString(payload.fields, 'userId'),
+      uploadId: getFieldString(payload.fields, 'uploadId'),
+      assets: storedAssets,
+    })
+  }
+
   return {
     assemblyId,
     resultCount: results.length,
+    ...(storage ? { storedAssetCount: storedAssets.length } : {}),
     ok: typeof payload.ok === 'string' ? payload.ok : undefined,
     status: typeof payload.ok === 'string' ? payload.ok : undefined,
   }
 }
+
+const findStoredAssetRows = (
+  ctx: Pick<MutationCtx, 'db'>,
+  workspace: string,
+  assetId: string,
+): Promise<Doc<'storedAssets'>[]> =>
+  ctx.db
+    .query('storedAssets')
+    .withIndex('by_version', (q) =>
+      q.eq('asset.workspace', workspace).eq('asset.asset_id', assetId),
+    )
+    .collect()
 
 export const upsertAssembly = internalMutation({
   args: vUpsertAssemblyArgs,
@@ -274,6 +333,41 @@ export const replaceResultsForAssembly = internalMutation({
     }
 
     return null
+  },
+})
+
+// Idempotent by Workspace, asset and version: notification retries and refreshes are harmless.
+export const registerStoredAssets = internalMutation({
+  args: vRegisterStoredAssetsArgs,
+  returns: vRegisterStoredAssetsResponse,
+  handler: async (ctx, args) => {
+    let inserted = 0
+    let existing = 0
+    const now = Date.now()
+    for (const entry of args.assets) {
+      const found = await ctx.db
+        .query('storedAssets')
+        .withIndex('by_version', (q) =>
+          q
+            .eq('asset.workspace', entry.asset.workspace)
+            .eq('asset.asset_id', entry.asset.asset_id)
+            .eq('asset.version_id', entry.asset.version_id),
+        )
+        .first()
+      if (found) {
+        existing += 1
+        continue
+      }
+      await ctx.db.insert('storedAssets', {
+        ...entry,
+        album: args.album,
+        userId: args.userId,
+        uploadId: args.uploadId,
+        createdAt: now,
+      })
+      inserted += 1
+    }
+    return { inserted, existing }
   },
 })
 
@@ -383,7 +477,7 @@ export const processWebhook = internalAction({
   returns: vWebhookResponse,
   handler: async (ctx, args) => {
     const parsed = await parseWebhookPayload(args)
-    return applyAssemblyStatus(ctx, parsed)
+    return applyAssemblyStatus(ctx, parsed, args.storage)
   },
 })
 
@@ -398,6 +492,7 @@ export const handleWebhook = action({
       signature: args.signature,
       verifySignature,
       authSecret: args.config?.authSecret,
+      storage: args.storage,
     })
   },
 })
@@ -421,6 +516,7 @@ export const queueWebhook = action({
       signature: args.signature,
       verifySignature: args.verifySignature ?? true,
       authSecret: args.config?.authSecret,
+      storage: args.storage,
     })
 
     return { assemblyId, queued: true }
@@ -452,7 +548,7 @@ export const refreshAssembly = action({
       }
     }
 
-    return applyAssemblyStatus(ctx, payload)
+    return applyAssemblyStatus(ctx, payload, args.storage)
   },
 })
 
@@ -585,5 +681,147 @@ export const storeAssemblyMetadata = mutation({
       userId: args.userId ?? existing.userId,
       fields: args.fields ?? existing.fields,
     }
+  },
+})
+
+/** Visible Storage receipts of one album, newest first, from local indexed data only. */
+export const listStoredAssets = query({
+  args: vListStoredAssetsArgs,
+  returns: vStoredAssetPage,
+  handler: async (ctx, args) => {
+    return ctx.db
+      .query('storedAssets')
+      .withIndex('by_album_visibility', (q) =>
+        q.eq('album', args.album).eq('deletionRequestedAt', undefined),
+      )
+      .order('desc')
+      .paginate(args.paginationOpts)
+  },
+})
+
+/** One exact visible version; rows awaiting deletion are never returned for delivery. */
+export const getStoredAsset = query({
+  args: vGetStoredAssetArgs,
+  returns: v.union(vStoredAssetRow, v.null()),
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query('storedAssets')
+      .withIndex('by_version', (q) =>
+        q
+          .eq('asset.workspace', args.workspace)
+          .eq('asset.asset_id', args.assetId)
+          .eq('asset.version_id', args.versionId),
+      )
+      .first()
+    return row && row.deletionRequestedAt === undefined ? row : null
+  },
+})
+
+export const listStoredAssetsForAssembly = query({
+  args: vListStoredAssetsForAssemblyArgs,
+  returns: v.array(vStoredAssetRow),
+  handler: async (ctx, args) => {
+    const rows = await ctx.db
+      .query('storedAssets')
+      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
+      .take(Math.min(Math.max(args.limit ?? 200, 1), 500))
+    return rows.filter((row) => row.deletionRequestedAt === undefined)
+  },
+})
+
+/**
+ * First step of the deletion ledger: hide every version of expired assets immediately. Rows stay
+ * until the Storage deletion is confirmed, so an interrupted cleanup can always be retried.
+ */
+export const requestStoredAssetDeletion = mutation({
+  args: vRequestStoredAssetDeletionArgs,
+  returns: vRequestStoredAssetDeletionResponse,
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(args.limit ?? 100, 1), 500)
+    const candidates = await ctx.db
+      .query('storedAssets')
+      .withIndex('by_album_visibility', (q) =>
+        q
+          .eq('album', args.album)
+          .eq('deletionRequestedAt', undefined)
+          .lt('createdAt', args.createdBefore),
+      )
+      .take(limit + 1)
+    const now = Date.now()
+    const requested = new Map<string, { workspace: string; assetId: string }>()
+    for (const candidate of candidates.slice(0, limit)) {
+      const { workspace, asset_id: assetId } = candidate.asset
+      const key = JSON.stringify([workspace, assetId])
+      if (requested.has(key)) continue
+      requested.set(key, { workspace, assetId })
+      // Storage deletes whole assets, so every locally known version is hidden together.
+      for (const row of await findStoredAssetRows(ctx, workspace, assetId)) {
+        if (row.deletionRequestedAt === undefined) {
+          await ctx.db.patch(row._id, { deletionRequestedAt: now })
+        }
+      }
+    }
+    return { requested: [...requested.values()], hasMore: candidates.length > limit }
+  },
+})
+
+export const listStoredAssetDeletions = query({
+  args: vListStoredAssetDeletionsArgs,
+  returns: v.array(vStoredAssetDeletion),
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(args.limit ?? 100, 1), 500)
+    const rows = await ctx.db
+      .query('storedAssets')
+      .withIndex('by_deletionRequestedAt', (q) => q.gt('deletionRequestedAt', 0))
+      .take(limit)
+    const pending = new Map<string, typeof vStoredAssetDeletion.type>()
+    for (const row of rows) {
+      const { workspace, asset_id: assetId, path } = row.asset
+      const key = JSON.stringify([workspace, assetId])
+      const entry = pending.get(key) ?? {
+        workspace,
+        assetId,
+        paths: [],
+        rows: 0,
+        deletionRequestedAt: row.deletionRequestedAt ?? 0,
+        deletionAttempts: row.deletionAttempts ?? 0,
+        deletionError: row.deletionError,
+      }
+      if (!entry.paths.includes(path)) entry.paths.push(path)
+      entry.rows += 1
+      pending.set(key, entry)
+    }
+    return [...pending.values()]
+  },
+})
+
+/** Call only after Storage confirmed the deletion; this removes the last local references. */
+export const completeStoredAssetDeletion = mutation({
+  args: vCompleteStoredAssetDeletionArgs,
+  returns: v.object({ deleted: v.number() }),
+  handler: async (ctx, args) => {
+    const rows = await findStoredAssetRows(ctx, args.workspace, args.assetId)
+    if (rows.some((row) => row.deletionRequestedAt === undefined)) {
+      throw transloaditError('storage', 'Request deletion before completing it')
+    }
+    for (const row of rows) {
+      await ctx.db.delete(row._id)
+    }
+    return { deleted: rows.length }
+  },
+})
+
+export const failStoredAssetDeletion = mutation({
+  args: vFailStoredAssetDeletionArgs,
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    for (const row of await findStoredAssetRows(ctx, args.workspace, args.assetId)) {
+      if (row.deletionRequestedAt === undefined) continue
+      await ctx.db.patch(row._id, {
+        deletionAttempts: (row.deletionAttempts ?? 0) + 1,
+        deletionError: args.error.slice(0, 500),
+      })
+    }
+    return null
   },
 })

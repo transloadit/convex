@@ -126,6 +126,8 @@ const deployDemo = async () => {
     'R2_HOST',
     'R2_PUBLIC_URL',
     'WEDDING_UPLOAD_CODE',
+    // Enables private Storage originals; unset keeps the R2-only pipeline.
+    'TRANSLOADIT_WORKSPACE',
   ]
 
   for (const name of optionalEnv) {

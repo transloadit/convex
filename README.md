@@ -72,7 +72,8 @@ export const {
 
 These wrappers do not add application authorization. Expose only the operations your app needs,
 and add membership/ownership checks for signing, queries, refresh, edits, and deletion. The example
-limits guest signing to its wedding pipeline and keeps cleanup internal; its gallery remains public.
+limits guest signing to its wedding pipeline and keeps cleanup internal; album reads require an
+admitted guest.
 
 Note: pass `expires` in `createAssembly` when you need a custom expiry; otherwise the component defaults to 1 hour from now.
 
@@ -91,6 +92,32 @@ Lifecycle:
 1. `createAssembly` inserts the initial `assemblies` row.
 2. `handleWebhook`, `queueWebhook`, or `refreshAssembly` upserts the assembly + replaces results.
 3. `listResults` returns flattened step outputs for use in UIs.
+
+## Storage receipts
+
+When an Assembly writes to Transloadit Storage with the `/transloadit/store` Robot, the component
+can keep each canonical receipt (`workspace`, `asset_id`, `version_id`, `path`,
+`size`, `mime`, checksums, dimensions and optional ThumbHash). Enable it with the Storage Workspace:
+
+```ts
+const transloadit = new Transloadit(components.transloadit, { storageWorkspace: "my-workspace" });
+// or set TRANSLOADIT_WORKSPACE for makeTransloaditAPI and the class defaults
+```
+
+- Only completed Assemblies register receipts, from verified webhooks or authoritative refreshes.
+  A malformed or cross-Workspace receipt fails the whole status update; nothing is persisted.
+- `storedAssets` keeps one row per Workspace, asset and version, with its Assembly, Step, result and
+  original IDs, plus `album`, `userId` and `uploadId` copied from the signed Assembly fields.
+  Notification retries are harmless.
+- `listStoredAssets` pages through an album's visible receipts from local data, newest first;
+  `getStoredAsset` returns one exact version. Neither contacts Storage or signs anything.
+- Deletion is a ledger: `requestStoredAssetDeletion` hides every version of expired assets at once,
+  your server deletes them from Storage, then `completeStoredAssetDeletion` removes the references
+  (or `failStoredAssetDeletion` records a retryable error).
+
+Receipts are private metadata, not credentials. Signed Assembly fields are not ownership proof on
+their own: bind receipts to server-created upload records and authorize every read, as the
+example's `convex/media.ts` does. `makeTransloaditAPI` deliberately exposes no receipt queries.
 
 ## Webhook route
 
