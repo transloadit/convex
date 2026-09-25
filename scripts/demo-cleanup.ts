@@ -31,6 +31,7 @@ export type CleanupConvex = {
   summary: () => Promise<{
     results: number
     resultsTruncated: boolean
+    r2Results: number
     storagePrefix: string | null
   }>
   /** One page of visible receipt versions per call, so large albums stay within transaction limits. */
@@ -76,6 +77,22 @@ export type CleanupStorage = {
   /** The asset's current path, or null when Storage no longer has it. */
   currentPath: (assetId: string) => Promise<string | null>
   delete: (assetId: string) => Promise<void>
+}
+
+type DeleteObjectsResult = { Errors?: { Key?: string; Code?: string }[] }
+
+/** S3 DeleteObjects can answer 200 with per-key errors; any error means the batch failed. */
+export const deleteR2Batch = async (
+  send: (keys: string[]) => Promise<DeleteObjectsResult>,
+  keys: string[],
+) => {
+  const errors = (await send(keys)).Errors ?? []
+  if (errors.length > 0) {
+    const sample = errors.slice(0, 3).map((error) => `${error.Key}: ${error.Code}`)
+    throw new Error(
+      `R2 did not delete ${errors.length} of ${keys.length} objects (${sample.join(', ')})`,
+    )
+  }
 }
 
 export type CleanupR2 = {
@@ -256,8 +273,12 @@ export const runDemoCleanup = async (
         return { hidden, ...ledger, orphans }
       })()
     : undefined
-  const retryNeeded =
+  const storageIncomplete =
     storageReport !== undefined && storageReport.failed + storageReport.outsidePrefix > 0
+  // Skipping R2 must not forget results that are the only references to R2 media (or when that
+  // cannot be established from a truncated count).
+  const r2MediaKept = reset && !r2 && (summary.r2Results > 0 || summary.resultsTruncated)
+  const retryNeeded = storageIncomplete || r2MediaKept
 
   // 4. A reset clears R2 before the Convex results that point at it.
   let r2Deleted = 0
@@ -271,6 +292,7 @@ export const runDemoCleanup = async (
       }
     }
     if (!retryNeeded) purged = await convex.purgeAlbum()
+    // Stored assets are never purged here: the ledger keeps Storage references until deletion.
   }
 
   return {
@@ -279,7 +301,7 @@ export const runDemoCleanup = async (
     createdBefore,
     storage: storageReport ?? 'skipped',
     r2: reset ? (r2 ? { deleted: r2Deleted } : 'skipped') : 'unchanged',
-    convex: purged,
+    convex: r2MediaKept ? 'kept: results reference skipped R2 media' : purged,
     retryNeeded,
   }
 }

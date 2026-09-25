@@ -110,6 +110,9 @@ const buildVideoThumbsStep = (use: string): RobotVideoThumbsInput => {
   return step
 }
 
+// Steps that export to the demo's R2 bucket: their results are the only references to that media.
+export const r2OutputSteps = ['images_output', 'videos_thumbs_output', 'videos_output'] as const
+
 export const buildWeddingSteps = ({
   storagePrefix,
 }: {

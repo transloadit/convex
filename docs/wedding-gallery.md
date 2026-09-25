@@ -84,8 +84,9 @@ Delivery semantics, as verified against production with synthetic assets:
   assets in Convex first, so the app stops issuing new redirects before any bytes are deleted.
 
 Storage namespaces: each deployment writes under `convex-demo/<namespace>/<album>/`. Convex cloud
-deployments use their deployment name. Local and self-hosted deployments have no unique name, so
-Storage stays off for them until `TRANSLOADIT_STORAGE_NAMESPACE` names one.
+deployments use their deployment name. Local and self-hosted deployments have no unique name, so a
+configured `TRANSLOADIT_WORKSPACE` fails closed there until `TRANSLOADIT_STORAGE_NAMESPACE` names
+one; only an unset Workspace keeps the R2-only pipeline.
 
 Demo retention: `node scripts/cleanup-demo.ts --older-than=24` expires Storage photos older than a
 day through the ledger: hide, delete, then keep a tombstone so a late notification cannot restore
@@ -93,8 +94,9 @@ the photo. Failures stay hidden and retryable.
 Without `--older-than` the script resets the whole demo album, including unregistered uploads under
 this deployment's prefix, R2 objects and Convex results. `--dry-run` reports every backend and changes
 nothing. A reset refuses to run while R2 or Storage is unconfigured unless `--skip-r2` or
-`--skip-storage` says so explicitly, so references are never forgotten while media stays
-reachable. Cleanup never deletes Storage assets outside the deployment's demo prefix. Scheduling the
+`--skip-storage` says so explicitly. Even then, Convex results that still reference R2 media are
+kept (and reported as incomplete), a partial R2 batch deletion counts as a failure, and Storage
+references stay in the ledger until Storage confirms each deletion. Cleanup never deletes Storage assets outside the deployment's demo prefix. Scheduling the
 daily expiry is still open; R2 keeps its one-day lifecycle rule.
 
 For the real wedding, an independently tested backup and restore of the originals remains a gate,

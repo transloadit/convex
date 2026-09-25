@@ -4,6 +4,7 @@ import {
   type CleanupConvex,
   type CleanupR2,
   type CleanupStorage,
+  deleteR2Batch,
   runDemoCleanup,
 } from './demo-cleanup.ts'
 
@@ -17,7 +18,12 @@ type Row = { assetId: string; path: string; createdAt: number; hidden: boolean; 
 const fakeConvex = (rows: Row[]) => {
   const calls: string[] = []
   const convex: CleanupConvex = {
-    summary: async () => ({ results: 3, resultsTruncated: false, storagePrefix: prefix }),
+    summary: async () => ({
+      results: 3,
+      resultsTruncated: false,
+      r2Results: 0,
+      storagePrefix: prefix,
+    }),
     visiblePage: async () => ({
       count: rows.filter((row) => !row.hidden).length,
       isDone: true,
@@ -326,5 +332,37 @@ describe('demo cleanup', () => {
     const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now, skipR2: true })
     expect(report).toMatchObject({ retryNeeded: true, storage: { failed: 1 } })
     expect(calls).not.toContain('purge')
+  })
+
+  test('skipping R2 never forgets results that still point at R2 media', async () => {
+    const { convex, calls } = fakeConvex([row('stored', 30)])
+    convex.summary = async () => ({
+      results: 5,
+      resultsTruncated: false,
+      r2Results: 2,
+      storagePrefix: prefix,
+    })
+    const { storage } = fakeStorage(['stored'])
+    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now, skipR2: true })
+    expect(report).toMatchObject({
+      retryNeeded: true,
+      convex: 'kept: results reference skipped R2 media',
+    })
+    expect(calls).not.toContain('purge')
+  })
+
+  test('a partial R2 deletion is a failure, so Convex results are kept for a retry', async () => {
+    const { convex, calls } = fakeConvex([row('stored', 1)])
+    const { storage } = fakeStorage(['stored'])
+    const send = vi.fn(async () => ({ Errors: [{ Key: 'wedding/a.jpg', Code: 'AccessDenied' }] }))
+    const r2: CleanupR2 = {
+      list: async () => ['wedding/a.jpg', 'wedding/b.jpg'],
+      delete: (keys) => deleteR2Batch(send, keys),
+    }
+    await expect(runDemoCleanup({ convex, storage, r2 }, { dryRun: false, now })).rejects.toThrow(
+      'AccessDenied',
+    )
+    expect(calls).not.toContain('purge')
+    expect(send).toHaveBeenCalledTimes(1)
   })
 })

@@ -2,6 +2,7 @@ import { vStoredAsset } from '@transloadit/convex'
 import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
 import { getAlbumStoragePrefix } from '../lib/storage'
+import { r2OutputSteps } from '../lib/transloadit-steps'
 import { components } from './_generated/api'
 import { internalMutation, internalQuery } from './_generated/server'
 
@@ -16,6 +17,8 @@ export const summary = internalQuery({
   returns: v.object({
     results: v.number(),
     resultsTruncated: v.boolean(),
+    // Results of R2 export Steps: forgetting them would orphan public R2 objects.
+    r2Results: v.number(),
     // Null when this deployment has no unambiguous Storage namespace.
     storagePrefix: v.union(v.string(), v.null()),
   }),
@@ -27,6 +30,9 @@ export const summary = internalQuery({
     return {
       results: results.length,
       resultsTruncated: results.length === pageSize,
+      r2Results: results.filter((result) =>
+        (r2OutputSteps as readonly string[]).includes(result.stepName),
+      ).length,
       // Computed where upload paths are chosen, so custom client URLs cannot change the prefix.
       storagePrefix: getAlbumStoragePrefix(args.album) ?? null,
     }

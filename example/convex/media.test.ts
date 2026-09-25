@@ -5,6 +5,7 @@ import { convexTest } from 'convex-test'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import componentSchema from '../../src/component/schema'
 import { inviteVersion } from '../lib/album-access'
+import { r2OutputSteps } from '../lib/transloadit-steps'
 import schema from './schema'
 
 // Example deployment bindings are generated during deployment, not required for offline tests.
@@ -151,27 +152,21 @@ describe('private Storage uploads', () => {
     ])
   })
 
-  test('local deployments need an explicit Storage namespace before using a shared Workspace', async () => {
+  test('a configured Workspace without a unique namespace fails closed instead of using R2', async () => {
     vi.stubEnv('CONVEX_CLOUD_URL', 'http://127.0.0.1:3210')
     const t = setup()
     const guest = await admit(t, 'Alex')
-    const signed = async () =>
-      JSON.parse(
-        (
-          await guest.action(api.wedding.createWeddingAssemblyOptions, {
-            guestName: 'Alex',
-            fileCount: 1,
-          })
-        ).assemblyOptions.params,
-      )
-    expect((await signed()).steps.images_stored).toBeUndefined()
+    const sign = () =>
+      guest.action(api.wedding.createWeddingAssemblyOptions, { guestName: 'Alex', fileCount: 1 })
+    await expect(sign()).rejects.toThrow('TRANSLOADIT_STORAGE_NAMESPACE')
+    vi.stubEnv('TRANSLOADIT_STORAGE_NAMESPACE', 'Not A Namespace!')
+    await expect(sign()).rejects.toThrow('TRANSLOADIT_STORAGE_NAMESPACE')
     expect(await t.query(api.storageCleanup.summary, { album: 'wedding-gallery' })).toMatchObject({
       storagePrefix: null,
     })
     vi.stubEnv('TRANSLOADIT_STORAGE_NAMESPACE', 'kvz-laptop')
-    expect((await signed()).steps.images_stored.path).toMatch(
-      /^convex-demo\/kvz-laptop\/wedding-gallery\//,
-    )
+    const params = JSON.parse((await sign()).assemblyOptions.params)
+    expect(params.steps.images_stored.path).toMatch(/^convex-demo\/kvz-laptop\/wedding-gallery\//)
   })
 
   test('keeps the R2-only pipeline when no Storage Workspace is configured', async () => {
@@ -186,6 +181,11 @@ describe('private Storage uploads', () => {
     expect(params.steps.images_stored).toBeUndefined()
     expect(params.steps.images_output).toMatchObject({ robot: '/cloudflare/store' })
     expect(params.steps[':original']).toEqual({ robot: '/upload/handle' })
+    // Cleanup relies on this list to know which results are the only references to R2 media.
+    const r2Steps = Object.entries(params.steps as Record<string, { robot: string }>)
+      .filter(([, step]) => step.robot === '/cloudflare/store')
+      .map(([name]) => name)
+    expect(r2Steps.sort()).toEqual([...r2OutputSteps].sort())
   })
 })
 

@@ -5,6 +5,7 @@ import {
   type CleanupConvex,
   type CleanupR2,
   type CleanupStorage,
+  deleteR2Batch,
   runDemoCleanup,
   type StorageObject,
 } from './demo-cleanup.ts'
@@ -186,14 +187,17 @@ const r2: CleanupR2 | undefined =
             } while (continuationToken)
             return keys
           },
-          delete: async (keys) => {
-            await s3.send(
-              new DeleteObjectsCommand({
-                Bucket: bucket,
-                Delete: { Objects: keys.map((Key) => ({ Key })) },
-              }),
-            )
-          },
+          delete: (keys) =>
+            deleteR2Batch(
+              (batch) =>
+                s3.send(
+                  new DeleteObjectsCommand({
+                    Bucket: bucket,
+                    Delete: { Objects: batch.map((Key) => ({ Key })) },
+                  }),
+                ),
+              keys,
+            ),
         }
       })()
     : undefined

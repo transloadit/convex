@@ -16,11 +16,20 @@ const storageNamespace = () => {
   }
 }
 
-// Transloadit Storage is optional in the demo: without a Workspace and an unambiguous namespace,
-// uploads keep the R2-only pipeline.
+// Transloadit Storage is optional in the demo: without a Workspace, uploads keep the R2-only
+// pipeline. A configured Workspace never silently falls back to public R2: it fails closed until
+// the deployment has a unique namespace.
 export const getStorageWorkspace = () => {
   const workspace = process.env.TRANSLOADIT_WORKSPACE?.trim()
-  return workspace && storageNamespace() ? workspace : undefined
+  if (!workspace) return undefined
+  if (!storageNamespace()) {
+    throw new Error(
+      'TRANSLOADIT_WORKSPACE is set, but this deployment has no unique Storage namespace. Set ' +
+        'TRANSLOADIT_STORAGE_NAMESPACE (lowercase letters, digits and hyphens) for local or ' +
+        'self-hosted deployments.',
+    )
+  }
+  return workspace
 }
 
 export const getStorageConfig = () => {
