@@ -12,12 +12,40 @@ Living notes for the Convex half of the approved DX cleanup. The SDK half (Viewe
       the Convex peer floor in the README, CONTRIBUTING and changesets (d02e6f9).
 - [x] Official component codegen with a CI drift check against a local backend (c78a784).
 - [x] convex-helpers `paginator` plus its `usePaginatedQuery` replace the handmade window (3904b70).
+- [x] After the SDK packages reached npm: exact registry versions replace the `file:` Viewer and Zod
+      packs, and the vendored packs and their overrides are gone. The release guard and the Yarn age
+      gate stay, with exact exceptions only (73fe6e7).
 - [ ] council-review, local browser evidence (desktop, phone, empty page, ThumbHash), claude-usertest,
       `yarn check`, push, CI green on the exact head.
-- [ ] After the SDK packages are on npm: replace the `file:` Viewer and Zod packs with exact registry
-      versions and drop the vendored packs and their overrides. Keep the release guard and the Yarn
-      age gate (narrow, exact exceptions only).
 - [ ] Merge only on Kevin's decision: a merge to `main` deploys the production demo.
+
+## SDK release
+
+Observed on 2026-09-25 (UTC). This record replaces the SDK's pre-release finish checklist, which is
+now a historical snapshot.
+
+- node-sdk #518 merged as dc7d42d at 15:52:43Z. Release PR #519 (head 9b663aa) merged as 5b2b550 at
+  16:02:37Z; CI on 5b2b550 passed.
+- Published: `@transloadit/viewer` 0.0.3 under the `alpha` tag (`latest` stays 0.0.1);
+  `@transloadit/node`, `@transloadit/types`, `@transloadit/zod` and `transloadit` 5.0.1;
+  `@transloadit/mcp-server` 0.4.1. `@transloadit/utils` is unchanged at 4.9.0.
+- Transient boundary: npm accepted Viewer 0.0.3 at 16:04Z, but its metadata stayed 404, so
+  Changesets immediately retried the same version and got a 409 staged-version conflict. Nobody
+  bumped a version or bypassed the workflow. Once the registry showed the packages (Viewer 0.0.3
+  published 16:05:23Z, Zod 5.0.1 16:06:26Z), the same Release run was rerun: run 36158197469,
+  attempt 2, succeeded at 16:11:06Z, and every package has its release tag.
+
+## Registry dependencies
+
+73fe6e7 pins `@transloadit/zod` 5.0.1 (runtime dependency) and `@transloadit/viewer` 0.0.3 (dev
+dependency for the example) exactly. It removes `vendor/sdk-preview`, its resolutions, the QA
+template's `file:` overrides and the tarball Git attributes. `@transloadit/utils` `^4.8.1` resolves
+to 4.9.0 for this package, Viewer and `@transloadit/node` alike.
+
+The registry tarballs carry the same runtime JavaScript as the vendored e521c00 packs; Zod's
+`.d.ts` files differ only in member order. `.yarnrc.yml` admits exactly `@transloadit/viewer@0.0.3`
+and `@transloadit/zod@5.0.1` before the 24-hour age gate, which still applies to everything else.
+`scripts/assert-publishable.ts` still runs before Changesets and passes on this manifest.
 
 ## Privacy boundary
 
