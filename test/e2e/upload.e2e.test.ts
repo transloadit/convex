@@ -789,6 +789,9 @@ describeE2e('e2e upload flow', () => {
       }
       await page.getByRole('button', { name: 'Album verlaten' }).click()
       await browserExpect(entry).toBeVisible()
+      // The gate is shown immediately to stop subscriptions; its button stays disabled until
+      // signOut has revoked the server session and cleared the HTTP-only cookies.
+      await browserExpect(enter).toBeEnabled()
       await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
       if (storedImageHref) {
         const denied = await page.request.get(storedImageHref, {
