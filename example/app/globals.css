@@ -773,8 +773,17 @@ summary:focus-visible {
   place-items: center;
 }
 
-/* Viewer pictures stay transparent to layout, so their img keeps the existing sizing rules. */
-.viewer-media picture,
+/* Native view transitions need a box on the picture that AnimateView names. */
+.viewer-media picture {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
 .card picture {
   display: contents;
 }

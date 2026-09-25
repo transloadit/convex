@@ -21,13 +21,6 @@ jobs:
     concurrency:
       group: convex-production
       cancel-in-progress: false
-    env:
-      CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
-      # A deployment deploy key is also its admin key; reuse the existing production secret.
-      CONVEX_ADMIN_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
-      TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
-      TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
-      TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -37,7 +30,20 @@ jobs:
       - run: corepack enable
       - run: yarn install --immutable
       - name: Verify the production namespace and report expiry selection
+        env:
+          CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
+          # A deployment deploy key is also its admin key; reuse the production secret.
+          CONVEX_ADMIN_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
+          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
+          TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
         run: yarn demo:cleanup --older-than=24 --expected-prefix=convex-demo/little-aardvark-87/wedding-gallery/ --dry-run
       - name: Expire photos and drain the retry ledger
         if: github.event_name == 'schedule' || !inputs.dry-run
+        env:
+          CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
+          CONVEX_ADMIN_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+          TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
+          TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
+          TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
         run: yarn demo:cleanup --older-than=24 --expected-prefix=convex-demo/little-aardvark-87/wedding-gallery/

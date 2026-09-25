@@ -21,9 +21,15 @@ work is not in scope.
 - [x] Red-first: upload rollback previously kept signing Storage uploads. New-upload R2 rollback
       now leaves existing private receipts accessible and their Workspace configured.
 - [x] Explicit empty settings clear persisted activation/rollback; omitted local settings remain.
-- [x] Focused suites: 39 tests pass; `yarn check`: 186 tests and type checks pass.
-- [ ] Council review and local-only security/browser evidence reviewed independently.
-- [ ] Isolated branch backend and Vercel delivery credentials configured, then Storage activated.
+- [x] Focused suites and `yarn check`: 188 tests and type checks pass.
+- [x] Council: no issues. Local-only Opus security review: PASS; 32 route probes plus Chromium
+      and WebKit image/download/revocation evidence with published Viewer 0.0.3. A nonblocking
+      secret-scope finding was fixed red-first: installation steps cannot access cleanup keys.
+- [x] Isolated branch backend `necessary-kingfisher-139` and branch-only Vercel delivery credentials
+      configured, then Storage activated. Production remains off until the merge gate passes.
+- [x] Real preview uncovered two existing private-image regressions, fixed red-first: the original
+      download link stole initial dialog focus, and `display: contents` removed the picture's
+      native view-transition box. Close-button focus and image slide transitions are restored.
 - [ ] Exact-head preview: decoded photos, byte-identical download, anonymous/logout denial, video,
       desktop/mobile screenshots, expiration selection and owned synthetic-media cleanup.
 - [ ] PR checks green, squash/admin merge, main build/deploy green.
