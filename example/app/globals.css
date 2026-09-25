@@ -779,6 +779,13 @@ summary:focus-visible {
   display: contents;
 }
 
+/* Browsers still select candidates from hidden sources. Displayed, they would become extra grid
+   rows beside the image and push it off centre. */
+.viewer-media source,
+.card source {
+  display: none;
+}
+
 .viewer-actions {
   display: flex;
   flex-shrink: 0;
@@ -799,6 +806,20 @@ summary:focus-visible {
 .gallery-more {
   display: block;
   margin: 24px auto 0;
+}
+
+/* On narrow screens the photo name gets its own line instead of being cut off by the actions. */
+@media (max-width: 640px) {
+  .viewer-toolbar:not(.viewer-navigation) {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .viewer-toolbar:not(.viewer-navigation) .viewer-caption {
+    flex: 1 1 100%;
+  }
+  .viewer-actions {
+    margin-left: auto;
+  }
 }
 
 .viewer-media img,
