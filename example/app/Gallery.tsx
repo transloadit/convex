@@ -175,6 +175,7 @@ const GalleryViewer = ({
 }) => {
   const t = useTranslations('viewer')
   const dialogRef = useRef<HTMLDialogElement>(null)
+  const closeRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
 
   useLayoutEffect(() => {
@@ -182,6 +183,8 @@ const GalleryViewer = ({
     const opener = document.activeElement
     const overflow = document.body.style.overflow
     dialog?.showModal()
+    // Private photos add a download link before Close; keep the same safe initial action.
+    closeRef.current?.focus({ preventScroll: true })
     document.body.style.overflow = 'hidden'
     return () => {
       dialog?.close()
@@ -230,7 +233,7 @@ const GalleryViewer = ({
               {t('download')}
             </a>
           )}
-          <button type="button" onClick={onClose} aria-label={t('close')}>
+          <button ref={closeRef} type="button" onClick={onClose} aria-label={t('close')}>
             {t('closeButton')} <span aria-hidden="true">×</span>
           </button>
         </div>

@@ -126,6 +126,21 @@ test('an album without photos or later pages shows the empty state', () => {
   expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
 })
 
+test('a private photo opens on Close rather than the new original-download link', () => {
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery results={[]} storageAssets={[photo(1)]} />
+    </AlbumIntlProvider>,
+  )
+  const opener = screen.getByRole('button', { name: /View photo-1/ })
+  opener.focus()
+  fireEvent.click(opener)
+  expect(screen.getByRole('link', { name: 'Download original' })).not.toBeNull()
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close viewer' }))
+  fireEvent(screen.getByRole('dialog'), new Event('cancel'))
+  expect(document.activeElement).toBe(opener)
+})
+
 test('opaque thumbnails paint their ThumbHash behind the final pixels, without load handlers', () => {
   const { container } = render(
     <AlbumIntlProvider initialLocale="en">
