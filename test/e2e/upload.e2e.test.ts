@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { expect as browserExpect, chromium } from '@playwright/test'
 import { ConvexHttpClient } from 'convex/browser'
@@ -79,6 +80,10 @@ describeE2e('e2e upload flow', () => {
   test('uploads wedding photos and videos', async () => {
     const browser = await chromium.launch(chromiumChannel ? { channel: chromiumChannel } : {})
     const page = await browser.newPage()
+    let storedImageHref: string | undefined
+    const appRequestHeaders: Record<string, string> = useRemote
+      ? { 'x-vercel-protection-bypass': vercelBypassToken }
+      : {}
     const localStatusRequests: number[] = []
     page.on('request', (request) => {
       const url = new URL(request.url())
@@ -516,6 +521,31 @@ describeE2e('e2e upload flow', () => {
 
       const cards = page.locator(`[data-testid="gallery"] [data-assembly-id="${assemblyId}"]`)
       await browserExpect(cards).toHaveCount(3)
+      if (process.env.E2E_EXPECT_STORAGE === '1') {
+        const photos = cards.getByRole('img')
+        await browserExpect(photos).toHaveCount(2)
+        const sources = await photos.evaluateAll((images) =>
+          images.map((image) => (image instanceof HTMLImageElement ? image.currentSrc : '')),
+        )
+        expect(
+          sources.every((src) => {
+            const url = new URL(src)
+            return url.origin === appOrigin && url.pathname === '/api/transloadit/media'
+          }),
+        ).toBe(true)
+        storedImageHref = sources[0]
+        const anonymous = await browser.newContext()
+        try {
+          const denied = await anonymous.request.get(storedImageHref, {
+            headers: appRequestHeaders,
+            maxRedirects: 0,
+          })
+          expect(denied.status()).toBe(404)
+          expect(denied.headers()['cache-control']).toContain('no-store')
+        } finally {
+          await anonymous.close()
+        }
+      }
       await browserExpect(cards.locator('.gallery-credit')).toHaveText(
         Array(3).fill('Added by Preview Guest'),
       )
@@ -536,6 +566,31 @@ describeE2e('e2e upload flow', () => {
       await photo.click()
       const viewer = page.getByRole('dialog')
       await browserExpect(viewer).toBeVisible()
+      if (storedImageHref) {
+        const href = await viewer
+          .getByRole('link', { name: 'Download original' })
+          .getAttribute('href')
+        if (!href) throw new Error('A stored photo must expose its original download')
+        const redirect = await page.request.get(new URL(href, serverUrl).href, {
+          headers: appRequestHeaders,
+          maxRedirects: 0,
+        })
+        expect(redirect.status()).toBe(307)
+        expect(redirect.headers()['cache-control']).toContain('no-store')
+        const location = redirect.headers().location
+        if (!location) throw new Error('The original must redirect to the CDN')
+        expect(new URL(location).origin === appOrigin).toBe(false)
+        const original = await page.request.get(location)
+        expect(original.ok()).toBe(true)
+        const expectedHashes = [imagePath, imagePathAlt].map((path) =>
+          createHash('sha256').update(readFileSync(path)).digest('hex'),
+        )
+        expect(expectedHashes).toContain(
+          createHash('sha256')
+            .update(await original.body())
+            .digest('hex'),
+        )
+      }
       await browserExpect(viewer.locator('.viewer-credit')).toHaveText('Added by Preview Guest')
       await browserExpect(viewer.getByRole('button', { name: 'Close viewer' })).toBeFocused()
       if (transitions !== undefined) {
@@ -735,6 +790,14 @@ describeE2e('e2e upload flow', () => {
       await page.getByRole('button', { name: 'Album verlaten' }).click()
       await browserExpect(entry).toBeVisible()
       await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
+      if (storedImageHref) {
+        const denied = await page.request.get(storedImageHref, {
+          headers: appRequestHeaders,
+          maxRedirects: 0,
+        })
+        expect(denied.status()).toBe(404)
+        expect(denied.headers()['cache-control']).toContain('no-store')
+      }
       // A crafted invitation URL cannot send credentials to a backend of its choice.
       const craftedUrl = new URL(serverUrl)
       craftedUrl.searchParams.set('convexUrl', 'https://example.invalid')

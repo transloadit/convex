@@ -137,29 +137,58 @@ Cloud browser QA opens the ordinary preview URL without a `convexUrl` override a
 it connects to the deployment created by CI. Configure the branch variable before that check can
 pass for a new branch.
 
-## Demo cleanup (Convex + R2)
+## Demo Storage activation and rollback
 
-To remove demo uploads from Convex and Cloudflare R2, run:
+Photos can use private Transloadit Storage; videos still use public R2. This demo is not a private
+video album. Use the published Viewer alpha and SDK versions pinned in `package.json`.
+
+Before enabling uploads, configure `TRANSLOADIT_SMART_CDN_KEY`, `TRANSLOADIT_SMART_CDN_SECRET` and
+`TRANSLOADIT_SMART_CDN_WORKSPACE` on the matching Vercel environment. They must belong to the same
+Workspace as the backend Assembly key; the delivery key needs `smart_cdn:sign`. Never expose them
+with a `NEXT_PUBLIC_` name. The branch's `NEXT_PUBLIC_CONVEX_URL` must point to its own backend.
+
+GitHub repository variables control activation independently:
+
+- `TRANSLOADIT_STORAGE_PREVIEW_BRANCH` and `TRANSLOADIT_STORAGE_PREVIEW_WORKSPACE` opt in exactly
+  one preview branch. Other previews keep the R2 path, even when production uses Storage.
+- `TRANSLOADIT_WORKSPACE` opts production into Storage. Set it only after the isolated preview
+  passes, then deploy the current main workflow. It never enables a preview implicitly.
+- `TRANSLOADIT_STORAGE_UPLOADS_DISABLED=1` rolls production **new uploads** back to R2 on the next
+  deployment. Keep the Workspace and delivery keys configured so existing private photos and
+  in-flight upload receipts remain usable. Clear this switch to re-enable Storage uploads.
+
+An explicitly empty Workspace value is applied to the backend, not silently skipped; clearing it
+also disables existing private delivery. It is not the normal upload rollback. Local deploys which
+omit the variable altogether leave its current value untouched.
+
+Cloud QA sets `E2E_EXPECT_STORAGE=1` for an enabled environment. It requires same-origin authorized
+photo URLs, byte-identical original downloads, anonymous denial and denial after logout. An R2-only
+success must not be treated as Storage evidence. Video playback stays covered separately.
+
+## Demo cleanup (Convex + Storage + R2)
+
+The demo hides photos after 24 hours. `Expire demo Storage photos` runs daily on main, first reports
+the selection, then expires Storage photos older than 24 hours. Physical removal can therefore take
+up to another daily interval, plus retry delays. Failed deletions remain in the retry ledger.
+The job shares the production-deploy concurrency group, has a 15-minute timeout and refuses any
+backend whose prefix is not exactly `convex-demo/little-aardvark-87/wedding-gallery/`.
+
+For an isolated deployment, inspect its exact prefix, then preview expiry:
 
 ```bash
-yarn demo:cleanup
+yarn demo:cleanup --older-than=24 --expected-prefix=convex-demo/YOUR-DEPLOYMENT/wedding-gallery/ --dry-run
 ```
 
-This requires:
+Remove `--dry-run` only after checking the target. This requires `CONVEX_URL`, `CONVEX_ADMIN_KEY`,
+`TRANSLOADIT_WORKSPACE`, `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`. The scheduled job reuses the
+existing production deployment key as the admin key. Manual workflow dispatch defaults to dry-run.
+Each deletion checks both the historical receipt path and current asset path. R2 is untouched by
+expiry; its existing one-day lifecycle handles video objects separately.
 
-- `CONVEX_URL`
-- `CONVEX_ADMIN_KEY`
-- `R2_BUCKET`
-- `R2_ACCESS_KEY_ID`
-- `R2_SECRET_ACCESS_KEY`
-- `R2_ACCOUNT_ID` or `R2_HOST`
-
-Optional:
-
-- `DEMO_ALBUM` (defaults to `wedding-gallery`)
-- `--dry-run` (prints the counts without deleting)
-
-Note: the demo bucket is configured to auto-expire objects after 1 day via `yarn r2:lifecycle`.
+**Without `--older-than`, `demo:cleanup` resets the whole album**, including R2. Use that only for
+an intentional reset with the R2 credentials too, or an explicit `--skip-r2` / `--skip-storage`
+choice. Missing backend credentials never authorize forgetting its still-live media references.
+`DEMO_ALBUM` defaults to `wedding-gallery`.
 
 ## Verification and QA
 

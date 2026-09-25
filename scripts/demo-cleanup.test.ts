@@ -147,6 +147,55 @@ const row = (assetId: string, ageHours: number, path = `${prefix}${assetId}.jpg`
 const expire = { dryRun: false, olderThanMs: hour, now }
 
 describe('demo cleanup', () => {
+  test('a scheduled expiry refuses the wrong deployment before listing or changing media', async () => {
+    const { convex, calls } = fakeConvex([row('old', 30)])
+    const { storage, deleted } = fakeStorage(['old'])
+    storage.list = vi.fn(storage.list)
+    await expect(
+      runDemoCleanup(
+        { convex, storage },
+        { ...expire, expectedStoragePrefix: 'convex-demo/production/wedding-gallery/' },
+      ),
+    ).rejects.toThrow('Storage prefix does not match')
+    expect(storage.list).not.toHaveBeenCalled()
+    expect(calls).toEqual([])
+    expect(deleted).toEqual([])
+  })
+
+  test('an expected prefix never permits a broad match or a missing namespace', async () => {
+    const { convex, calls } = fakeConvex([row('old', 30)])
+    const { storage, deleted } = fakeStorage(['old'])
+    await expect(
+      runDemoCleanup({ convex, storage }, { ...expire, expectedStoragePrefix: 'convex-demo/' }),
+    ).rejects.toThrow('Storage prefix does not match')
+    convex.summary = async () => ({
+      results: 1,
+      resultsTruncated: false,
+      r2Results: 0,
+      storagePrefix: null,
+    })
+    await expect(
+      runDemoCleanup({ convex, storage }, { ...expire, expectedStoragePrefix: prefix }),
+    ).rejects.toThrow('namespace')
+    expect(calls).toEqual([])
+    expect(deleted).toEqual([])
+  })
+
+  test('the exact deployment prefix allows only expired photos to be deleted', async () => {
+    const rows = [row('old', 30), row('recent', 1)]
+    const { convex } = fakeConvex(rows)
+    const { storage, deleted } = fakeStorage(['old', 'recent'])
+    const r2: CleanupR2 = { list: vi.fn(), delete: vi.fn() }
+    await runDemoCleanup(
+      { convex, storage, r2 },
+      { dryRun: false, olderThanMs: 24 * hour, now, expectedStoragePrefix: prefix },
+    )
+    expect(deleted).toEqual(['old'])
+    expect(rows).toEqual([row('recent', 1)])
+    expect(r2.list).not.toHaveBeenCalled()
+    expect(r2.delete).not.toHaveBeenCalled()
+  })
+
   test('a dry run reports every backend and changes nothing', async () => {
     const rows = [row('old', 30), row('new', 1)]
     const { convex, calls } = fakeConvex(rows)

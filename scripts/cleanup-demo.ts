@@ -46,6 +46,10 @@ const album =
 const prefix = (argMap.get('prefix') as string | undefined) || `wedding/${album}/`
 const dryRun = argMap.get('dry-run') === true
 const olderThan = argMap.get('older-than')
+const expectedStoragePrefix = argMap.get('expected-prefix')
+if (expectedStoragePrefix !== undefined && typeof expectedStoragePrefix !== 'string') {
+  throw new Error('--expected-prefix must be a Storage path')
+}
 const olderThanHours = olderThan === undefined ? undefined : Number(olderThan)
 if (olderThanHours !== undefined && !(Number.isFinite(olderThanHours) && olderThanHours > 0)) {
   throw new Error('--older-than must be a positive number of hours')
@@ -209,6 +213,7 @@ runDemoCleanup(
     skipR2: argMap.get('skip-r2') === true,
     skipStorage: argMap.get('skip-storage') === true,
     ...(olderThanHours === undefined ? {} : { olderThanMs: olderThanHours * 60 * 60 * 1000 }),
+    ...(expectedStoragePrefix === undefined ? {} : { expectedStoragePrefix }),
   },
 )
   .then((report) => {
