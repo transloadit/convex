@@ -810,7 +810,7 @@ summary:focus-visible {
 
 .gallery-error {
   margin: 0 0 16px;
-  color: var(--muted);
+  color: #8b382a;
   font: 13px / 1.5 var(--ui-font);
 }
 
