@@ -13,7 +13,7 @@ const prefix = 'convex-demo/demo-deployment/wedding-gallery/'
 
 type Row = { assetId: string; path: string; createdAt: number; hidden: boolean; attempts: number }
 
-// An in-memory stand-in for the component ledger, with the same hide/complete/fail rules.
+// An in-memory stand-in for the component ledger, with the same hide/complete/fail and paging rules.
 const fakeConvex = (rows: Row[]) => {
   const calls: string[] = []
   const convex: CleanupConvex = {
@@ -22,6 +22,8 @@ const fakeConvex = (rows: Row[]) => {
       expiredStoredAssets: rows.filter((row) => !row.hidden && row.createdAt < createdBefore)
         .length,
       results: 3,
+      truncated: false,
+      storagePrefix: prefix,
     }),
     requestStorageDeletion: async ({ createdBefore, limit }) => {
       calls.push('hide')
@@ -32,16 +34,20 @@ const fakeConvex = (rows: Row[]) => {
         hasMore: expired.length > limit,
       }
     },
-    pendingStorageDeletions: async ({ limit }) =>
-      rows
-        .filter((row) => row.hidden)
-        .slice(0, limit)
-        .map((row) => ({
+    pendingStorageDeletions: async ({ cursor, numItems }) => {
+      const pending = rows.filter((row) => row.hidden)
+      const start = cursor === null ? 0 : Number(cursor)
+      return {
+        page: pending.slice(start, start + numItems).map((row) => ({
           workspace: 'w',
           assetId: row.assetId,
           paths: [row.path],
           deletionAttempts: row.attempts,
         })),
+        isDone: start + numItems >= pending.length,
+        continueCursor: String(start + numItems),
+      }
+    },
     completeStorageDeletion: async ({ assetId }) => {
       calls.push(`complete:${assetId}`)
       rows.splice(
@@ -49,8 +55,8 @@ const fakeConvex = (rows: Row[]) => {
         1,
       )
     },
-    failStorageDeletion: async ({ assetId }) => {
-      calls.push(`fail:${assetId}`)
+    failStorageDeletion: async ({ assetId, error }) => {
+      calls.push(`fail:${assetId}:${error}`)
       const row = rows.find((candidate) => candidate.assetId === assetId)
       if (row) row.attempts += 1
     },
@@ -62,18 +68,27 @@ const fakeConvex = (rows: Row[]) => {
   return { convex, calls }
 }
 
-const fakeStorage = (objects: string[], failing = new Set<string>()) => {
+const fakeStorage = (
+  objects: string[],
+  { failing = new Set<string>(), moved = new Map<string, string>() } = {},
+) => {
   const deleted: string[] = []
+  const exists = (assetId: string) => objects.includes(assetId) && !deleted.includes(assetId)
   const storage: CleanupStorage = {
     workspace: 'w',
-    prefix,
-    list: async () =>
+    list: async (listPrefix) =>
       objects
-        .filter((assetId) => !deleted.includes(assetId))
-        .map((assetId) => ({ asset_id: assetId, path: `${prefix}${assetId}.jpg` })),
+        .filter(exists)
+        .map((assetId) => ({
+          asset_id: assetId,
+          path: moved.get(assetId) ?? `${prefix}${assetId}.jpg`,
+        }))
+        .filter((object) => object.path.startsWith(listPrefix)),
+    currentPath: async (assetId) =>
+      exists(assetId) ? (moved.get(assetId) ?? `${prefix}${assetId}.jpg`) : null,
     delete: async (assetId) => {
       if (failing.has(assetId)) throw Object.assign(new Error('HTTP 503'), { code: 'HTTP_503' })
-      if (!objects.includes(assetId) || deleted.includes(assetId))
+      if (!exists(assetId))
         throw Object.assign(new Error('gone'), { code: 'DAM_RESOURCE_NOT_FOUND' })
       deleted.push(assetId)
     },
@@ -88,6 +103,8 @@ const row = (assetId: string, ageHours: number, path = `${prefix}${assetId}.jpg`
   hidden: false,
   attempts: 0,
 })
+
+const expire = { dryRun: false, olderThanMs: hour, now }
 
 describe('demo cleanup', () => {
   test('a dry run reports every backend and changes nothing', async () => {
@@ -109,7 +126,7 @@ describe('demo cleanup', () => {
     expect(rows.every((candidate) => !candidate.hidden)).toBe(true)
   })
 
-  test('expiry hides old photos, deletes their bytes, then drops the references', async () => {
+  test('expiry hides old photos, deletes their bytes, then records the deletion', async () => {
     const rows = [row('old', 30), row('new', 1)]
     const { convex, calls } = fakeConvex(rows)
     const { storage, deleted } = fakeStorage(['old', 'new'])
@@ -121,58 +138,81 @@ describe('demo cleanup', () => {
       mode: 'expire',
       storage: { hidden: 1, deleted: 1 },
       r2: 'unchanged',
+      retryNeeded: false,
     })
     expect(deleted).toEqual(['old'])
     expect(rows.map((candidate) => candidate.assetId)).toEqual(['new'])
     expect(calls).toEqual(['hide', 'complete:old'])
   })
 
-  test('never deletes bytes outside this deployment prefix, even when a row names them', async () => {
+  test('never deletes or releases an asset whose receipt lies outside this deployment', async () => {
     const rows = [row('foreign', 30, 'website/hero.jpg')]
-    const { convex } = fakeConvex(rows)
+    const { convex, calls } = fakeConvex(rows)
     const { storage, deleted } = fakeStorage(['foreign'])
-    const report = await runDemoCleanup(
-      { convex, storage },
-      { dryRun: false, olderThanMs: hour, now },
-    )
-    expect(report).toMatchObject({ storage: { skippedOutsidePrefix: 1, deleted: 0 } })
+    const report = await runDemoCleanup({ convex, storage }, expire)
+    expect(report).toMatchObject({ retryNeeded: true, storage: { outsidePrefix: 1, deleted: 0 } })
     expect(deleted).toEqual([])
-    expect(rows).toEqual([])
+    // The reference stays hidden and pending with a reason, never silently completed.
+    expect(rows).toEqual([expect.objectContaining({ assetId: 'foreign', attempts: 1 })])
+    expect(calls).toContain('fail:foreign:Outside the demo Storage prefix')
+  })
+
+  test('checks the current location, so an asset moved away since upload is kept', async () => {
+    const rows = [row('moved', 30)]
+    const { convex } = fakeConvex(rows)
+    const { storage, deleted } = fakeStorage(['moved'], {
+      moved: new Map([['moved', 'website/keep.jpg']]),
+    })
+    const report = await runDemoCleanup({ convex, storage }, expire)
+    expect(report).toMatchObject({ retryNeeded: true, storage: { outsidePrefix: 1, deleted: 0 } })
+    expect(deleted).toEqual([])
+    expect(rows).toEqual([expect.objectContaining({ assetId: 'moved', hidden: true })])
   })
 
   test('an interrupted deletion stays hidden and completes on the next run', async () => {
     const rows = [row('flaky', 30), row('fine', 30)]
     const { convex, calls } = fakeConvex(rows)
     const failing = new Set(['flaky'])
-    const { storage, deleted } = fakeStorage(['flaky', 'fine'], failing)
-    const first = await runDemoCleanup(
-      { convex, storage },
-      { dryRun: false, olderThanMs: hour, now },
-    )
+    const { storage, deleted } = fakeStorage(['flaky', 'fine'], { failing })
+    const first = await runDemoCleanup({ convex, storage }, expire)
     expect(first).toMatchObject({ retryNeeded: true, storage: { failed: 1, deleted: 1 } })
     expect(rows).toEqual([expect.objectContaining({ assetId: 'flaky', hidden: true, attempts: 1 })])
 
     failing.clear()
-    const second = await runDemoCleanup(
-      { convex, storage },
-      { dryRun: false, olderThanMs: hour, now },
-    )
+    const second = await runDemoCleanup({ convex, storage }, expire)
     expect(second).toMatchObject({ retryNeeded: false, storage: { hidden: 0, deleted: 1 } })
     expect(deleted.sort()).toEqual(['fine', 'flaky'])
     expect(rows).toEqual([])
-    expect(calls).toContain('fail:flaky')
+    expect(calls.some((call) => call.startsWith('fail:flaky'))).toBe(true)
   })
 
-  test('assets already gone from Storage still release their references', async () => {
+  test('failures on the first ledger page never block later pages', async () => {
+    const assets = Array.from({ length: 150 }, (_, index) => `asset-${index}`)
+    const rows = assets.map((assetId) => row(assetId, 30))
+    const { convex } = fakeConvex(rows)
+    const failing = new Set(assets.slice(0, 100))
+    const { storage, deleted } = fakeStorage(assets, { failing })
+    const report = await runDemoCleanup({ convex, storage }, { ...expire, batchSize: 100 })
+    expect(report).toMatchObject({ retryNeeded: true, storage: { failed: 100, deleted: 50 } })
+    expect(deleted).toEqual(assets.slice(100))
+  })
+
+  test('assets already gone from Storage still record their deletion', async () => {
     const rows = [row('gone', 30)]
     const { convex } = fakeConvex(rows)
     const { storage } = fakeStorage([])
-    const report = await runDemoCleanup(
-      { convex, storage },
-      { dryRun: false, olderThanMs: hour, now },
-    )
+    const report = await runDemoCleanup({ convex, storage }, expire)
     expect(report).toMatchObject({ storage: { alreadyDeleted: 1, failed: 0 } })
     expect(rows).toEqual([])
+  })
+
+  test('without Storage configuration nothing is hidden, so receipts cannot get stranded', async () => {
+    const rows = [row('old', 30)]
+    const { convex, calls } = fakeConvex(rows)
+    const report = await runDemoCleanup({ convex }, expire)
+    expect(report).toMatchObject({ storage: 'disabled', retryNeeded: false })
+    expect(calls).toEqual([])
+    expect(rows).toEqual([expect.objectContaining({ hidden: false })])
   })
 
   test('a reset clears Storage orphans and R2 before purging Convex results', async () => {
@@ -200,7 +240,7 @@ describe('demo cleanup', () => {
 
   test('a reset keeps Convex results while Storage deletions still need a retry', async () => {
     const { convex, calls } = fakeConvex([row('flaky', 1)])
-    const { storage } = fakeStorage(['flaky'], new Set(['flaky']))
+    const { storage } = fakeStorage(['flaky'], { failing: new Set(['flaky']) })
     await expect(runDemoCleanup({ convex, storage }, { dryRun: false, now })).rejects.toThrow(
       'HTTP 503',
     )

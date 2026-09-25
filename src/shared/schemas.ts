@@ -149,7 +149,8 @@ export const vRequestStoredAssetDeletionResponse = v.object({
 })
 
 export const vListStoredAssetDeletionsArgs = {
-  limit: v.optional(v.number()),
+  album: v.string(),
+  paginationOpts: paginationOptsValidator,
 }
 
 export const vStoredAssetDeletion = v.object({
@@ -163,6 +164,12 @@ export const vStoredAssetDeletion = v.object({
 })
 
 export type StoredAssetDeletion = Infer<typeof vStoredAssetDeletion>
+
+export const vStoredAssetDeletionPage = v.object({
+  page: v.array(vStoredAssetDeletion),
+  isDone: v.boolean(),
+  continueCursor: v.string(),
+})
 
 export const vCompleteStoredAssetDeletionArgs = {
   workspace: v.string(),

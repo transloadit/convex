@@ -36,6 +36,7 @@ const damId = (seed: string) => `${seed.padEnd(21, 'x').slice(0, 21)}A`
 const setup = () => {
   const t = convexTest(schema, {
     './media.ts': () => import('./media'),
+    './storageCleanup.ts': () => import('./storageCleanup'),
     './wedding.ts': () => import('./wedding'),
     './guests.ts': () => import('./guests'),
     './transloadit.ts': () => import('./transloadit'),
@@ -254,5 +255,25 @@ describe('gallery and delivery authorization', () => {
       paginationOpts: { numItems: 10, cursor: null },
     })
     expect(page.page).toEqual([])
+  })
+})
+
+describe('cleanup summary', () => {
+  test('reports the backend prefix and counts per album, including the oldest receipts', async () => {
+    const t = setup()
+    const alex = await admit(t, 'Alex')
+    await upload(alex, t, 'a')
+    const later = Date.now() + 1
+    expect(
+      await t.query(api.storageCleanup.summary, { album: 'wedding-gallery', createdBefore: later }),
+    ).toMatchObject({
+      visibleStoredAssets: 1,
+      expiredStoredAssets: 1,
+      truncated: false,
+      storagePrefix: 'convex-demo/local/wedding-gallery/',
+    })
+    expect(
+      await t.query(api.storageCleanup.summary, { album: 'another-album', createdBefore: later }),
+    ).toMatchObject({ visibleStoredAssets: 0, storagePrefix: 'convex-demo/local/another-album/' })
   })
 })

@@ -1,44 +1,62 @@
+import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
-import { album } from '../lib/album-access'
+import { getAlbumStoragePrefix } from '../lib/storage'
 import { components } from './_generated/api'
 import { internalMutation, internalQuery } from './_generated/server'
 
 // Admin-only wrappers for scripts/cleanup-demo.ts. Guests can never hide or delete album media.
 
-const summaryLimit = 1000
+const summaryPageSize = 1000
+const summaryPageLimit = 10
 
 export const summary = internalQuery({
-  args: { createdBefore: v.number() },
+  args: { album: v.string(), createdBefore: v.number() },
   returns: v.object({
     visibleStoredAssets: v.number(),
     expiredStoredAssets: v.number(),
     results: v.number(),
+    truncated: v.boolean(),
+    storagePrefix: v.string(),
   }),
   handler: async (ctx, args) => {
-    const visible = await ctx.runQuery(components.transloadit.lib.listStoredAssets, {
-      album,
-      paginationOpts: { numItems: summaryLimit, cursor: null },
-    })
+    let visibleStoredAssets = 0
+    let expiredStoredAssets = 0
+    let cursor: string | null = null
+    let isDone = false
+    // Expired receipts are the oldest, so count across pages instead of the newest page only.
+    for (let page = 0; page < summaryPageLimit && !isDone; page += 1) {
+      const result = await ctx.runQuery(components.transloadit.lib.listStoredAssets, {
+        album: args.album,
+        paginationOpts: { numItems: summaryPageSize, cursor },
+      })
+      visibleStoredAssets += result.page.length
+      expiredStoredAssets += result.page.filter((row) => row.createdAt < args.createdBefore).length
+      isDone = result.isDone
+      cursor = result.continueCursor
+    }
     const results = await ctx.runQuery(components.transloadit.lib.listAlbumResults, {
-      album,
-      limit: summaryLimit,
+      album: args.album,
+      limit: summaryPageSize,
     })
     return {
-      visibleStoredAssets: visible.page.length,
-      expiredStoredAssets: visible.page.filter((row) => row.createdAt < args.createdBefore).length,
+      visibleStoredAssets,
+      expiredStoredAssets,
       results: results.length,
+      truncated: !isDone || results.length === summaryPageSize,
+      // Computed where upload paths are chosen, so custom client URLs cannot change the prefix.
+      storagePrefix: getAlbumStoragePrefix(args.album),
     }
   },
 })
 
 export const requestDeletion = internalMutation({
-  args: { createdBefore: v.number(), limit: v.number() },
+  args: { album: v.string(), createdBefore: v.number(), limit: v.number() },
   handler: (ctx, args) =>
-    ctx.runMutation(components.transloadit.lib.requestStoredAssetDeletion, { album, ...args }),
+    ctx.runMutation(components.transloadit.lib.requestStoredAssetDeletion, args),
 })
 
 export const pending = internalQuery({
-  args: { limit: v.number() },
+  args: { album: v.string(), paginationOpts: paginationOptsValidator },
   handler: (ctx, args) => ctx.runQuery(components.transloadit.lib.listStoredAssetDeletions, args),
 })
 

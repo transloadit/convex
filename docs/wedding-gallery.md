@@ -51,7 +51,9 @@ Status, 25 September 2026:
 - **Receipts.** The component registers each verified receipt once, with its Assembly provenance.
   The app binds it to the server-created upload record (album, guest and prefix) before listing it.
 - **Sessions.** Hosted albums use the official Convex Auth Next.js integration: tokens live in
-  httpOnly cookies, refreshed by `proxy.ts`, so server routes can authorize the viewer.
+  httpOnly cookies, refreshed by `proxy.ts`, so server routes can authorize the viewer. Guests who
+  entered before this change enter their name (and code) once more; their old browser-stored token
+  is not migrated.
 - **Authorization.** `media:forDelivery` is the delivery route's single check: a live session with
   the current invitation, this album, the exact retained version and an explicit `preview`,
   `original` or `download` action. It returns the stored receipt or `null`.

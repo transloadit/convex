@@ -9,7 +9,6 @@ import {
   type AssemblyResultResponse,
   type CreateAssemblyArgs,
   type StorageConfig,
-  type StoredAssetDeletion,
   type StoredAssetReference,
   type StoredAssetResponse,
   vAssemblyIdArgs,
@@ -271,8 +270,8 @@ export class TransloaditClient {
 
   async listStoredAssetDeletions(
     ctx: RunQueryCtx,
-    args: { limit?: number } = {},
-  ): Promise<StoredAssetDeletion[]> {
+    args: { album: string; paginationOpts: PaginationOptions },
+  ) {
     return ctx.runQuery(this.component.lib.listStoredAssetDeletions, args)
   }
 

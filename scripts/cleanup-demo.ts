@@ -60,18 +60,20 @@ const client = new ConvexHttpClient(convexUrl, {
 client.setAdminAuth(convexAdminKey)
 
 const convex: CleanupConvex = {
-  summary: (args) => client.query('storageCleanup:summary', args) as never,
+  summary: (args) => client.query('storageCleanup:summary', { album, ...args }) as never,
   requestStorageDeletion: (args) =>
-    client.mutation('storageCleanup:requestDeletion', args) as never,
-  pendingStorageDeletions: (args) => client.query('storageCleanup:pending', args) as never,
+    client.mutation('storageCleanup:requestDeletion', { album, ...args }) as never,
+  pendingStorageDeletions: ({ cursor, numItems }) =>
+    client.query('storageCleanup:pending', {
+      album,
+      paginationOpts: { cursor, numItems },
+    }) as never,
   completeStorageDeletion: (args) => client.mutation('storageCleanup:complete', args),
   failStorageDeletion: (args) => client.mutation('storageCleanup:fail', args),
   purgeAlbum: () =>
     client.mutation('transloadit:purgeAlbum', { album, deleteAssemblies: true }) as never,
 }
 
-// Matches example/lib/storage.ts: each Convex deployment writes under its own demo prefix.
-const deploymentSlug = new URL(convexUrl).hostname.split('.')[0] || 'local'
 const workspace = process.env.TRANSLOADIT_WORKSPACE?.trim()
 const transloadit = workspace
   ? new Transloadit({
@@ -83,7 +85,6 @@ const storage: CleanupStorage | undefined =
   workspace && transloadit
     ? {
         workspace,
-        prefix: `convex-demo/${deploymentSlug}/${album}/`,
         list: async (storagePrefix) => {
           const assets: { asset_id: string; path: string }[] = []
           let cursor: string | undefined
@@ -100,6 +101,14 @@ const storage: CleanupStorage | undefined =
             cursor = page.next_cursor ?? undefined
           } while (cursor)
           return assets
+        },
+        currentPath: async (assetId) => {
+          try {
+            return (await transloadit.getStoredAsset(assetId)).path
+          } catch (error) {
+            if ((error as { code?: unknown })?.code === 'DAM_RESOURCE_NOT_FOUND') return null
+            throw error
+          }
         },
         delete: async (assetId) => {
           await transloadit.deleteStoredAsset(assetId)

@@ -19,9 +19,13 @@ const deploymentSlug = () => {
   }
 }
 
+/** Everything this deployment's demo stores for one album; cleanup never leaves this prefix. */
+export const getAlbumStoragePrefix = (albumName: string) =>
+  `convex-demo/${deploymentSlug()}/${albumName}/`
+
 /** Server-chosen, unguessable destination for one upload. Clients never choose Storage paths. */
 export const getUploadStoragePrefix = (uploadId: string) =>
-  `convex-demo/${deploymentSlug()}/${album}/${uploadId}/`
+  `${getAlbumStoragePrefix(album)}${uploadId}/`
 
 /** A stored file belongs to an upload only when it was written directly under its prefix. */
 export const isInUploadStoragePrefix = (path: string, prefix: string) =>

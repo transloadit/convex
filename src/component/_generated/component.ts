@@ -223,16 +223,30 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listStoredAssetDeletions: FunctionReference<
         "query",
         "internal",
-        { limit?: number },
-        Array<{
-          assetId: string;
-          deletionAttempts: number;
-          deletionError?: string;
-          deletionRequestedAt: number;
-          paths: Array<string>;
-          rows: number;
-          workspace: string;
-        }>,
+        {
+          album: string;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            assetId: string;
+            deletionAttempts: number;
+            deletionError?: string;
+            deletionRequestedAt: number;
+            paths: Array<string>;
+            rows: number;
+            workspace: string;
+          }>;
+        },
         Name
       >;
       listStoredAssets: FunctionReference<

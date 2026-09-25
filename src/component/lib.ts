@@ -35,6 +35,7 @@ import {
   vRequestStoredAssetDeletionResponse,
   vStoreAssemblyMetadataArgs,
   vStoredAssetDeletion,
+  vStoredAssetDeletionPage,
   vStoredAssetPage,
   vStoredAssetRow,
   vTransloaditConfig,
@@ -765,19 +766,20 @@ export const requestStoredAssetDeletion = mutation({
   },
 })
 
+/** One album's hidden assets still awaiting Storage deletion, paginated so failures never block. */
 export const listStoredAssetDeletions = query({
   args: vListStoredAssetDeletionsArgs,
-  returns: v.array(vStoredAssetDeletion),
+  returns: vStoredAssetDeletionPage,
   handler: async (ctx, args) => {
-    const limit = Math.min(Math.max(args.limit ?? 100, 1), 500)
-    const rows = await ctx.db
+    const result = await ctx.db
       .query('storedAssets')
-      .withIndex('by_pending_deletion', (q) =>
-        q.eq('deletedAt', undefined).gt('deletionRequestedAt', 0),
+      .withIndex('by_album_pending_deletion', (q) =>
+        q.eq('album', args.album).eq('deletedAt', undefined).gt('deletionRequestedAt', 0),
       )
-      .take(limit)
+      .paginate(args.paginationOpts)
+    // Versions of one asset are grouped per page; callers deduplicate assets across pages.
     const pending = new Map<string, typeof vStoredAssetDeletion.type>()
-    for (const row of rows) {
+    for (const row of result.page) {
       const { workspace, asset_id: assetId, path } = row.asset
       const key = JSON.stringify([workspace, assetId])
       const entry = pending.get(key) ?? {
@@ -793,7 +795,11 @@ export const listStoredAssetDeletions = query({
       entry.rows += 1
       pending.set(key, entry)
     }
-    return [...pending.values()]
+    return {
+      page: [...pending.values()],
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    }
   },
 })
 

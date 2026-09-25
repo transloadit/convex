@@ -32,6 +32,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   )
   // The server provider hands the cookie session to the browser client without exposing a
   // refresh token to scripts. The URL is a runtime value, so it doubles as the storage namespace.
+  // Sessions from the earlier browser-only provider are not migrated: those guests enter again.
   return convexUrl ? (
     <ConvexAuthNextjsServerProvider storageNamespace={convexUrl}>
       {document}

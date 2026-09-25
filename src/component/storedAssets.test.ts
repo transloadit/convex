@@ -227,7 +227,12 @@ describe('stored asset reads and deletion ledger', () => {
     ).toBeNull()
 
     await t.mutation(api.lib.failStoredAssetDeletion, { ...first, error: 'HTTP 503' })
-    const pending = await t.query(api.lib.listStoredAssetDeletions, {})
+    const pendingPage = (numItems = 10) =>
+      t.query(api.lib.listStoredAssetDeletions, {
+        album: 'wedding-gallery',
+        paginationOpts: { numItems, cursor: null },
+      })
+    const pending = (await pendingPage()).page
     expect(pending).toHaveLength(2)
     expect(pending.find((entry) => entry.assetId === first.assetId)).toMatchObject({
       deletionAttempts: 1,
@@ -236,7 +241,7 @@ describe('stored asset reads and deletion ledger', () => {
     })
 
     expect(await t.mutation(api.lib.completeStoredAssetDeletion, first)).toEqual({ deleted: 1 })
-    expect(await t.query(api.lib.listStoredAssetDeletions, {})).toHaveLength(1)
+    expect((await pendingPage()).page).toHaveLength(1)
     // The completed version stays as a tombstone without image data, never as a visible row.
     const tombstone = (await t.run((ctx) => ctx.db.query('storedAssets').collect())).find(
       (row) => row.asset.asset_id === first.assetId,
@@ -245,6 +250,36 @@ describe('stored asset reads and deletion ledger', () => {
     expect(tombstone?.asset.thumbhash).toBeUndefined()
     expect(tombstone?.deletionError).toBeUndefined()
     expect(await t.mutation(api.lib.completeStoredAssetDeletion, first)).toEqual({ deleted: 0 })
+  })
+
+  test("pages through one album's pending deletions only", async () => {
+    const t = convexTest(schema, modules)
+    for (const [album, seeds] of [
+      ['wedding-gallery', ['a', 'b', 'c']],
+      ['another-album', ['x']],
+    ] as const) {
+      await t.action(api.lib.handleWebhook, {
+        ...signed({
+          ...completed({ stored: seeds.map((seedName) => receipt(seedName)) }),
+          assembly_id: `assembly-${album}`,
+          fields: { album },
+        }),
+        storage,
+      })
+      await t.mutation(api.lib.requestStoredAssetDeletion, { album, createdBefore: Date.now() + 1 })
+    }
+    const first = await t.query(api.lib.listStoredAssetDeletions, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 2, cursor: null },
+    })
+    const second = await t.query(api.lib.listStoredAssetDeletions, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 2, cursor: first.continueCursor },
+    })
+    expect([...first.page, ...second.page].map((entry) => entry.assetId).sort()).toEqual(
+      ['a', 'b', 'c'].map((seedName) => damId(`asset${seedName}`)).sort(),
+    )
+    expect(second.isDone).toBe(true)
   })
 
   test('refuses to complete a deletion that was never requested', async () => {
@@ -281,7 +316,11 @@ describe('stored asset reads and deletion ledger', () => {
         versionId: damId('versionn0'),
       }),
     ).toBeNull()
-    expect(await t.query(api.lib.listStoredAssetDeletions, {})).toEqual([])
+    const pending = await t.query(api.lib.listStoredAssetDeletions, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    expect(pending.page).toEqual([])
   })
 
   test('a replayed notification does not resurrect a hidden version', async () => {
