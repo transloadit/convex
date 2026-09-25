@@ -47,7 +47,7 @@ Status, 25 September 2026:
 
 - **Originals.** With `TRANSLOADIT_WORKSPACE` configured, photos are stored with
   `/transloadit/store` under a server-chosen `convex-demo/<deployment>/<album>/<upload>/` prefix,
-  with a ThumbHash. Without it, uploads keep the R2-only pipeline. On paid plans the stored bytes
+  with a ThumbHash for the thumbnail placeholder. Without it, uploads keep the R2-only pipeline. On paid plans the stored bytes
   are the uploaded originals. On the Community plan, API2 currently exempts only store Steps that
   use `:original` directly from the upload watermark; this album stores a photo filter of
   `:original`, so those photos are watermarked until API2 also recognizes filtered originals.
@@ -66,6 +66,11 @@ Status, 25 September 2026:
   private photos with `@transloadit/viewer/react` `Image` and pages through `media:list` with
   cursors, freezing loaded pages so live uploads never shift photos between pages. The Viewer
   packages are vendored prereleases until the alpha is published.
+- **Placeholders.** Thumbnails use `placeholder="blur"` with an explicit `objectFit="cover"`: the
+  receipt's ThumbHash is painted as an inline background that the loaded opaque pixels cover, with
+  no load handler. Transparent photos and the letterboxed (`contain`) viewer get none. A ThumbHash
+  is preview pixels, so `media:list` and `media:forDelivery` return it only to an admitted guest
+  and only for versions that guest may preview.
 - **Activation order.** Enabling `TRANSLOADIT_WORKSPACE` on Convex replaces public R2 photo
   renditions with private Storage originals. Configure the delivery key on the Next.js host first;
   without it the route answers 404 and new photos cannot be shown.

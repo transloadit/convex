@@ -49,6 +49,10 @@ const Media = ({
   const t = useTranslations('viewer')
   // Private photos: each candidate is a stable same-origin route URL that reauthorizes the guest
   // and redirects to a short-lived CDN grant, so long-open albums keep loading.
+  // Thumbnails fill a box of the photo's own ratio, so its opaque pixels cover the ThumbHash
+  // background once loaded, without a load handler; Viewer skips transparent photos. The fullscreen
+  // photo is letterboxed. Both fits are explicit, so the stylesheet cannot change what Viewer's
+  // placeholder guard sees.
   if (item.receipt)
     return (
       <Image
@@ -56,6 +60,8 @@ const Media = ({
         alt={item.name || t('moment')}
         sizes={viewing ? '100vw' : thumbnailSizes(item.aspectRatio)}
         loading={viewing ? 'eager' : 'lazy'}
+        placeholder={viewing ? 'empty' : 'blur'}
+        objectFit={viewing ? 'contain' : 'cover'}
       />
     )
   return item.kind === 'video' ? (

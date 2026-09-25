@@ -1,4 +1,4 @@
-import { vStoredAsset, type vStoredAssetResponse } from '@transloadit/convex'
+import { type StoredAsset, vStoredAsset, type vStoredAssetResponse } from '@transloadit/convex'
 import { paginationOptsValidator } from 'convex/server'
 import { type Infer, v } from 'convex/values'
 import { album } from '../lib/album-access'
@@ -41,6 +41,15 @@ const findBoundUpload = async (ctx: QueryCtx, row: StoredAssetRow) => {
   return upload
 }
 
+// Previews need image geometry. A ThumbHash is preview pixels too: versions that only allow
+// originals never send it, from either query.
+const canPreview = (asset: StoredAsset) => Boolean(asset.width && asset.height)
+const authorizedReceipt = (asset: StoredAsset) => {
+  if (canPreview(asset)) return asset
+  const { thumbhash: _thumbhash, ...receipt } = asset
+  return receipt
+}
+
 /**
  * Newest private photos for admitted guests: canonical receipts, never URLs or credentials.
  * Pages keep the component's cursors, including `endCursor` for stable pages in a live album.
@@ -67,7 +76,7 @@ export const list = query({
       page.push({
         id: `${workspace}:${asset_id}:${version_id}`,
         assemblyId: row.assemblyId,
-        asset: row.asset,
+        asset: authorizedReceipt(row.asset),
         uploadedBy: upload.guestName,
         createdAt: row.createdAt,
       })
@@ -98,7 +107,7 @@ export const forDelivery = query({
       versionId: args.version_id,
     })
     if (!row || !(await findBoundUpload(ctx, row))) return null
-    if (args.action === 'preview' && !(row.asset.width && row.asset.height)) return null
-    return row.asset
+    if (args.action === 'preview' && !canPreview(row.asset)) return null
+    return authorizedReceipt(row.asset)
   },
 })

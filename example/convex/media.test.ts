@@ -270,6 +270,34 @@ describe('gallery and delivery authorization', () => {
     })
   })
 
+  test('ThumbHash pixels reach only guests who may preview that exact version', async () => {
+    const t = setup()
+    const alex = await admit(t, 'Alex')
+    const thumbhash = 'IvkFHYx/iHiHh3h3d3h4d494+IiI'
+    await upload(alex, t, 'photo', (prefix) => ({ path: `${prefix}photo.jpg`, thumbhash }))
+    // Geometry-less receipts are original-only: forDelivery refuses previews for them.
+    const { asset: originalOnly } = await upload(alex, t, 'raw', (prefix) => ({
+      path: `${prefix}raw.jpg`,
+      width: undefined,
+      height: undefined,
+      thumbhash,
+    }))
+    expect(await alex.query(api.media.forDelivery, request(originalOnly))).toBeNull()
+    const original = await alex.query(api.media.forDelivery, request(originalOnly, 'original'))
+    expect(original).toMatchObject({ asset_id: originalOnly.asset_id })
+    expect(original).not.toHaveProperty('thumbhash')
+    const page = await alex.query(api.media.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    const hashes = Object.fromEntries(
+      page.page.map(({ asset }: { asset: { path: string; thumbhash?: string } }) => [
+        asset.path.slice(asset.path.lastIndexOf('/') + 1),
+        asset.thumbhash,
+      ]),
+    )
+    expect(hashes).toEqual({ 'photo.jpg': thumbhash, 'raw.jpg': undefined })
+  })
+
   test('hidden assets disappear from the gallery and delivery before Storage deletion', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')
