@@ -1,8 +1,9 @@
 import type { AssemblyStatus } from '@transloadit/zod/v3/assemblyStatus'
 import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template'
-import type { IndexRangeBuilder } from 'convex/server'
+import type { IndexRangeBuilder, PaginationOptions } from 'convex/server'
 import { anyApi, type FunctionReference } from 'convex/server'
-import { type ObjectType, v } from 'convex/values'
+import { ConvexError, type ObjectType, v } from 'convex/values'
+import { paginator } from 'convex-helpers/server/pagination'
 import { parseAssemblyStatus } from '../shared/assemblyUrls.ts'
 import { transloaditError } from '../shared/errors.ts'
 import { getResultUrl } from '../shared/resultUtils.ts'
@@ -62,6 +63,7 @@ import {
   signTransloaditParams,
   verifyWebhookSignature,
 } from './apiUtils.ts'
+import schema from './schema.ts'
 
 const TRANSLOADIT_ASSEMBLY_URL = 'https://api2.transloadit.com/assemblies'
 
@@ -713,9 +715,8 @@ export const storeAssemblyMetadata = mutation({
   },
 })
 
-// Components cannot use the built-in `.paginate()`, so pages are index ranges with explicit cursors.
-// A position is [indexed time, _creationTime]; _creationTime breaks ties between rows registered
-// in the same instant.
+// The expiry scan continues mid-page from an explicit cursor. A position is [indexed time,
+// _creationTime]; _creationTime breaks ties between rows registered in the same instant.
 type Position = [number, number]
 type VisibleRange = IndexRangeBuilder<
   Doc<'storedAssets'>,
@@ -743,82 +744,77 @@ const parsePosition = (cursor: string | null | undefined): Position | null => {
 const pageSize = (numItems: number) => Math.min(Math.max(Math.floor(numItems), 1), 500)
 const emptyPosition = JSON.stringify([0, 0])
 
+const maxRowsRead = 1000
+
+// Components cannot use the built-in `.paginate()`; convex-helpers' paginator pages the index
+// instead. Its cursors are index keys: the album, the absent deletion time, the indexed time,
+// _creationTime and _id. Anything else, such as an earlier release's [time, _creationTime] tuple
+// or another album's key, is refused as InvalidCursor so usePaginatedQuery restarts.
+const paginationFor = (album: string | undefined, opts: PaginationOptions) => {
+  // The paginator's encoding of an absent album, and of albums that end like that marker.
+  const albumKey =
+    album === undefined ? 'undefined' : album.endsWith('undefined') ? `_${album}` : album
+  for (const cursor of [opts.cursor, opts.endCursor]) {
+    if (cursor == null) continue
+    let key: unknown
+    try {
+      key = JSON.parse(cursor)
+    } catch {
+      key = undefined
+    }
+    if (
+      !Array.isArray(key) ||
+      key.length !== 5 ||
+      key[0] !== albumKey ||
+      key[1] !== 'undefined' ||
+      !Number.isFinite(key[2]) ||
+      !Number.isFinite(key[3]) ||
+      typeof key[4] !== 'string'
+    ) {
+      throw new ConvexError('InvalidCursor: restart Storage pagination')
+    }
+  }
+  const numItems = pageSize(opts.numItems)
+  return {
+    numItems,
+    cursor: opts.cursor,
+    endCursor: opts.endCursor,
+    // Clients may lower the bound on rows read, but neither raise it nor split an ordinary page.
+    maximumRowsRead: Math.min(
+      Math.max(opts.maximumRowsRead ?? maxRowsRead, numItems + 1),
+      maxRowsRead,
+    ),
+  }
+}
+
+// A loaded page that outgrew the read limit must keep its end: the paginator continues from where
+// it stopped, which would drop the rest of the range from the two halves the client splits it into.
+const keepLoadedRange = <Page extends { pageStatus?: string | null; continueCursor: string }>(
+  page: Page,
+  endCursor: string | null | undefined,
+) =>
+  endCursor && page.pageStatus === 'SplitRequired' ? { ...page, continueCursor: endCursor } : page
+
 /**
- * Visible Storage receipts of one album, newest first, from local indexed data only. `cursor`
- * starts after a position; an optional inclusive `endCursor` fixes a loaded page's range, so a
- * reactive client can keep earlier pages stable while new photos arrive at the top.
+ * Visible Storage receipts of one album, newest first, from local indexed data only. Pages follow
+ * Convex's cursor protocol: an inclusive `endCursor` fixes a loaded page's range, so a reactive
+ * client keeps earlier pages stable while new photos arrive at the top, and `pageStatus` with
+ * `splitCursor` says when a loaded page has grown too large to read at once.
  */
 export const listStoredAssets = query({
   args: vListStoredAssetsArgs,
   returns: vStoredAssetPage,
-  handler: async (ctx, args) => {
-    const start = parsePosition(args.paginationOpts.cursor)
-    const end = parsePosition(args.paginationOpts.endCursor)
-    const limit = end ? 1000 : pageSize(args.paginationOpts.numItems)
-    const visible = (q: VisibleRange) =>
-      q.eq('album', args.album).eq('deletionRequestedAt', undefined)
-    const inRange = (row: Doc<'storedAssets'>) =>
-      !end || row.createdAt > end[0] || (row.createdAt === end[0] && row._creationTime >= end[1])
-    const rows: Doc<'storedAssets'>[] = []
-    if (start && (!end || end[0] <= start[0])) {
-      // Rows sharing the cursor's instant but created before it come first.
-      rows.push(
-        ...(await ctx.db
-          .query('storedAssets')
-          .withIndex('by_album_visibility', (q) => {
-            const tied = visible(q).eq('createdAt', start[0])
-            return end && end[0] === start[0]
-              ? tied.gte('_creationTime', end[1]).lt('_creationTime', start[1])
-              : tied.lt('_creationTime', start[1])
-          })
-          .order('desc')
-          .take(limit + 1)),
-      )
-    }
-    if (rows.length <= limit && (!start || !end || end[0] < start[0])) {
-      const older = await ctx.db
+  handler: async (ctx, args) =>
+    keepLoadedRange(
+      await paginator(ctx.db, schema)
         .query('storedAssets')
-        .withIndex('by_album_visibility', (q) => {
-          const all = visible(q)
-          if (end && start) return all.gte('createdAt', end[0]).lt('createdAt', start[0])
-          if (end) return all.gte('createdAt', end[0])
-          if (start) return all.lt('createdAt', start[0])
-          return all
-        })
-        .order('desc')
-        .take(limit + 1 - rows.length)
-      rows.push(...older.filter(inRange))
-    }
-    const page = rows.slice(0, limit)
-    const last = page[page.length - 1]
-    if (end) {
-      // A fixed page ends at its end cursor; later pages continue from there.
-      const beyond = await ctx.db
-        .query('storedAssets')
-        .withIndex('by_album_visibility', (q) => visible(q).lte('createdAt', end[0]))
-        .order('desc')
-        .filter((q) =>
-          q.or(q.lt(q.field('createdAt'), end[0]), q.lt(q.field('_creationTime'), end[1])),
+        .withIndex('by_album_visibility', (q) =>
+          q.eq('album', args.album).eq('deletionRequestedAt', undefined),
         )
-        .first()
-      return {
-        page,
-        isDone: beyond === null,
-        continueCursor: args.paginationOpts.endCursor ?? emptyPosition,
-        // A frozen range that outgrew the limit must be split there, never skipped.
-        ...(rows.length > limit && last
-          ? { splitCursor: JSON.stringify([last.createdAt, last._creationTime]) }
-          : {}),
-      }
-    }
-    return {
-      page,
-      isDone: rows.length <= limit,
-      continueCursor: last
-        ? JSON.stringify([last.createdAt, last._creationTime])
-        : (args.paginationOpts.cursor ?? emptyPosition),
-    }
-  },
+        .order('desc')
+        .paginate(paginationFor(args.album, args.paginationOpts)),
+      args.paginationOpts.endCursor,
+    ),
 })
 
 /** One exact visible version; rows awaiting deletion are never returned for delivery. */
@@ -998,51 +994,25 @@ export const adoptStoredAssetsForDeletion = mutation({
 })
 
 /**
- * One album's hidden assets still awaiting Storage deletion, paged by an explicit index cursor
- * (components cannot use `.paginate()`), so entries that keep failing never block later ones.
+ * One album's hidden assets still awaiting Storage deletion, oldest request first, paged like
+ * `listStoredAssets`, so entries that keep failing never block later ones.
  */
 export const listStoredAssetDeletions = query({
   args: vListStoredAssetDeletionsArgs,
   returns: vStoredAssetDeletionPage,
   handler: async (ctx, args) => {
-    const numItems = pageSize(args.paginationOpts.numItems)
-    const cursor = parsePosition(args.paginationOpts.cursor)
-    const ledger = () =>
-      ctx.db.query('storedAssets').withIndex('by_album_pending_deletion', (q) => {
-        const pending = q.eq('album', args.album).eq('deletedAt', undefined)
-        return cursor
-          ? pending.gt('deletionRequestedAt', cursor[0])
-          : pending.gt('deletionRequestedAt', 0)
-      })
-    // Rows requested at the cursor's instant but created after its row come first.
-    const tied = cursor
-      ? await ctx.db
-          .query('storedAssets')
-          .withIndex('by_album_pending_deletion', (q) =>
-            q
-              .eq('album', args.album)
-              .eq('deletedAt', undefined)
-              .eq('deletionRequestedAt', cursor[0])
-              .gt('_creationTime', cursor[1]),
-          )
-          .take(numItems + 1)
-      : []
-    const rows =
-      tied.length > numItems
-        ? tied
-        : [...tied, ...(await ledger().take(numItems + 1 - tied.length))]
-    const page = rows.slice(0, numItems)
-    const last = page[page.length - 1]
-    const result = {
-      page,
-      isDone: rows.length <= numItems,
-      continueCursor: last
-        ? JSON.stringify([last.deletionRequestedAt, last._creationTime])
-        : (args.paginationOpts.cursor ?? emptyPosition),
-    }
+    const { page, ...position } = keepLoadedRange(
+      await paginator(ctx.db, schema)
+        .query('storedAssets')
+        .withIndex('by_album_pending_deletion', (q) =>
+          q.eq('album', args.album).eq('deletedAt', undefined).gt('deletionRequestedAt', 0),
+        )
+        .paginate(paginationFor(args.album, args.paginationOpts)),
+      args.paginationOpts.endCursor,
+    )
     // Versions of one asset are grouped per page; callers deduplicate assets across pages.
     const pending = new Map<string, typeof vStoredAssetDeletion.type>()
-    for (const row of result.page) {
+    for (const row of page) {
       const { workspace, asset_id: assetId, path } = row.asset
       const key = JSON.stringify([workspace, assetId])
       const entry = pending.get(key) ?? {
@@ -1058,11 +1028,7 @@ export const listStoredAssetDeletions = query({
       entry.rows += 1
       pending.set(key, entry)
     }
-    return {
-      page: [...pending.values()],
-      isDone: result.isDone,
-      continueCursor: result.continueCursor,
-    }
+    return { page: [...pending.values()], ...position }
   },
 })
 

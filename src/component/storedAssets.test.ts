@@ -316,7 +316,7 @@ describe('council 3 regressions', () => {
     expect(pending.page.map((entry) => entry.assetId)).toEqual([damId('assetorphan')])
   })
 
-  test('a frozen page that outgrows its limit reports where to split', async () => {
+  test('a frozen page that outgrows the read limit splits without skipping a row', async () => {
     const t = convexTest(schema, modules)
     const first = Array.from({ length: 5 }, (_, index) => receipt(`old${index}`))
     await t.action(api.lib.handleWebhook, {
@@ -337,21 +337,26 @@ describe('council 3 regressions', () => {
         storage,
       })
     }
-    const frozen = await t.query(api.lib.listStoredAssets, {
-      album: 'wedding-gallery',
-      paginationOpts: { numItems: 5, cursor: null, endCursor: oldest.continueCursor },
-    })
-    expect(frozen.page).toHaveLength(1000)
-    expect(frozen.splitCursor).toBeDefined()
-    const rest = await t.query(api.lib.listStoredAssets, {
-      album: 'wedding-gallery',
-      paginationOpts: {
-        numItems: 5,
-        cursor: frozen.splitCursor ?? null,
-        endCursor: oldest.continueCursor,
-      },
-    })
-    const ids = [...frozen.page, ...rest.page].map((row) => row._id)
+    let splits = 0
+    // Split the way convex-helpers' usePaginatedQuery does, until every range fits one read.
+    const read = async (range: { cursor: string | null; endCursor: string }): Promise<string[]> => {
+      const result = await t.query(api.lib.listStoredAssets, {
+        album: 'wedding-gallery',
+        // A client cannot raise the bound on rows read.
+        paginationOpts: { numItems: 5, maximumRowsRead: 100_000, ...range },
+      })
+      expect(result.page.length).toBeLessThanOrEqual(1000)
+      if (result.pageStatus !== 'SplitRequired') return result.page.map((row) => row._id)
+      const { splitCursor } = result
+      if (!splitCursor) throw new Error('expected a split cursor')
+      splits += 1
+      return [
+        ...(await read({ cursor: range.cursor, endCursor: splitCursor })),
+        ...(await read({ cursor: splitCursor, endCursor: result.continueCursor })),
+      ]
+    }
+    const ids = await read({ cursor: null, endCursor: oldest.continueCursor })
+    expect(splits).toBeGreaterThan(0)
     expect(ids).toHaveLength(1055)
     expect(new Set(ids).size).toBe(1055)
   })
@@ -435,6 +440,11 @@ describe('stored asset reads and deletion ledger', () => {
     const ids = await pageThrough(t, 500)
     expect(ids).toHaveLength(1200)
     expect(new Set(ids).size).toBe(1200)
+    const capped = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 5000, cursor: null },
+    })
+    expect(capped.page).toHaveLength(500)
   })
 
   test('an end cursor keeps a loaded page stable while newer photos arrive', async () => {
@@ -472,15 +482,85 @@ describe('stored asset reads and deletion ledger', () => {
     expect(unchanged.isDone).toBe(false)
   })
 
-  test('rejects malformed cursors', async () => {
-    const t = await seed(1)
-    for (const cursor of ['not json', '[1]', '["a", 2]', '{}'])
-      await expect(
-        t.query(api.lib.listStoredAssets, {
-          album: 'wedding-gallery',
-          paginationOpts: { numItems: 2, cursor },
-        }),
-      ).rejects.toThrow('Invalid Storage cursor')
+  test('hiding a photo shrinks only the loaded page that held it', async () => {
+    const t = await seed(5)
+    const list = (range: { cursor: string | null; endCursor?: string }) =>
+      t.query(api.lib.listStoredAssets, {
+        album: 'wedding-gallery',
+        paginationOpts: { numItems: 2, ...range },
+      })
+    const first = await list({ cursor: null })
+    const second = await list({ cursor: first.continueCursor })
+    // Hide the row the first page's cursor points at.
+    const [kept, hidden] = first.page
+    if (!kept || !hidden) throw new Error('expected a full first page')
+    await t.run((ctx) => ctx.db.patch(hidden._id, { deletionRequestedAt: Date.now() }))
+    const pinned = await list({ cursor: null, endCursor: first.continueCursor })
+    const next = await list({ cursor: first.continueCursor, endCursor: second.continueCursor })
+    expect(pinned.page.map((row) => row._id)).toEqual([kept._id])
+    expect(next.page.map((row) => row._id)).toEqual(second.page.map((row) => row._id))
+  })
+
+  test('refuses cursors from another album or an earlier release, so clients restart', async () => {
+    const t = await seed(3)
+    const list = (
+      album: string,
+      range: { cursor: string | null; endCursor?: string; maximumRowsRead?: number },
+    ) => t.query(api.lib.listStoredAssets, { album, paginationOpts: { numItems: 1, ...range } })
+    const first = await list('wedding-gallery', { cursor: null })
+    const [row] = first.page
+    if (!row) throw new Error('expected a row')
+    // Earlier releases paged by [createdAt, _creationTime].
+    const released = JSON.stringify([row.createdAt, row._creationTime])
+    for (const cursor of ['not json', '[]', '{}', '[1]', '["a", 2]', released]) {
+      await expect(list('wedding-gallery', { cursor })).rejects.toThrow('InvalidCursor')
+      await expect(list('wedding-gallery', { cursor: null, endCursor: cursor })).rejects.toThrow(
+        'InvalidCursor',
+      )
+    }
+    await expect(list('another-album', { cursor: first.continueCursor })).rejects.toThrow(
+      'InvalidCursor',
+    )
+    // A tiny read bound from a client cannot turn an ordinary page into a split.
+    const next = await list('wedding-gallery', {
+      cursor: first.continueCursor,
+      maximumRowsRead: 1,
+    })
+    expect(next.page).toHaveLength(1)
+    expect(next.pageStatus ?? null).toBeNull()
+  })
+
+  test('deletion ledger cursors stay in their album, also for receipts without one', async () => {
+    const t = convexTest(schema, modules)
+    const seeds = ['l1', 'l2', 'l3']
+    await t.action(api.lib.handleWebhook, {
+      ...signed({
+        ...completed({ stored: seeds.map((seedName) => receipt(seedName)) }),
+        fields: {},
+      }),
+      storage,
+    })
+    await t.mutation(api.lib.requestStoredAssetDeletion, { createdBefore: Date.now() + 1 })
+    const pending = (cursor: string | null, album?: string) =>
+      t.query(api.lib.listStoredAssetDeletions, {
+        ...(album ? { album } : {}),
+        paginationOpts: { numItems: 1, cursor },
+      })
+    const seen: string[] = []
+    let cursor: string | null = null
+    for (let guard = 0; guard < 10; guard += 1) {
+      const result: Awaited<ReturnType<typeof pending>> = await pending(cursor)
+      seen.push(...result.page.map((entry) => entry.assetId))
+      if (result.isDone) break
+      cursor = result.continueCursor
+    }
+    expect(seen.sort()).toEqual(seeds.map((seedName) => damId(`asset${seedName}`)).sort())
+    // A cursor over receipts without an album encodes that absence; no album accepts it.
+    const first = await pending(null)
+    await expect(pending(first.continueCursor, 'wedding-gallery')).rejects.toThrow('InvalidCursor')
+    const [row] = await t.run((ctx) => ctx.db.query('storedAssets').collect())
+    const released = JSON.stringify([row?.deletionRequestedAt, row?._creationTime])
+    await expect(pending(released)).rejects.toThrow('InvalidCursor')
   })
 
   test('hides requested deletions at once and keeps references until Storage confirms', async () => {

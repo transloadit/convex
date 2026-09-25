@@ -25,7 +25,7 @@
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "codegen": "CONVEX_DEPLOY_KEY= convex codegen --component-dir ./src/component",
-    "typecheck": "tsc --noEmit && yarn typecheck:example",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json && yarn typecheck:example",
     "test": "vitest run --typecheck",
     "test:watch": "vitest --typecheck",
     "verify": "yarn check && yarn verify:local",
@@ -80,11 +80,12 @@
     }
   },
   "peerDependencies": {
-    "convex": "^1.24.8"
+    "convex": "^1.43.0"
   },
   "dependencies": {
     "@transloadit/utils": "^4.8.1",
-    "@transloadit/zod": "file:./vendor/sdk-preview/transloadit-zod.tgz"
+    "@transloadit/zod": "file:./vendor/sdk-preview/transloadit-zod.tgz",
+    "convex-helpers": "^0.1.124"
   },
   "devDependencies": {
     "@auth/core": "^0.41.3",

@@ -13,7 +13,6 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "verbatimModuleSyntax": true,
-    "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true,
     "composite": true,
     "isolatedModules": true,

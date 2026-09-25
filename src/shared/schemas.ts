@@ -89,17 +89,24 @@ export const vStoredAssetResponse = v.object({
 
 export type StoredAssetResponse = Infer<typeof vStoredAssetResponse>
 
+// Convex's page-split protocol, which usePaginatedQuery from convex-helpers acts on.
+const vPageSplit = {
+  splitCursor: v.optional(v.union(v.string(), v.null())),
+  pageStatus: v.optional(
+    v.union(v.literal('SplitRecommended'), v.literal('SplitRequired'), v.null()),
+  ),
+}
 export const vStoredAssetPage = v.object({
   page: v.array(vStoredAssetRow),
   isDone: v.boolean(),
   continueCursor: v.string(),
-  splitCursor: v.optional(v.string()),
+  ...vPageSplit,
 })
 export const vStoredAssetResponsePage = v.object({
   page: v.array(vStoredAssetResponse),
   isDone: v.boolean(),
   continueCursor: v.string(),
-  splitCursor: v.optional(v.string()),
+  ...vPageSplit,
 })
 
 /** Enables Storage receipt ingestion; results from any other Workspace fail verification. */
@@ -188,6 +195,7 @@ export const vStoredAssetDeletionPage = v.object({
   page: v.array(vStoredAssetDeletion),
   isDone: v.boolean(),
   continueCursor: v.string(),
+  ...vPageSplit,
 })
 
 export const vCompleteStoredAssetDeletionArgs = {

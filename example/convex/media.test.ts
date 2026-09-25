@@ -312,6 +312,29 @@ describe('gallery and delivery authorization', () => {
     })
     expect(page.page).toEqual([])
   })
+
+  test('the gallery forwards page splits and refused cursors to the client', async () => {
+    const t = setup()
+    const alex = await admit(t, 'Alex')
+    await upload(alex, t, 'a')
+    const list = (paginationOpts: Record<string, unknown>) =>
+      alex.query(api.media.list, {
+        paginationOpts: { numItems: 1, cursor: null, ...paginationOpts },
+      })
+    const first = await list({})
+    await upload(alex, t, 'b')
+    await upload(alex, t, 'c')
+    // A loaded page that outgrew its read bound asks to be split and keeps its end.
+    expect(await list({ endCursor: first.continueCursor, maximumRowsRead: 2 })).toMatchObject({
+      pageStatus: 'SplitRequired',
+      splitCursor: expect.any(String),
+      continueCursor: first.continueCursor,
+    })
+    // usePaginatedQuery restarts on InvalidCursor, for example after an earlier release's cursor.
+    await expect(list({ cursor: JSON.stringify([Date.now(), Date.now()]) })).rejects.toThrow(
+      'InvalidCursor',
+    )
+  })
 })
 
 describe('cleanup previews follow the expiry rules', () => {

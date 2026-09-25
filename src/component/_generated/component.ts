@@ -269,6 +269,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             rows: number;
             workspace: string;
           }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
         },
         Name
       >;
@@ -319,7 +321,8 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             uploadId?: string;
             userId?: string;
           }>;
-          splitCursor?: string;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
         },
         Name
       >;

@@ -1,5 +1,5 @@
 import { type StoredAsset, vStoredAsset, type vStoredAssetResponse } from '@transloadit/convex'
-import { paginationOptsValidator } from 'convex/server'
+import { paginationOptsValidator, paginationResultValidator } from 'convex/server'
 import { type Infer, v } from 'convex/values'
 import { album } from '../lib/album-access'
 import { getStorageWorkspace, isInUploadStoragePrefix } from '../lib/storage'
@@ -52,16 +52,12 @@ const authorizedReceipt = (asset: StoredAsset) => {
 
 /**
  * Newest private photos for admitted guests: canonical receipts, never URLs or credentials.
- * Pages keep the component's cursors, including `endCursor` for stable pages in a live album.
+ * Pages keep the component's cursors and split signals, which usePaginatedQuery from
+ * convex-helpers uses to keep loaded pages stable in a live album.
  */
 export const list = query({
   args: { paginationOpts: paginationOptsValidator },
-  returns: v.object({
-    page: v.array(vGalleryAsset),
-    isDone: v.boolean(),
-    continueCursor: v.string(),
-    splitCursor: v.optional(v.string()),
-  }),
+  returns: paginationResultValidator(vGalleryAsset),
   handler: async (ctx, args) => {
     await requireGuest(ctx)
     const result = await ctx.runQuery(components.transloadit.lib.listStoredAssets, {
@@ -81,12 +77,7 @@ export const list = query({
         createdAt: row.createdAt,
       })
     }
-    return {
-      page,
-      isDone: result.isDone,
-      continueCursor: result.continueCursor,
-      ...(result.splitCursor ? { splitCursor: result.splitCursor } : {}),
-    }
+    return { ...result, page }
   },
 })
 
