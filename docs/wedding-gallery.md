@@ -99,10 +99,11 @@ the photo. Failures stay hidden and retryable.
 Without `--older-than` the script resets the whole demo album, including unregistered uploads under
 this deployment's prefix, R2 objects and Convex results. `--dry-run` reports every backend and changes
 nothing. A reset refuses to run while R2 or Storage is unconfigured unless `--skip-r2` or
-`--skip-storage` says so explicitly. Even then, Convex results that still reference R2 media are
-kept (and reported as incomplete), a partial R2 batch deletion counts as a failure, and Storage
-references stay in the ledger until Storage confirms each deletion. Cleanup never deletes Storage assets outside the deployment's demo prefix. Scheduling the
-daily expiry is still open; R2 keeps its one-day lifecycle rule.
+`--skip-storage` says so explicitly; a skip flag also leaves a configured backend untouched. Even
+then, Convex results that still reference R2 media are kept (and reported as incomplete), a partial
+R2 batch deletion counts as a failure, and Storage references stay in the ledger until Storage
+confirms each deletion. Cleanup never deletes Storage assets outside the deployment's demo prefix.
+Scheduling the daily expiry is still open; R2 keeps its one-day lifecycle rule.
 
 For the real wedding, an independently tested backup and restore of the originals remains a gate,
 along with a separate Workspace or prefix that demo cleanup can never reach.

@@ -183,7 +183,10 @@ export const runDemoCleanup = async (
   deps: { convex: CleanupConvex; storage?: CleanupStorage; r2?: CleanupR2 },
   options: CleanupOptions,
 ) => {
-  const { convex, storage, r2 } = deps
+  const { convex } = deps
+  // A skip flag leaves that backend untouched even when it is configured.
+  const storage = options.skipStorage ? undefined : deps.storage
+  const r2 = options.skipR2 ? undefined : deps.r2
   const now = options.now ?? Date.now()
   const batchSize = options.batchSize ?? 100
   const reset = options.olderThanMs === undefined

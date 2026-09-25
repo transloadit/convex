@@ -281,6 +281,33 @@ describe('demo cleanup', () => {
     expect(report).toMatchObject({ r2: 'skipped', convex: { deletedResults: 3 } })
   })
 
+  test('skip flags leave configured backends untouched', async () => {
+    const rows = [row('old', 30)]
+    const { convex, calls } = fakeConvex(rows)
+    convex.summary = async () => ({
+      results: 3,
+      resultsTruncated: false,
+      r2Results: 1,
+      storagePrefix: prefix,
+    })
+    const { storage, deleted } = fakeStorage(['old'])
+    const r2: CleanupR2 = { list: vi.fn(async () => ['wedding/a.jpg']), delete: vi.fn() }
+    const skip = { now, skipStorage: true, skipR2: true }
+    const preview = await runDemoCleanup({ convex, storage, r2 }, { ...skip, dryRun: true })
+    expect(preview).toMatchObject({ storage: 'skipped', r2: 'skipped' })
+    const report = await runDemoCleanup({ convex, storage, r2 }, { ...skip, dryRun: false })
+    expect(report).toMatchObject({
+      storage: 'skipped',
+      r2: 'skipped',
+      convex: 'kept: results reference skipped R2 media',
+    })
+    expect(r2.list).not.toHaveBeenCalled()
+    expect(r2.delete).not.toHaveBeenCalled()
+    expect(deleted).toEqual([])
+    expect(calls).toEqual([])
+    expect(rows).toEqual([expect.objectContaining({ hidden: false })])
+  })
+
   test('dry runs count each expired asset once across preview pages', async () => {
     const { convex } = fakeConvex([row('a', 30), row('b', 30)])
     const pages = [
