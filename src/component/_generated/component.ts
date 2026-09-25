@@ -24,6 +24,36 @@ import type { FunctionReference } from "convex/server";
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
     lib: {
+      adoptStoredAssetsForDeletion: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          album?: string;
+          assets: Array<{
+            asset_id: string;
+            has_alpha?: boolean;
+            height?: number;
+            md5hash?: string;
+            mime: string | null;
+            path: string;
+            sha256?: string;
+            size: number;
+            thumbhash?: string;
+            version_id: string;
+            width?: number;
+            workspace: string;
+          }>;
+        },
+        { adopted: number; alreadyKnown: number },
+        Name
+      >;
+      completeStoredAssetDeletion: FunctionReference<
+        "mutation",
+        "internal",
+        { assetId: string; workspace: string },
+        { deleted: number },
+        Name
+      >;
       createAssembly: FunctionReference<
         "action",
         "internal",
@@ -58,6 +88,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         { fields?: Record<string, any>; params: string; signature: string },
         Name
       >;
+      failStoredAssetDeletion: FunctionReference<
+        "mutation",
+        "internal",
+        { assetId: string; error: string; workspace: string },
+        null,
+        Name
+      >;
       getAssemblyStatus: FunctionReference<
         "query",
         "internal",
@@ -83,6 +120,42 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         } | null,
         Name
       >;
+      getStoredAsset: FunctionReference<
+        "query",
+        "internal",
+        { assetId: string; versionId: string; workspace: string },
+        {
+          _creationTime: number;
+          _id: string;
+          album?: string;
+          assemblyId: string;
+          asset: {
+            asset_id: string;
+            has_alpha?: boolean;
+            height?: number;
+            md5hash?: string;
+            mime: string | null;
+            path: string;
+            sha256?: string;
+            size: number;
+            thumbhash?: string;
+            version_id: string;
+            width?: number;
+            workspace: string;
+          };
+          createdAt: number;
+          deletedAt?: number;
+          deletionAttempts?: number;
+          deletionError?: string;
+          deletionRequestedAt?: number;
+          originalId?: string | Array<string | null>;
+          resultId: string;
+          stepName: string;
+          uploadId?: string;
+          userId?: string;
+        } | null,
+        Name
+      >;
       handleWebhook: FunctionReference<
         "action",
         "internal",
@@ -91,6 +164,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           payload: any;
           rawBody?: string;
           signature?: string;
+          storage?: { workspace: string };
           verifySignature?: boolean;
         },
         {
@@ -98,6 +172,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           ok?: string;
           resultCount: number;
           status?: string;
+          storedAssetCount?: number;
         },
         Name
       >;
@@ -168,6 +243,141 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
+      listStoredAssetDeletions: FunctionReference<
+        "query",
+        "internal",
+        {
+          album?: string;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            assetId: string;
+            deletionAttempts: number;
+            deletionError?: string;
+            deletionRequestedAt: number;
+            paths: Array<string>;
+            rows: number;
+            workspace: string;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        },
+        Name
+      >;
+      listStoredAssets: FunctionReference<
+        "query",
+        "internal",
+        {
+          album: string;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            _creationTime: number;
+            _id: string;
+            album?: string;
+            assemblyId: string;
+            asset: {
+              asset_id: string;
+              has_alpha?: boolean;
+              height?: number;
+              md5hash?: string;
+              mime: string | null;
+              path: string;
+              sha256?: string;
+              size: number;
+              thumbhash?: string;
+              version_id: string;
+              width?: number;
+              workspace: string;
+            };
+            createdAt: number;
+            deletedAt?: number;
+            deletionAttempts?: number;
+            deletionError?: string;
+            deletionRequestedAt?: number;
+            originalId?: string | Array<string | null>;
+            resultId: string;
+            stepName: string;
+            uploadId?: string;
+            userId?: string;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        },
+        Name
+      >;
+      listStoredAssetsForAssembly: FunctionReference<
+        "query",
+        "internal",
+        { assemblyId: string; limit?: number },
+        Array<{
+          _creationTime: number;
+          _id: string;
+          album?: string;
+          assemblyId: string;
+          asset: {
+            asset_id: string;
+            has_alpha?: boolean;
+            height?: number;
+            md5hash?: string;
+            mime: string | null;
+            path: string;
+            sha256?: string;
+            size: number;
+            thumbhash?: string;
+            version_id: string;
+            width?: number;
+            workspace: string;
+          };
+          createdAt: number;
+          deletedAt?: number;
+          deletionAttempts?: number;
+          deletionError?: string;
+          deletionRequestedAt?: number;
+          originalId?: string | Array<string | null>;
+          resultId: string;
+          stepName: string;
+          uploadId?: string;
+          userId?: string;
+        }>,
+        Name
+      >;
+      previewStoredAssetExpiry: FunctionReference<
+        "query",
+        "internal",
+        {
+          album?: string;
+          createdBefore: number;
+          cursor?: string;
+          limit?: number;
+        },
+        {
+          continueCursor: string;
+          hasMore: boolean;
+          requested: Array<{ assetId: string; workspace: string }>;
+        },
+        Name
+      >;
       purgeAlbum: FunctionReference<
         "mutation",
         "internal",
@@ -183,6 +393,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           payload: any;
           rawBody?: string;
           signature?: string;
+          storage?: { workspace: string };
           verifySignature?: boolean;
         },
         { assemblyId: string; queued: boolean },
@@ -195,12 +406,30 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           assemblyId: string;
           config?: { authKey: string; authSecret: string };
           expectedFields?: Record<string, string>;
+          storage?: { workspace: string };
         },
         {
           assemblyId: string;
           ok?: string;
           resultCount: number;
           status?: string;
+          storedAssetCount?: number;
+        },
+        Name
+      >;
+      requestStoredAssetDeletion: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          album?: string;
+          createdBefore: number;
+          cursor?: string;
+          limit?: number;
+        },
+        {
+          continueCursor: string;
+          hasMore: boolean;
+          requested: Array<{ assetId: string; workspace: string }>;
         },
         Name
       >;

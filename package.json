@@ -24,7 +24,8 @@
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "typecheck": "tsc --noEmit && yarn typecheck:example",
+    "codegen": "CONVEX_DEPLOY_KEY= convex codegen --component-dir ./src/component",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json && yarn typecheck:example",
     "test": "vitest run --typecheck",
     "test:watch": "vitest --typecheck",
     "verify": "yarn check && yarn verify:local",
@@ -79,11 +80,12 @@
     }
   },
   "peerDependencies": {
-    "convex": "^1.24.8"
+    "convex": "^1.43.0"
   },
   "dependencies": {
     "@transloadit/utils": "^4.8.1",
-    "@transloadit/zod": "^4.4.0"
+    "@transloadit/zod": "5.0.1",
+    "convex-helpers": "^0.1.124"
   },
   "devDependencies": {
     "@auth/core": "^0.41.3",
@@ -96,6 +98,8 @@
     "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
+    "@transloadit/node": "4.14.0",
+    "@transloadit/viewer": "0.0.3",
     "@types/node": "^24.13.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

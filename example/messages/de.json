@@ -21,7 +21,9 @@
     "emptyTitle": "Die erste Erinnerung gehört dir.",
     "emptyHint": "Füge über Fotos teilen deine liebsten Fotos und Videos des Tages hinzu.",
     "unavailable": "Die Galerie ist vorübergehend nicht verfügbar",
-    "unavailableHint": "Uploads sind derzeit nicht möglich. Bitte versuche es später erneut."
+    "unavailableHint": "Uploads sind derzeit nicht möglich. Bitte versuche es später erneut.",
+    "loadMore": "Weitere Erinnerungen anzeigen",
+    "loadFailed": "Einige Fotos konnten nicht geladen werden. Bitte lade die Seite neu."
   },
   "language": { "label": "Sprache: {language}" },
   "access": {
@@ -69,7 +71,8 @@
     "next": "Weiter",
     "position": "{current, number} / {total, number}",
     "addedBy": "Hinzugefügt von {name}",
-    "unknownContributor": "Beitrag von einem unbekannten Gast"
+    "unknownContributor": "Beitrag von einem unbekannten Gast",
+    "download": "Original herunterladen"
   },
   "notifications": {
     "guest": "Ein Gast",

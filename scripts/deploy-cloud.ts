@@ -145,6 +145,8 @@ const deployCloud = async () => {
       'R2_ACCOUNT_ID',
       'R2_HOST',
       'R2_PUBLIC_URL',
+      // Enables private Storage originals; unset keeps the R2-only pipeline.
+      'TRANSLOADIT_WORKSPACE',
     ]
 
     for (const name of optionalEnv) {

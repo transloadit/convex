@@ -21,7 +21,9 @@
     "emptyTitle": "The first memory is yours.",
     "emptyHint": "Use Share photos to add your favorite photos and videos from the day.",
     "unavailable": "Gallery temporarily unavailable",
-    "unavailableHint": "Uploads are unavailable right now. Please try again later."
+    "unavailableHint": "Uploads are unavailable right now. Please try again later.",
+    "loadMore": "Show more memories",
+    "loadFailed": "Some photos could not be loaded. Please reload the page."
   },
   "language": { "label": "Language: {language}" },
   "access": {
@@ -69,7 +71,8 @@
     "next": "Next",
     "position": "{current, number} / {total, number}",
     "addedBy": "Added by {name}",
-    "unknownContributor": "Contributor unknown"
+    "unknownContributor": "Contributor unknown",
+    "download": "Download original"
   },
   "notifications": {
     "guest": "A guest",

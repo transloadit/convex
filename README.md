@@ -14,6 +14,8 @@ A Convex component for creating Transloadit Assemblies, signing Uppy uploads, an
 
 - Node.js 24.15+ or 26+
 - Yarn 4 (Corepack)
+- `convex` 1.43+ (peer dependency). Storage receipt pages use convex-helpers' `paginator`, and the
+  tested convex-helpers release (0.1.124) declares this Convex floor.
 
 ## Install
 
@@ -72,25 +74,74 @@ export const {
 
 These wrappers do not add application authorization. Expose only the operations your app needs,
 and add membership/ownership checks for signing, queries, refresh, edits, and deletion. The example
-limits guest signing to its wedding pipeline and keeps cleanup internal; its gallery remains public.
+limits guest signing to its wedding pipeline and keeps cleanup internal; album reads require an
+admitted guest.
 
 Note: pass `expires` in `createAssembly` when you need a custom expiry; otherwise the component defaults to 1 hour from now.
 
 ## Data model
 
-The component stores Transloadit metadata in two tables:
+The component stores Transloadit metadata in three tables:
 
 ```
-assemblies 1 ──── * results
+results * ──── 1 assemblies 1 ──── * storedAssets
 ```
 
 - `assemblies`: one row per Transloadit Assembly (status/ok, notify URL, uploads, raw payload, etc).
 - `results`: one row per output file, grouped by `assemblyId` + `stepName` (a step can yield multiple rows). Each row includes normalized fields (name/size/mime/url), optional `resultId`, and the raw Transloadit output object.
+- `storedAssets`: one Storage receipt per Workspace, asset and version, with the Assembly, Step and
+  result that stored it (see [Storage receipts](#storage-receipts)). Storage objects adopted for
+  deletion have no Assembly.
 
 Lifecycle:
 1. `createAssembly` inserts the initial `assemblies` row.
 2. `handleWebhook`, `queueWebhook`, or `refreshAssembly` upserts the assembly + replaces results.
 3. `listResults` returns flattened step outputs for use in UIs.
+
+## Storage receipts
+
+When an Assembly writes to Transloadit Storage with the `/transloadit/store` Robot, the component
+can keep each canonical receipt (`workspace`, `asset_id`, `version_id`, `path`,
+`size`, `mime`, checksums, dimensions and optional ThumbHash). Enable it with the Storage Workspace:
+
+```ts
+const transloadit = new Transloadit(components.transloadit, { storageWorkspace: "my-workspace" });
+// or set TRANSLOADIT_WORKSPACE for makeTransloaditAPI and the class defaults
+```
+
+- Only completed Assemblies register receipts, from verified webhooks or authoritative refreshes.
+  A malformed or cross-Workspace receipt fails the whole status update; nothing is persisted.
+- `storedAssets` keeps one row per Workspace, asset and version, with its Assembly, Step, result and
+  original IDs, plus `album`, `userId` and `uploadId` copied from the signed Assembly fields.
+  Notification retries are harmless.
+- `listStoredAssets` pages an album's visible receipts newest first, from local indexed data. It
+  takes Convex `paginationOpts` and answers with Convex's cursor protocol, including `pageStatus`
+  and `splitCursor` when a loaded page grows past the read limit, so an app query can pass pages
+  through to `usePaginatedQuery` from `convex-helpers/react`, which keeps loaded pages gap-free
+  while new photos arrive. A page holds at most 500 receipts and reads at most 1000 rows. A cursor
+  that is not this album's index key (another album's, or one from an older deployment) fails with
+  `InvalidCursor`, which restarts that hook. `getStoredAsset` returns one exact version. Neither
+  contacts Storage or signs anything.
+- Deletion is a ledger for your own retention job: `previewStoredAssetExpiry` dry-runs a selection,
+  `requestStoredAssetDeletion` hides every version of expired assets at once,
+  `adoptStoredAssetsForDeletion` brings in Storage objects that no receipt registered, and
+  `listStoredAssetDeletions` pages what still awaits deletion. Your server deletes those objects
+  from Storage, then `completeStoredAssetDeletion` turns the rows into tombstones (or
+  `failStoredAssetDeletion` records a retryable error).
+- A tombstone stops a late notification from registering the deleted version again. It is a
+  retained record, not an erasure: it keeps the receipt without its ThumbHash (path, size,
+  checksums, dimensions), its Assembly provenance and its album, user and upload linkage. Nothing
+  purges tombstones: the component keeps them and exposes no function to remove them.
+
+Byte-identical originals depend on the Assembly: on the Community plan, API2 currently exempts
+only store Steps that use `:original` directly from its upload watermark, so a Step that stores a
+filter of `:original` (as the wedding example does for photos) stores watermarked photos there.
+
+Receipts are private metadata, not credentials. Signed Assembly fields are not ownership proof on
+their own: bind receipts to server-created upload records and authorize every read, as the
+example's `convex/media.ts` does. `makeTransloaditAPI` deliberately exposes no receipt queries.
+A ThumbHash is a tiny preview of the image: return it only to viewers who may see a preview (the
+example strips it from versions its guests may only fetch as originals).
 
 ## Webhook route
 

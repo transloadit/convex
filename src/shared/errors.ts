@@ -6,6 +6,7 @@ export type TransloaditErrorContext =
   | 'webhook'
   | 'payload'
   | 'config'
+  | 'storage'
 
 export class TransloaditError extends Error {
   readonly context: TransloaditErrorContext

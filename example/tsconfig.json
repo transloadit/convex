@@ -26,6 +26,13 @@
       }
     ]
   },
-  "include": ["next-env.d.ts", "app", "lib", ".next/types/**/*.ts", ".next/dev/types/**/*.ts"],
+  "include": [
+    "next-env.d.ts",
+    "proxy.ts",
+    "app",
+    "lib",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }

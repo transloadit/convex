@@ -1,0 +1,6 @@
+{
+  "//": "Code that Node runs by stripping types. Dependencies may ship other TypeScript sources.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "erasableSyntaxOnly": true },
+  "include": ["./scripts/**/*.ts", "./src/debug/**/*"]
+}

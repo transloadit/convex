@@ -20,6 +20,7 @@ import { getUploadErrorCode, type UploadErrorCode } from '../lib/upload-errors'
 import { CloudAlbumGate, LocalAlbumGate } from './AlbumGate'
 import { Gallery } from './Gallery'
 import { Providers } from './providers'
+import { StorageGallery } from './StorageGallery'
 import {
   shouldAdvanceStage,
   type UploadStage,
@@ -413,7 +414,7 @@ const CloudWeddingUploads = ({
       toasts={toasts}
       authState={isLoading ? 'loading' : isAuthenticated ? 'authenticated' : 'guest'}
     >
-      <Gallery results={galleryResults} />
+      <StorageGallery results={galleryResults} />
     </WeddingLayout>
   )
 }

@@ -1,5 +1,6 @@
 'use client'
 
+import { getStorageAssetHref, Image } from '@transloadit/viewer/react'
 import { spring } from 'motion'
 import { AnimateView } from 'motion/react-animate-view'
 import { useTranslations } from 'next-intl'
@@ -13,7 +14,15 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { buildGalleryItems, type GalleryItem, type GalleryResult } from '../lib/gallery'
+import {
+  buildGalleryItems,
+  buildStorageGalleryItems,
+  type GalleryItem,
+  type GalleryResult,
+  mergeGalleryItems,
+  type StorageGalleryAsset,
+  thumbnailSizes,
+} from '../lib/gallery'
 
 const motionPreference = '(prefers-reduced-motion: reduce)'
 const subscribeToMotionPreference = (onChange: () => void) => {
@@ -38,6 +47,23 @@ const Media = ({
   onDimensions?: (width: number, height: number) => void
 }) => {
   const t = useTranslations('viewer')
+  // Private photos: each candidate is a stable same-origin route URL that reauthorizes the guest
+  // and redirects to a short-lived CDN grant, so long-open albums keep loading.
+  // Thumbnails fill a box of the photo's own ratio, so its opaque pixels cover the ThumbHash
+  // background once loaded, without a load handler; Viewer skips transparent photos. The fullscreen
+  // photo is letterboxed. Both fits are explicit, so the stylesheet cannot change what Viewer's
+  // placeholder guard sees.
+  if (item.receipt)
+    return (
+      <Image
+        src={item.receipt}
+        alt={item.name || t('moment')}
+        sizes={viewing ? '100vw' : thumbnailSizes(item.aspectRatio)}
+        loading={viewing ? 'eager' : 'lazy'}
+        placeholder={viewing ? 'empty' : 'blur'}
+        objectFit={viewing ? 'contain' : 'cover'}
+      />
+    )
   return item.kind === 'video' ? (
     // biome-ignore lint/a11y/useMediaCaption: Guest clips do not have caption tracks.
     <video
@@ -195,9 +221,19 @@ const GalleryViewer = ({
             {item.uploadedBy ? t('addedBy', { name: item.uploadedBy }) : t('unknownContributor')}
           </span>
         </div>
-        <button type="button" onClick={onClose} aria-label={t('close')}>
-          {t('closeButton')} <span aria-hidden="true">×</span>
-        </button>
+        <div className="viewer-actions">
+          {item.receipt && (
+            <a
+              className="viewer-download"
+              href={getStorageAssetHref(item.receipt, { action: 'download' })}
+            >
+              {t('download')}
+            </a>
+          )}
+          <button type="button" onClick={onClose} aria-label={t('close')}>
+            {t('closeButton')} <span aria-hidden="true">×</span>
+          </button>
+        </div>
       </div>
       <div className="viewer-media">
         {reducedMotion ? (
@@ -243,9 +279,22 @@ const GalleryViewer = ({
   )
 }
 
-export const Gallery = ({ results }: { results: GalleryResult[] }) => {
+export const Gallery = ({
+  results,
+  storageAssets = [],
+  onLoadMore,
+  loadFailed = false,
+}: {
+  results: GalleryResult[]
+  storageAssets?: StorageGalleryAsset[]
+  onLoadMore?: () => void
+  loadFailed?: boolean
+}) => {
   const t = useTranslations('album')
-  const items = buildGalleryItems(results)
+  const items = mergeGalleryItems(
+    buildStorageGalleryItems(storageAssets),
+    buildGalleryItems(results),
+  )
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Subscribe to changes too: Motion's hook currently snapshots this preference at mount.
   const reducedMotion = useSyncExternalStore(
@@ -271,7 +320,27 @@ export const Gallery = ({ results }: { results: GalleryResult[] }) => {
   const transitionName = (id: string) =>
     `photo-${Array.from(`${instanceId}-${id}`, (char) => char.codePointAt(0)?.toString(16)).join('-')}`
 
+  const failure = loadFailed ? (
+    <p className="gallery-error" role="alert">
+      {t('loadFailed')}
+    </p>
+  ) : null
+
+  const more = onLoadMore ? (
+    <button type="button" className="button gallery-more" onClick={onLoadMore}>
+      {t('loadMore')}
+    </button>
+  ) : null
+
   if (!items.length) {
+    // Filtering can empty a page while later pages still hold photos: keep the way forward.
+    if (failure || more)
+      return (
+        <>
+          {failure}
+          {more}
+        </>
+      )
     return (
       <div className="gallery-empty" data-testid="gallery-empty">
         <span className="empty-flower" aria-hidden="true">
@@ -285,6 +354,7 @@ export const Gallery = ({ results }: { results: GalleryResult[] }) => {
 
   return (
     <>
+      {failure}
       <p className="gallery-count">{t('count', { count: items.length })}</p>
       <div className="gallery" data-testid="gallery">
         {items.map((item) => (
@@ -300,6 +370,7 @@ export const Gallery = ({ results }: { results: GalleryResult[] }) => {
           />
         ))}
       </div>
+      {more}
       {selected && (
         <GalleryViewer
           item={selected}

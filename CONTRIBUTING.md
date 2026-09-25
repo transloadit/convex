@@ -214,9 +214,33 @@ const t = createTransloaditTest();
 ## Generated files
 
 `src/component/_generated` is Convex codegen output. It is checked in so tests and component
-consumers have stable API references. If you change component functions or schemas, regenerate with
-Convex codegen (for example via `npx convex dev` or `npx convex codegen`) and commit the updated
-files.
+consumers have stable API references. If you change component functions or schemas, regenerate it
+with the official Convex CLI and commit the result:
+
+```bash
+CONVEX_AGENT_MODE=anonymous npx convex init   # once: a throwaway local backend, no account needed
+yarn codegen                                  # convex codegen --component-dir ./src/component
+```
+
+Codegen analyses the component on a deployment without changing the code it runs. The root
+`convex.json` points the CLI at the example app, which mounts the component from `src/`.
+`yarn codegen` ignores `CONVEX_DEPLOY_KEY` so a key in `.env` never becomes the codegen target; it
+uses the deployment `convex init` or `convex dev` configured. CI repeats these steps against a
+local backend and fails when the committed output drifts.
+
+## Storage pagination
+
+`listStoredAssets` and `listStoredAssetDeletions` page with convex-helpers' `paginator`. The tested
+helper release is 0.1.124, whose `convex` peer (`^1.43.0`) sets this package's peer floor; raise
+the floor with the helper, not with whatever Convex happens to be installed.
+
+One behavior of that release needs a local repair. When a loaded page (`endCursor` set) has grown
+past `maximumRowsRead`, the paginator answers `SplitRequired` with `continueCursor` at the row where
+it stopped reading, not at `endCursor`. `usePaginatedQuery` would then split the page into halves
+that end there and silently drop the rest of the loaded range. `keepLoadedRange` in
+`src/component/lib.ts` restores the page's end. The test "a frozen page that outgrows the read limit
+splits without skipping a row" fails without it; keep both until an upgraded helper passes that test
+with the repair removed.
 
 ## Releases (Changesets)
 

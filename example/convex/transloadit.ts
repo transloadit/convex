@@ -2,6 +2,7 @@ import { vAssemblyResponse, vAssemblyResultResponse } from '@transloadit/convex'
 import { v } from 'convex/values'
 import { album } from '../lib/album-access'
 import { getGuestName } from '../lib/guest-name'
+import { getStorageConfig } from '../lib/storage'
 import { components, internal } from './_generated/api'
 import { action, internalAction, internalMutation, type QueryCtx, query } from './_generated/server'
 import { requireGuest } from './guests'
@@ -71,6 +72,7 @@ export const refreshAssembly = action({
         authKey: requireEnv('TRANSLOADIT_KEY'),
         authSecret: requireEnv('TRANSLOADIT_SECRET'),
       },
+      storage: getStorageConfig(),
     })
   },
 })
@@ -82,6 +84,7 @@ export const queueWebhook = internalAction({
     ctx.runAction(components.transloadit.lib.queueWebhook, {
       ...args,
       config: { authSecret: requireEnv('TRANSLOADIT_SECRET') },
+      storage: getStorageConfig(),
     }),
 })
 

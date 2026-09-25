@@ -61,6 +61,28 @@ jobs:
       - run: yarn install --immutable
       - run: yarn typecheck
 
+  codegen:
+    name: Component codegen drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          lfs: true
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - run: npm install --global corepack@0.36.0
+      - run: corepack enable
+      - run: yarn install --immutable
+      # Codegen analyses the component on a backend; a throwaway local one needs no credentials.
+      - run: npx convex init
+        env:
+          CONVEX_AGENT_MODE: anonymous
+      - run: yarn codegen
+      - run: |
+          git diff --exit-code -- src/component/_generated
+          test -z "$(git status --porcelain -- src/component/_generated)"
+
   unit:
     name: Unit tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
@@ -203,6 +225,7 @@ jobs:
           R2_HOST: ${{ secrets.R2_HOST }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
       - name: Resolve Vercel preview URL
         if: env.E2E_REMOTE_APP_URL == ''
         run: |
@@ -260,6 +283,7 @@ jobs:
       - pack
       - biome
       - typescript
+      - codegen
       - unit
       - example
       - browser
@@ -288,6 +312,7 @@ jobs:
           R2_HOST: ${{ secrets.R2_HOST }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
+          TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
       - name: Deploy Vercel and wait for the new production build
         run: timeout --foreground 8m node scripts/deploy-vercel.ts
         env:
