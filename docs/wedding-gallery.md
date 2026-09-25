@@ -64,8 +64,8 @@ Status, 25 September 2026:
   server-only `TRANSLOADIT_SMART_CDN_KEY`, `TRANSLOADIT_SMART_CDN_SECRET` and
   `TRANSLOADIT_SMART_CDN_WORKSPACE` (a least-privilege `smart_cdn:sign` key). The gallery renders
   private photos with `@transloadit/viewer/react` `Image` and pages through `media:list` with
-  cursors, freezing loaded pages so live uploads never shift photos between pages. The Viewer
-  packages are vendored prereleases until the alpha is published.
+  cursors, freezing loaded pages so live uploads never shift photos between pages. The example
+  pins the published Viewer alpha (`@transloadit/viewer` 0.0.3, npm tag `alpha`).
 - **Placeholders.** Thumbnails use `placeholder="blur"` with an explicit `objectFit="cover"`: the
   receipt's ThumbHash is painted as an inline background that the loaded opaque pixels cover, with
   no load handler. Transparent photos and the letterboxed (`contain`) viewer get none. A ThumbHash
