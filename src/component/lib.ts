@@ -345,16 +345,16 @@ export const registerStoredAssets = internalMutation({
     let existing = 0
     const now = Date.now()
     for (const entry of args.assets) {
-      const found = await ctx.db
-        .query('storedAssets')
-        .withIndex('by_version', (q) =>
-          q
-            .eq('asset.workspace', entry.asset.workspace)
-            .eq('asset.asset_id', entry.asset.asset_id)
-            .eq('asset.version_id', entry.asset.version_id),
+      const known = await findStoredAssetRows(ctx, entry.asset.workspace, entry.asset.asset_id)
+      // A known version is a replay. Any version of an asset that is being or has been deleted is
+      // never registered again: late notifications must not bring deleted media back.
+      if (
+        known.some(
+          (row) =>
+            row.asset.version_id === entry.asset.version_id ||
+            row.deletionRequestedAt !== undefined,
         )
-        .first()
-      if (found) {
+      ) {
         existing += 1
         continue
       }
@@ -772,7 +772,9 @@ export const listStoredAssetDeletions = query({
     const limit = Math.min(Math.max(args.limit ?? 100, 1), 500)
     const rows = await ctx.db
       .query('storedAssets')
-      .withIndex('by_deletionRequestedAt', (q) => q.gt('deletionRequestedAt', 0))
+      .withIndex('by_pending_deletion', (q) =>
+        q.eq('deletedAt', undefined).gt('deletionRequestedAt', 0),
+      )
       .take(limit)
     const pending = new Map<string, typeof vStoredAssetDeletion.type>()
     for (const row of rows) {
@@ -795,7 +797,10 @@ export const listStoredAssetDeletions = query({
   },
 })
 
-/** Call only after Storage confirmed the deletion; this removes the last local references. */
+/**
+ * Call only after Storage confirmed the deletion. Rows become tombstones: they leave the ledger,
+ * drop their ThumbHash and keep only the identity that stops late notifications resurrecting them.
+ */
 export const completeStoredAssetDeletion = mutation({
   args: vCompleteStoredAssetDeletionArgs,
   returns: v.object({ deleted: v.number() }),
@@ -804,10 +809,15 @@ export const completeStoredAssetDeletion = mutation({
     if (rows.some((row) => row.deletionRequestedAt === undefined)) {
       throw transloaditError('storage', 'Request deletion before completing it')
     }
+    const now = Date.now()
+    let deleted = 0
     for (const row of rows) {
-      await ctx.db.delete(row._id)
+      if (row.deletedAt !== undefined) continue
+      const { thumbhash: _thumbhash, ...asset } = row.asset
+      await ctx.db.patch(row._id, { asset, deletedAt: now, deletionError: undefined })
+      deleted += 1
     }
-    return { deleted: rows.length }
+    return { deleted }
   },
 })
 
@@ -816,7 +826,7 @@ export const failStoredAssetDeletion = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     for (const row of await findStoredAssetRows(ctx, args.workspace, args.assetId)) {
-      if (row.deletionRequestedAt === undefined) continue
+      if (row.deletionRequestedAt === undefined || row.deletedAt !== undefined) continue
       await ctx.db.patch(row._id, {
         deletionAttempts: (row.deletionAttempts ?? 0) + 1,
         deletionError: args.error.slice(0, 500),

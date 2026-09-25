@@ -21,7 +21,8 @@
     "emptyTitle": "De eerste herinnering is van jou.",
     "emptyHint": "Voeg via Foto’s delen je favoriete foto’s en video’s van de dag toe.",
     "unavailable": "De galerij is tijdelijk niet beschikbaar",
-    "unavailableHint": "Uploaden is momenteel niet mogelijk. Probeer het later opnieuw."
+    "unavailableHint": "Uploaden is momenteel niet mogelijk. Probeer het later opnieuw.",
+    "loadMore": "Meer herinneringen tonen"
   },
   "language": { "label": "Taal: {language}" },
   "access": {
@@ -69,7 +70,8 @@
     "next": "Volgende",
     "position": "{current, number} / {total, number}",
     "addedBy": "Toegevoegd door {name}",
-    "unknownContributor": "Toegevoegd door een onbekende gast"
+    "unknownContributor": "Toegevoegd door een onbekende gast",
+    "download": "Origineel downloaden"
   },
   "notifications": {
     "guest": "Een gast",

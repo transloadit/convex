@@ -1,6 +1,16 @@
+import type { StoredAsset } from '@transloadit/convex'
+import type { StorageImageReceipt } from '@transloadit/viewer/react'
 import { type AssemblyResultResponse, getResultOriginalKey } from './transloadit'
 
 export type GalleryResult = AssemblyResultResponse & { uploadedBy?: string }
+
+/** One private Storage photo from `media:list`: a canonical receipt, never a URL. */
+export type StorageGalleryAsset = {
+  id: string
+  asset: StoredAsset
+  uploadedBy: string
+  createdAt: number
+}
 
 const retentionHours = Number.parseFloat(process.env.NEXT_PUBLIC_GALLERY_RETENTION_HOURS ?? '24')
 export const galleryRetentionMs =
@@ -15,11 +25,14 @@ export type GalleryItem = {
   id: string
   assemblyId?: string
   name: string
-  url: string
+  /** Public R2 rendition. Private Storage photos carry a receipt instead. */
+  url?: string
+  receipt?: StorageImageReceipt
   kind: 'image' | 'video'
   posterUrl?: string
   aspectRatio?: number
   uploadedBy?: string
+  createdAt?: number
 }
 
 const getAspectRatio = (raw: unknown) => {
@@ -78,6 +91,7 @@ export const buildGalleryItems = (
         kind: step.kind,
         aspectRatio: getAspectRatio(result.raw),
         uploadedBy: result.uploadedBy,
+        createdAt: result.createdAt,
       },
     })
   }
@@ -88,3 +102,28 @@ export const buildGalleryItems = (
       item.kind === 'video' ? posters.get(item.id.slice(0, -':video'.length))?.url : undefined,
   }))
 }
+
+// Private photos render from their receipt through the authorized media route.
+export const buildStorageGalleryItems = (
+  assets: StorageGalleryAsset[],
+  { now = Date.now(), retentionMs = galleryRetentionMs } = {},
+): GalleryItem[] =>
+  assets.flatMap(({ id, asset, uploadedBy, createdAt }) => {
+    const { width, height } = asset
+    if (now - createdAt >= retentionMs || !width || !height) return []
+    return [
+      {
+        id: `storage:${id}`,
+        name: asset.path.slice(asset.path.lastIndexOf('/') + 1),
+        receipt: { ...asset, width, height },
+        kind: 'image' as const,
+        aspectRatio: width / height,
+        uploadedBy,
+        createdAt,
+      },
+    ]
+  })
+
+/** Newest first across private photos and R2 media; equal times keep their incoming order. */
+export const mergeGalleryItems = (...lists: GalleryItem[][]) =>
+  lists.flat().sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))

@@ -21,7 +21,8 @@
     "emptyTitle": "Перший спогад — твій.",
     "emptyHint": "Натисни «Поділитися фото», щоб додати улюблені фото й відео цього дня.",
     "unavailable": "Галерея тимчасово недоступна",
-    "unavailableHint": "Зараз завантаження недоступне. Спробуй пізніше."
+    "unavailableHint": "Зараз завантаження недоступне. Спробуй пізніше.",
+    "loadMore": "Показати більше спогадів"
   },
   "language": { "label": "Мова: {language}" },
   "access": {
@@ -69,7 +70,8 @@
     "next": "Далі",
     "position": "{current, number} / {total, number}",
     "addedBy": "Додав(-ла): {name}",
-    "unknownContributor": "Невідомо, хто додав цей файл"
+    "unknownContributor": "Невідомо, хто додав цей файл",
+    "download": "Завантажити оригінал"
   },
   "notifications": {
     "guest": "Хтось із гостей",

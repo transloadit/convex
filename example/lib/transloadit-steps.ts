@@ -117,13 +117,17 @@ export const buildWeddingSteps = ({
     ':original': buildUploadStep({ thumbhash: Boolean(storagePrefix) }),
     images_filtered: buildFilterStep(':original', '^image'),
     videos_filtered: buildFilterStep(':original', '^video'),
-    images_resized: buildResizeStep('images_filtered'),
+    // With Storage, photos are private originals rendered through the authorized media route;
+    // public R2 photo renditions would bypass that check. Video keeps its R2 path for now.
+    ...(storagePrefix
+      ? { images_stored: buildStorageStep('images_filtered', storagePrefix) }
+      : {
+          images_resized: buildResizeStep('images_filtered'),
+          images_output: buildStoreStep('images_resized', r2),
+        }),
     videos_thumbs: buildVideoThumbsStep('videos_filtered'),
     videos_encoded: buildVideoStep('videos_filtered'),
-    images_output: buildStoreStep('images_resized', r2),
     videos_thumbs_output: buildStoreStep('videos_thumbs', r2),
     videos_output: buildStoreStep('videos_encoded', r2),
-    // Photos only for now: video keeps its R2 path until private playback is designed.
-    ...(storagePrefix ? { images_stored: buildStorageStep('images_filtered', storagePrefix) } : {}),
   }
 }

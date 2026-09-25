@@ -1,5 +1,6 @@
 'use client'
 
+import { getStorageAssetHref, Image } from '@transloadit/viewer/react'
 import { spring } from 'motion'
 import { AnimateView } from 'motion/react-animate-view'
 import { useTranslations } from 'next-intl'
@@ -13,7 +14,14 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { buildGalleryItems, type GalleryItem, type GalleryResult } from '../lib/gallery'
+import {
+  buildGalleryItems,
+  buildStorageGalleryItems,
+  type GalleryItem,
+  type GalleryResult,
+  mergeGalleryItems,
+  type StorageGalleryAsset,
+} from '../lib/gallery'
 
 const motionPreference = '(prefers-reduced-motion: reduce)'
 const subscribeToMotionPreference = (onChange: () => void) => {
@@ -38,6 +46,17 @@ const Media = ({
   onDimensions?: (width: number, height: number) => void
 }) => {
   const t = useTranslations('viewer')
+  // Private photos: each candidate is a stable same-origin route URL that reauthorizes the guest
+  // and redirects to a short-lived CDN grant, so long-open albums keep loading.
+  if (item.receipt)
+    return (
+      <Image
+        src={item.receipt}
+        alt={item.name || t('moment')}
+        sizes={viewing ? '100vw' : 'auto, (max-width: 640px) 50vw, 33vw'}
+        loading={viewing ? 'eager' : 'lazy'}
+      />
+    )
   return item.kind === 'video' ? (
     // biome-ignore lint/a11y/useMediaCaption: Guest clips do not have caption tracks.
     <video
@@ -195,9 +214,19 @@ const GalleryViewer = ({
             {item.uploadedBy ? t('addedBy', { name: item.uploadedBy }) : t('unknownContributor')}
           </span>
         </div>
-        <button type="button" onClick={onClose} aria-label={t('close')}>
-          {t('closeButton')} <span aria-hidden="true">×</span>
-        </button>
+        <div className="viewer-actions">
+          {item.receipt && (
+            <a
+              className="viewer-download"
+              href={getStorageAssetHref(item.receipt, { action: 'download' })}
+            >
+              {t('download')}
+            </a>
+          )}
+          <button type="button" onClick={onClose} aria-label={t('close')}>
+            {t('closeButton')} <span aria-hidden="true">×</span>
+          </button>
+        </div>
       </div>
       <div className="viewer-media">
         {reducedMotion ? (
@@ -243,9 +272,20 @@ const GalleryViewer = ({
   )
 }
 
-export const Gallery = ({ results }: { results: GalleryResult[] }) => {
+export const Gallery = ({
+  results,
+  storageAssets = [],
+  onLoadMore,
+}: {
+  results: GalleryResult[]
+  storageAssets?: StorageGalleryAsset[]
+  onLoadMore?: () => void
+}) => {
   const t = useTranslations('album')
-  const items = buildGalleryItems(results)
+  const items = mergeGalleryItems(
+    buildStorageGalleryItems(storageAssets),
+    buildGalleryItems(results),
+  )
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // Subscribe to changes too: Motion's hook currently snapshots this preference at mount.
   const reducedMotion = useSyncExternalStore(
@@ -300,6 +340,11 @@ export const Gallery = ({ results }: { results: GalleryResult[] }) => {
           />
         ))}
       </div>
+      {onLoadMore && (
+        <button type="button" className="button gallery-more" onClick={onLoadMore}>
+          {t('loadMore')}
+        </button>
+      )}
       {selected && (
         <GalleryViewer
           item={selected}

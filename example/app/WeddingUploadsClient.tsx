@@ -1,9 +1,9 @@
 'use client'
 
-import { useAction, useConvexAuth, useQuery } from 'convex/react'
-import { makeFunctionReference } from 'convex/server'
+import { useAction, useConvexAuth, usePaginatedQuery, useQuery } from 'convex/react'
+import { makeFunctionReference, type PaginationOptions, type PaginationResult } from 'convex/server'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GalleryResult } from '../lib/gallery'
+import type { GalleryResult, StorageGalleryAsset } from '../lib/gallery'
 import { getGuestName, isValidGuestName } from '../lib/guest-name'
 import {
   ASSEMBLY_STATUS_COMPLETED,
@@ -106,6 +106,12 @@ const listResultsRef = makeFunctionReference<
 const listGalleryRef = makeFunctionReference<'query', { limit?: number }, GalleryResult[]>(
   'wedding:listGallery',
 )
+const listMediaRef = makeFunctionReference<
+  'query',
+  { paginationOpts: PaginationOptions },
+  PaginationResult<StorageGalleryAsset>
+>('media:list')
+const galleryPageSize = 24
 const getAssemblyStatusRef = makeFunctionReference<
   'query',
   { assemblyId: string },
@@ -309,6 +315,8 @@ const CloudWeddingUploads = ({
   const status = useQuery(getAssemblyStatusRef, assemblyId ? { assemblyId } : 'skip')
   const results = useQuery(listResultsRef, assemblyId ? { assemblyId } : 'skip')
   const albumResults = useQuery(listGalleryRef, { limit: 80 })
+  // Private photos: canonical receipts only; the media route authorizes every image request.
+  const media = usePaginatedQuery(listMediaRef, {}, { initialNumItems: galleryPageSize })
   const assemblies = useQuery(listAssembliesRef, {
     status: ASSEMBLY_STATUS_COMPLETED,
     limit: 12,
@@ -413,7 +421,13 @@ const CloudWeddingUploads = ({
       toasts={toasts}
       authState={isLoading ? 'loading' : isAuthenticated ? 'authenticated' : 'guest'}
     >
-      <Gallery results={galleryResults} />
+      <Gallery
+        results={galleryResults}
+        storageAssets={media.results}
+        onLoadMore={
+          media.status === 'CanLoadMore' ? () => media.loadMore(galleryPageSize) : undefined
+        }
+      />
     </WeddingLayout>
   )
 }

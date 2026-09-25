@@ -83,7 +83,7 @@
   },
   "dependencies": {
     "@transloadit/utils": "^4.8.1",
-    "@transloadit/zod": "^4.5.0"
+    "@transloadit/zod": "file:./vendor/sdk-preview/transloadit-zod.tgz"
   },
   "devDependencies": {
     "@auth/core": "^0.41.3",
@@ -97,6 +97,7 @@
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@transloadit/node": "4.14.0",
+    "@transloadit/viewer": "file:./vendor/sdk-preview/transloadit-viewer.tgz",
     "@types/node": "^24.13.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
@@ -121,7 +122,9 @@
     "zod": "^4.6.5"
   },
   "resolutions": {
-    "preact": "10.29.8"
+    "preact": "10.29.8",
+    "@transloadit/utils": "file:./vendor/sdk-preview/transloadit-utils.tgz",
+    "@transloadit/zod": "file:./vendor/sdk-preview/transloadit-zod.tgz"
   },
   "types": "./dist/client/index.d.ts",
   "module": "./dist/client/index.js",

@@ -121,6 +121,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               workspace: string;
             };
           createdAt: number;
+          deletedAt?: number;
           deletionAttempts?: number;
           deletionError?: string;
           deletionRequestedAt?: number;
@@ -271,6 +272,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
                 workspace: string;
               };
             createdAt: number;
+            deletedAt?: number;
             deletionAttempts?: number;
             deletionError?: string;
             deletionRequestedAt?: number;
@@ -309,6 +311,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
               workspace: string;
             };
           createdAt: number;
+          deletedAt?: number;
           deletionAttempts?: number;
           deletionError?: string;
           deletionRequestedAt?: number;

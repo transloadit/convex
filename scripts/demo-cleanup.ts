@@ -1,5 +1,5 @@
-// Demo cleanup across Convex, Transloadit Storage and R2. References are removed only after the
-// backend confirms deletion, so an interrupted run is always safe to repeat.
+// Demo cleanup across Convex, Transloadit Storage and R2. References become tombstones only after
+// the backend confirms deletion, so an interrupted run is always safe to repeat.
 
 export type StorageDeletion = {
   workspace: string

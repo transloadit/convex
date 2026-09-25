@@ -72,7 +72,8 @@ Delivery semantics, as verified against production with synthetic assets:
   assets in Convex first, so the app stops issuing new redirects before any bytes are deleted.
 
 Demo retention: `node scripts/cleanup-demo.ts --older-than=24` expires Storage photos older than a
-day through the ledger (hide, delete, then drop references; failures stay hidden and retryable).
+day through the ledger: hide, delete, then keep a tombstone so a late notification cannot restore
+the photo. Failures stay hidden and retryable.
 Without `--older-than` the script resets the whole demo album, including unregistered uploads under
 this deployment's prefix, R2 objects and Convex results. `--dry-run` reports every backend and changes
 nothing. Cleanup never deletes Storage assets outside the deployment's demo prefix. Scheduling the

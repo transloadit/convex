@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'vitest'
-import { buildGalleryItems } from './gallery'
+import {
+  buildGalleryItems,
+  buildStorageGalleryItems,
+  mergeGalleryItems,
+  type StorageGalleryAsset,
+} from './gallery'
 import type { AssemblyResultResponse } from './transloadit'
 
 const result = (
@@ -43,7 +48,7 @@ describe('gallery media', () => {
       { now: 1000 },
     )
     expect(items).toHaveLength(2)
-    expect(items.every((item) => item.url.endsWith('images_output'))).toBe(true)
+    expect(items.every((item) => item.url?.endsWith('images_output'))).toBe(true)
   })
 
   test.each([false, true])(
@@ -93,5 +98,58 @@ describe('gallery media', () => {
     const results = [result('images_output')]
     expect(buildGalleryItems(results, { now: 2000, retentionMs: 1000 })).toEqual([])
     expect(buildGalleryItems(results, { now: 2000, retentionMs: Infinity })).toHaveLength(1)
+  })
+})
+
+const stored = (
+  id: string,
+  createdAt: number,
+  overrides: Partial<StorageGalleryAsset['asset']> = {},
+) => ({
+  id,
+  uploadedBy: 'Alex',
+  createdAt,
+  asset: {
+    workspace: 'open-test-prod',
+    asset_id: `${id.padEnd(21, 'x')}A`,
+    version_id: `${id.padEnd(21, 'y')}A`,
+    path: `convex-demo/local/wedding-gallery/upload/${id}.jpg`,
+    size: 1,
+    mime: 'image/jpeg',
+    width: 1600,
+    height: 1000,
+    ...overrides,
+  },
+})
+
+describe('private Storage photos', () => {
+  test('render from receipts with their credited guest, never from a URL', () => {
+    const [item] = buildStorageGalleryItems([stored('a', 1000)], { now: 1000 })
+    expect(item).toMatchObject({
+      id: 'storage:a',
+      name: 'a.jpg',
+      kind: 'image',
+      aspectRatio: 1.6,
+      uploadedBy: 'Alex',
+      receipt: { asset_id: stored('a', 0).asset.asset_id, width: 1600, height: 1000 },
+    })
+    expect(item?.url).toBeUndefined()
+  })
+
+  test('apply the retention boundary and skip receipts without image geometry', () => {
+    const assets = [stored('old', 0), stored('clip', 1500, { width: undefined, mime: 'video/mp4' })]
+    expect(buildStorageGalleryItems(assets, { now: 2000, retentionMs: 1000 })).toEqual([])
+  })
+
+  test('merge with R2 media newest first, keeping the incoming order for equal times', () => {
+    const photos = buildStorageGalleryItems([stored('new', 3000), stored('same', 1000)], {
+      now: 3000,
+    })
+    const videos = buildGalleryItems([result('videos_output', { createdAt: 2000 })], { now: 3000 })
+    expect(mergeGalleryItems(photos, videos).map((item) => item.id)).toEqual([
+      'storage:new',
+      videos[0]?.id,
+      'storage:same',
+    ])
   })
 })

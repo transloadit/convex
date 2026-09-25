@@ -112,8 +112,9 @@ const transloadit = new Transloadit(components.transloadit, { storageWorkspace: 
 - `listStoredAssets` pages through an album's visible receipts from local data, newest first;
   `getStoredAsset` returns one exact version. Neither contacts Storage or signs anything.
 - Deletion is a ledger: `requestStoredAssetDeletion` hides every version of expired assets at once,
-  your server deletes them from Storage, then `completeStoredAssetDeletion` removes the references
-  (or `failStoredAssetDeletion` records a retryable error).
+  your server deletes them from Storage, then `completeStoredAssetDeletion` turns the rows into
+  tombstones (or `failStoredAssetDeletion` records a retryable error). A tombstone keeps only what
+  stops a late notification from registering the deleted asset again; its ThumbHash is removed.
 
 Receipts are private metadata, not credentials. Signed Assembly fields are not ownership proof on
 their own: bind receipts to server-created upload records and authorize every read, as the

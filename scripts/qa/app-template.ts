@@ -14,15 +14,33 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
     devDependencies: Record<string, string>
   }
   const dependencies: Record<string, string> = { '@transloadit/convex': `file:${tgzPath}` }
+  // Unpublished SDK snapshots are vendored as relative `file:` tarballs; resolve them from the repo.
+  const fromRepo = (spec: string | undefined) =>
+    spec?.startsWith('file:') && !spec.startsWith('file:/')
+      ? `file:${join(repoRoot, spec.slice('file:'.length))}`
+      : spec
   for (const name of ['@auth/core', '@convex-dev/auth', '@transloadit/zod', 'convex', 'zod']) {
-    dependencies[name] = manifest.dependencies[name] ?? manifest.devDependencies[name]
+    const spec = fromRepo(manifest.dependencies[name] ?? manifest.devDependencies[name])
+    if (spec) dependencies[name] = spec
   }
+  // The packed component declares the same relative specs; npm must use these snapshots there too.
+  const overrides = Object.fromEntries(
+    Object.entries(dependencies).filter(
+      ([name, spec]) => name !== '@transloadit/convex' && spec.startsWith('file:'),
+    ),
+  )
 
   await mkdir(projectDir, { recursive: true })
   await writeFile(
     join(projectDir, 'package.json'),
     JSON.stringify(
-      { name: 'transloadit-convex-qa', private: true, type: 'module', dependencies },
+      {
+        name: 'transloadit-convex-qa',
+        private: true,
+        type: 'module',
+        dependencies,
+        ...(Object.keys(overrides).length > 0 ? { overrides } : {}),
+      },
       null,
       2,
     ),

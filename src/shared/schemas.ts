@@ -68,6 +68,9 @@ export const vStoredAssetFields = {
   deletionRequestedAt: v.optional(v.number()),
   deletionAttempts: v.optional(v.number()),
   deletionError: v.optional(v.string()),
+  // Tombstone: Storage confirmed the deletion. The identity stays so a late notification cannot
+  // register the deleted asset again; its ThumbHash image data is removed.
+  deletedAt: v.optional(v.number()),
 }
 
 export const vStoredAssetRow = v.object({

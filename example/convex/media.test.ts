@@ -137,6 +137,10 @@ describe('private Storage uploads', () => {
       use: 'images_filtered',
       conflict_strategy: 'rename',
     })
+    // Private photos must not also get public R2 renditions; video keeps its R2 path.
+    expect(params.steps.images_output).toBeUndefined()
+    expect(params.steps.images_resized).toBeUndefined()
+    expect(params.steps.videos_output).toMatchObject({ robot: '/cloudflare/store' })
     const uploads = await t.run((ctx) => ctx.db.query('uploads').collect())
     expect(uploads).toEqual([
       expect.objectContaining({ uploadId: params.fields.uploadId, storagePrefix: prefix }),
@@ -153,6 +157,7 @@ describe('private Storage uploads', () => {
     })
     const params = JSON.parse(options.assemblyOptions.params)
     expect(params.steps.images_stored).toBeUndefined()
+    expect(params.steps.images_output).toMatchObject({ robot: '/cloudflare/store' })
     expect(params.steps[':original']).toEqual({ robot: '/upload/handle' })
   })
 })

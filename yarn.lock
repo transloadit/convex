@@ -1595,6 +1595,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@noble/ciphers@npm:^1.3.0":
+  version: 1.3.0
+  resolution: "@noble/ciphers@npm:1.3.0"
+  checksum: 10c0/3ba6da645ce45e2f35e3b2e5c87ceba86b21dfa62b9466ede9edfb397f8116dae284f06652c0cd81d99445a2262b606632e868103d54ecc99fd946ae1af8cd37
+  languageName: node
+  linkType: hard
+
 "@oslojs/asn1@npm:1.0.0":
   version: 1.0.0
   resolution: "@oslojs/asn1@npm:1.0.0"
@@ -2217,7 +2224,8 @@ __metadata:
     "@testing-library/react": "npm:^16.3.3"
     "@transloadit/node": "npm:4.14.0"
     "@transloadit/utils": "npm:^4.8.1"
-    "@transloadit/zod": "npm:^4.5.0"
+    "@transloadit/viewer": "file:./vendor/sdk-preview/transloadit-viewer.tgz"
+    "@transloadit/zod": "file:./vendor/sdk-preview/transloadit-zod.tgz"
     "@types/node": "npm:^24.13.5"
     "@types/react": "npm:^19.3.0"
     "@types/react-dom": "npm:^19.3.0"
@@ -2302,27 +2310,42 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@transloadit/utils@npm:^4.8.1":
-  version: 4.8.1
-  resolution: "@transloadit/utils@npm:4.8.1"
-  checksum: 10c0/5b6ed6c8455348acf2e5933e3d7a2fbc027fe997e96115c8f7c3920b1201029a2d4c7f69f043ac6c2f8deae65075ebd935da357283210e99622b9147aa47f18f
-  languageName: node
-  linkType: hard
-
-"@transloadit/utils@npm:^4.9.0":
+"@transloadit/utils@file:./vendor/sdk-preview/transloadit-utils.tgz::locator=%40transloadit%2Fconvex%40workspace%3A.":
   version: 4.9.0
-  resolution: "@transloadit/utils@npm:4.9.0"
-  checksum: 10c0/f9665da8aa3a46f82108f47165d00f05449a591ae911d8e9b1fa33d3d1cfb8f8e50b96194ec2a78296255fc3f4fc5a4323f9476a2a11d9584e285ecc86c52f68
+  resolution: "@transloadit/utils@file:./vendor/sdk-preview/transloadit-utils.tgz#./vendor/sdk-preview/transloadit-utils.tgz::hash=de3f52&locator=%40transloadit%2Fconvex%40workspace%3A."
+  checksum: 10c0/fdc6ae6a6335ff77414149b4aa8e117f1885279b4a71ef7f2847f7742970ec54a08c89b110cbef55c80b95a3c07bd00faee7c7fd5236285ac58bd4de45b9efea
   languageName: node
   linkType: hard
 
-"@transloadit/zod@npm:^4.5.0":
-  version: 4.5.0
-  resolution: "@transloadit/zod@npm:4.5.0"
+"@transloadit/viewer@file:./vendor/sdk-preview/transloadit-viewer.tgz::locator=%40transloadit%2Fconvex%40workspace%3A.":
+  version: 0.0.2
+  resolution: "@transloadit/viewer@file:./vendor/sdk-preview/transloadit-viewer.tgz#./vendor/sdk-preview/transloadit-viewer.tgz::hash=9865d9&locator=%40transloadit%2Fconvex%40workspace%3A."
   dependencies:
-    type-fest: "npm:^5.6.0"
+    "@noble/ciphers": "npm:^1.3.0"
+    "@transloadit/utils": "npm:^4.9.0"
+    server-only: "npm:^0.0.1"
+    thumbhash: "npm:0.1.1"
+  peerDependencies:
+    next: ">=16.3.3 <17.0.0"
+    react: ">=19.0.0 <20.0.0"
+    react-dom: ">=19.0.0 <20.0.0"
+  peerDependenciesMeta:
+    next:
+      optional: true
+    react:
+      optional: true
+    react-dom:
+      optional: true
+  checksum: 10c0/145256d0d28068fd6ed1591e38aee736aec558a5f94a515fd7c766680548e628b187674d0200aeeaa03039765e2d0811ddc6e41ddd9c9466bb968ec949c91e03
+  languageName: node
+  linkType: hard
+
+"@transloadit/zod@file:./vendor/sdk-preview/transloadit-zod.tgz::locator=%40transloadit%2Fconvex%40workspace%3A.":
+  version: 5.0.0
+  resolution: "@transloadit/zod@file:./vendor/sdk-preview/transloadit-zod.tgz#./vendor/sdk-preview/transloadit-zod.tgz::hash=babc0a&locator=%40transloadit%2Fconvex%40workspace%3A."
+  dependencies:
     zod: "npm:^4.4.3"
-  checksum: 10c0/3d719c66ed003c4cc6534f5e066fd8e9b6a95c381b33c6fea68f5f995f0ea53aabf0f18b48b648bae7eeaa200a0f95c75a1d216accece6b8abdf281c109d48b8
+  checksum: 10c0/52f1e15a73660228926f4cd03e7422449d9bda9d3686ee9d41b9356fed0409a417320256a7303b3b9784337353f500663eb288504df811f4c01610cd468578ef
   languageName: node
   linkType: hard
 
@@ -5084,6 +5107,13 @@ __metadata:
     minizlib: "npm:^3.1.0"
     yallist: "npm:^5.0.0"
   checksum: 10c0/1311f6be85a8157ac4c9147bae43e13923d2a1aae15e4aa1bd5239e4e03d2cf53cfe103dde7f35832fbb4c938b042856bc8e9a0afd29abd05e2d1608788c4fea
+  languageName: node
+  linkType: hard
+
+"thumbhash@npm:0.1.1":
+  version: 0.1.1
+  resolution: "thumbhash@npm:0.1.1"
+  checksum: 10c0/9a23fe65a32b82400a966968a426f7e8a1bee352eedfc24b5342ebfe63f36e2cf8bba5b93adddf220bba625da2ad819ae5fbb6e9d5caa6f215e9ae274249bf87
   languageName: node
   linkType: hard
 

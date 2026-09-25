@@ -27,6 +27,7 @@ const receipt = (seed: string, overrides: Record<string, unknown> = {}) => ({
   md5hash: 'c6c5215913b57ac1bdc0109cb5676cb5',
   width: 1600,
   height: 1067,
+  thumbhash: 'AAAAAAAA',
   original_id: `original-${seed}`,
   ...overrides,
 })
@@ -81,7 +82,7 @@ describe('selectStoredAssets', () => {
 
   test.each([
     ['unfinished', { ok: 'ASSEMBLY_EXECUTING' }, 'not complete'],
-    ['failed', { error: 'ROBOT_FAILED' }, 'failed with ROBOT_FAILED'],
+    ['failed', { error: 'ROBOT_FAILED' }, 'not complete (ROBOT_FAILED)'],
     ['result-less', { results: undefined }, 'did not contain results'],
   ])('rejects an %s Assembly', (_label, extra, message) => {
     expect(() => selectStoredAssets(completed({}, extra) as never, storage)).toThrow(message)
@@ -236,7 +237,14 @@ describe('stored asset reads and deletion ledger', () => {
 
     expect(await t.mutation(api.lib.completeStoredAssetDeletion, first)).toEqual({ deleted: 1 })
     expect(await t.query(api.lib.listStoredAssetDeletions, {})).toHaveLength(1)
-    expect(await t.run((ctx) => ctx.db.query('storedAssets').collect())).toHaveLength(2)
+    // The completed version stays as a tombstone without image data, never as a visible row.
+    const tombstone = (await t.run((ctx) => ctx.db.query('storedAssets').collect())).find(
+      (row) => row.asset.asset_id === first.assetId,
+    )
+    expect(tombstone).toMatchObject({ deletedAt: expect.any(Number), deletionAttempts: 1 })
+    expect(tombstone?.asset.thumbhash).toBeUndefined()
+    expect(tombstone?.deletionError).toBeUndefined()
+    expect(await t.mutation(api.lib.completeStoredAssetDeletion, first)).toEqual({ deleted: 0 })
   })
 
   test('refuses to complete a deletion that was never requested', async () => {
@@ -245,6 +253,35 @@ describe('stored asset reads and deletion ledger', () => {
       t.mutation(api.lib.completeStoredAssetDeletion, { workspace, assetId: damId('assetn0') }),
     ).rejects.toThrow('Request deletion before completing it')
     expect(await t.run((ctx) => ctx.db.query('storedAssets').collect())).toHaveLength(1)
+  })
+
+  test('a delayed replay after a completed deletion does not bring the photo back', async () => {
+    const t = await seed(1)
+    await t.mutation(api.lib.requestStoredAssetDeletion, {
+      album: 'wedding-gallery',
+      createdBefore: Date.now() + 1,
+    })
+    const deletedAsset = { workspace, assetId: damId('assetn0') }
+    await t.mutation(api.lib.completeStoredAssetDeletion, deletedAsset)
+    // The same verified notification arrives late, and so does a newer version of that asset.
+    for (const replay of [receipt('n0'), receipt('n0', { version_id: damId('newerversion') })]) {
+      await t.action(api.lib.handleWebhook, {
+        ...signed(completed({ stored: [replay] })),
+        storage,
+      })
+    }
+    const page = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    expect(page.page).toHaveLength(0)
+    expect(
+      await t.query(api.lib.getStoredAsset, {
+        ...deletedAsset,
+        versionId: damId('versionn0'),
+      }),
+    ).toBeNull()
+    expect(await t.query(api.lib.listStoredAssetDeletions, {})).toEqual([])
   })
 
   test('a replayed notification does not resurrect a hidden version', async () => {
