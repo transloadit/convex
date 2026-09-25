@@ -125,6 +125,24 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('private Storage uploads', () => {
+  test('upload rollback uses R2 for new photos without disabling existing private receipts', async () => {
+    const t = setup()
+    const guest = await admit(t, 'Alex')
+    const { asset } = await upload(guest, t, 'before-rollback')
+    vi.stubEnv('TRANSLOADIT_STORAGE_UPLOADS_DISABLED', '1')
+    const options = await guest.action(api.wedding.createWeddingAssemblyOptions, {
+      guestName: 'Alex',
+      fileCount: 1,
+    })
+    const { steps } = JSON.parse(options.assemblyOptions.params)
+    expect(steps.images_output.robot).toBe('/cloudflare/store')
+    expect(steps.images_stored).toBeUndefined()
+    expect(await guest.query(api.media.forDelivery, request(asset))).toMatchObject({
+      asset_id: asset.asset_id,
+      version_id: asset.version_id,
+    })
+  })
+
   test('signs a server-chosen Storage prefix and records the upload before signing', async () => {
     const t = setup()
     const guest = await admit(t, 'Alex')

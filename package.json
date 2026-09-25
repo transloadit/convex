@@ -98,7 +98,7 @@
     "@playwright/test": "^1.63.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
-    "@transloadit/node": "4.14.0",
+    "@transloadit/node": "5.0.1",
     "@transloadit/viewer": "0.0.3",
     "@types/node": "^24.13.5",
     "@types/react": "^19.3.0",

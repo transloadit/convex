@@ -93,7 +93,11 @@ export const createWeddingAssemblyOptions = action({
     const guestName = args.guestName.trim()
     // Generated here, never by the browser: the upload ID also names its private Storage prefix.
     const uploadId = crypto.randomUUID()
-    const storagePrefix = getStorageWorkspace() ? getUploadStoragePrefix(uploadId) : undefined
+    // Roll back only new uploads; keep the Workspace configured for retained private receipts.
+    const storagePrefix =
+      process.env.TRANSLOADIT_STORAGE_UPLOADS_DISABLED !== '1' && getStorageWorkspace()
+        ? getUploadStoragePrefix(uploadId)
+        : undefined
     await ctx.runMutation(internal.wedding.beginUpload, {
       uploadId,
       userId: guest.userId,

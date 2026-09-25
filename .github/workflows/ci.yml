@@ -225,7 +225,9 @@ jobs:
           R2_HOST: ${{ secrets.R2_HOST }}
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
-          TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
+          # Only an explicitly chosen preview may opt in; the production switch is independent.
+          TRANSLOADIT_WORKSPACE: ${{ (github.head_ref || github.ref_name) == vars.TRANSLOADIT_STORAGE_PREVIEW_BRANCH && vars.TRANSLOADIT_STORAGE_PREVIEW_WORKSPACE || '' }}
+          TRANSLOADIT_STORAGE_UPLOADS_DISABLED: ""
       - name: Resolve Vercel preview URL
         if: env.E2E_REMOTE_APP_URL == ''
         run: |
@@ -267,6 +269,7 @@ jobs:
         env:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
           E2E_REMOTE_CONVEX_URL: ${{ env.E2E_REMOTE_CONVEX_URL }}
+          E2E_EXPECT_STORAGE: ${{ (github.head_ref || github.ref_name) == vars.TRANSLOADIT_STORAGE_PREVIEW_BRANCH && vars.TRANSLOADIT_STORAGE_PREVIEW_WORKSPACE != '' && '1' || '' }}
           PLAYWRIGHT_SKIP_INSTALL: "1"
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
@@ -313,6 +316,7 @@ jobs:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
           R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
+          TRANSLOADIT_STORAGE_UPLOADS_DISABLED: ${{ vars.TRANSLOADIT_STORAGE_UPLOADS_DISABLED }}
       - name: Deploy Vercel and wait for the new production build
         run: timeout --foreground 8m node scripts/deploy-vercel.ts
         env:
@@ -323,6 +327,7 @@ jobs:
         env:
           E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
           E2E_REMOTE_CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
+          E2E_EXPECT_STORAGE: ${{ vars.TRANSLOADIT_WORKSPACE != '' && vars.TRANSLOADIT_STORAGE_UPLOADS_DISABLED != '1' && '1' || '' }}
           PLAYWRIGHT_SKIP_INSTALL: "1"
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { loadEnv } from './env.ts'
+import { getOptionalDeployEnv, loadEnv } from './env.ts'
 import { writeAppFiles } from './qa/app-template.ts'
 import { parseDeployOutput, requireEnv, run } from './qa/run.ts'
 
@@ -137,23 +137,8 @@ const deployCloud = async () => {
     })
     await setEnv('JWKS', jwks)
 
-    const optionalEnv = [
-      'TRANSLOADIT_R2_CREDENTIALS',
-      'R2_BUCKET',
-      'R2_ACCESS_KEY_ID',
-      'R2_SECRET_ACCESS_KEY',
-      'R2_ACCOUNT_ID',
-      'R2_HOST',
-      'R2_PUBLIC_URL',
-      // Enables private Storage originals; unset keeps the R2-only pipeline.
-      'TRANSLOADIT_WORKSPACE',
-    ]
-
-    for (const name of optionalEnv) {
-      const value = process.env[name]
-      if (value) {
-        await setEnv(name, value)
-      }
+    for (const [name, value] of getOptionalDeployEnv()) {
+      await setEnv(name, value)
     }
 
     if (ciOutput) {

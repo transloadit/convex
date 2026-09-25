@@ -108,6 +108,8 @@ export type CleanupOptions = {
   skipStorage?: boolean
   /** Undefined resets the whole demo album; a number expires Storage assets older than this. */
   olderThanMs?: number
+  /** Scheduled expiry must match this exact backend namespace before touching any media. */
+  expectedStoragePrefix?: string
   now?: number
   batchSize?: number
 }
@@ -203,6 +205,9 @@ export const runDemoCleanup = async (
   const prefix = summary.storagePrefix ?? ''
   if (storage && !summary.storagePrefix) {
     throw new Error('This deployment has no unambiguous Storage namespace to clean up')
+  }
+  if (options.expectedStoragePrefix !== undefined && prefix !== options.expectedStoragePrefix) {
+    throw new Error('Storage prefix does not match the expected deployment namespace')
   }
   const storageObjects = storage ? await storage.list(prefix) : []
   const r2Keys = reset && r2 ? await r2.list() : []

@@ -2222,7 +2222,7 @@ __metadata:
     "@playwright/test": "npm:^1.63.0"
     "@testing-library/dom": "npm:^10.4.2"
     "@testing-library/react": "npm:^16.3.3"
-    "@transloadit/node": "npm:4.14.0"
+    "@transloadit/node": "npm:5.0.1"
     "@transloadit/utils": "npm:^4.8.1"
     "@transloadit/viewer": "npm:0.0.3"
     "@transloadit/zod": "npm:5.0.1"
@@ -2257,9 +2257,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@transloadit/node@npm:4.14.0":
-  version: 4.14.0
-  resolution: "@transloadit/node@npm:4.14.0"
+"@transloadit/node@npm:5.0.1":
+  version: 5.0.1
+  resolution: "@transloadit/node@npm:5.0.1"
   dependencies:
     "@transloadit/sev-logger": "npm:^0.1.9"
     "@transloadit/utils": "npm:^4.9.0"
@@ -2280,11 +2280,10 @@ __metadata:
     recursive-readdir: "npm:^2.2.3"
     tus-js-client: "npm:^4.3.1"
     typanion: "npm:^3.14.0"
-    type-fest: "npm:^5.6.0"
     zod: "npm:3.25.76"
   bin:
     transloadit: dist/cli.js
-  checksum: 10c0/91ad8b4f48cd507f6d319656d7f95de993c3b5e9183c4d734b4a4ae81dc7f67b0139883351a6e038c565c4700220fff36bc711a7886eb7d00675919d998447f5
+  checksum: 10c0/f622f5157861e8fc9ea871e059b8f9665509f8bdcef072a24f09830650050e5b9d964c7891c35e259e89a7f3695d0488a7f09288f6d4402365d5984b56188cc7
   languageName: node
   linkType: hard
 
@@ -5118,13 +5117,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tagged-tag@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "tagged-tag@npm:1.0.0"
-  checksum: 10c0/91d25c9ffb86a91f20522cefb2cbec9b64caa1febe27ad0df52f08993ff60888022d771e868e6416cf2e72dab68449d2139e8709ba009b74c6c7ecd4000048d1
-  languageName: node
-  linkType: hard
-
 "tar@npm:^7.5.4":
   version: 7.5.22
   resolution: "tar@npm:7.5.22"
@@ -5245,15 +5237,6 @@ __metadata:
   version: 4.41.0
   resolution: "type-fest@npm:4.41.0"
   checksum: 10c0/f5ca697797ed5e88d33ac8f1fec21921839871f808dc59345c9cf67345bfb958ce41bd821165dbf3ae591cedec2bf6fe8882098dfdd8dc54320b859711a2c1e4
-  languageName: node
-  linkType: hard
-
-"type-fest@npm:^5.6.0":
-  version: 5.9.0
-  resolution: "type-fest@npm:5.9.0"
-  dependencies:
-    tagged-tag: "npm:^1.0.0"
-  checksum: 10c0/9bf14a49454b9b40d9fe85e563a4cf90990bbe7c75958665b72660b4197a905f247be682a7757cac7c8fa60fc0eae32cc8cf51f80a88e15f0a3d4a8ec07eb5b6
   languageName: node
   linkType: hard
 
