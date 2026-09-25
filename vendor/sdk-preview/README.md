@@ -6,6 +6,7 @@ Convex integration before the Viewer alpha and the `@transloadit/zod` Storage ex
 published. Replace these `file:` dependencies with the published versions before merging; the
 package cannot be released while it depends on them.
 
-The Viewer tarball is newer: packed from the pushed SDK head that adds `placeholder="blur"` to
-`@transloadit/viewer/react` `Image` (commit and hash in `manifest.json`). It is not a published
-release either.
+The Viewer and Zod tarballs are newer: packed from the pushed SDK head that adds
+`placeholder="blur"` to `@transloadit/viewer/react` `Image` and keeps Assembly errors when `ok` is
+null in the Storage extractor (commit and hashes in `manifest.json`). They are not published
+releases either.

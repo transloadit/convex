@@ -21,17 +21,20 @@
       "sha256": "fc33ff930b66f020a5ba85d95885cc73e29f953371f0c69668782299c86d757a"
     },
     {
-      "path": "/tmp/viewer-react-3631c94.tgz",
-      "head": "3631c94a5b989cca81455789c9b775cca81ed624",
-      "bytes": 76509,
-      "sha256": "db82f7facb2e110be04f14b871373ad51488b1c58f0d2e935ca3b083e64aa31d",
-      "kind": "clean pushed SDK head with Image placeholder=\"blur\", not a published release",
-      "created_at": "2026-09-25T17:39:00Z"
+      "path": "/tmp/viewer-react-e521c00.tgz",
+      "head": "e521c0010618cbe3379a2af78b97dbc2dbc5044a",
+      "bytes": 76648,
+      "sha256": "ba0c8145b218ad8a66caf7b408d083a388e81011d83965d5f7ea7e7cd889b501",
+      "kind": "clean pushed SDK head: Image placeholder=\"blur\" with a cover background, not a published release",
+      "created_at": "2026-09-25T17:50:00Z"
     },
     {
-      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-final/transloadit-zod.tgz",
-      "bytes": 958208,
-      "sha256": "9b9307693d2424b4c379df350a1983087cc7cba74b0e72b02223e34bcef0a15a"
+      "path": "/tmp/zod-react-e521c00.tgz",
+      "head": "e521c0010618cbe3379a2af78b97dbc2dbc5044a",
+      "bytes": 958212,
+      "sha256": "c02ec434221de9f275a1170a3d96a75913e640c9460829a22397562ee99c399d",
+      "kind": "clean pushed SDK head: Storage extractor keeps Assembly errors when ok is null, not a published release",
+      "created_at": "2026-09-25T17:50:00Z"
     }
   ]
 }
