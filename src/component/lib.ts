@@ -787,8 +787,9 @@ const paginationFor = (album: string | undefined, opts: PaginationOptions) => {
   }
 }
 
-// A loaded page that outgrew the read limit must keep its end: the paginator continues from where
-// it stopped, which would drop the rest of the range from the two halves the client splits it into.
+// A loaded page that outgrew the read limit must keep its end. convex-helpers 0.1.124 answers it
+// with SplitRequired and a continueCursor where it stopped reading, so the client's two halves would
+// drop the rest of the range (see "Storage pagination" in CONTRIBUTING.md and its regression test).
 const keepLoadedRange = <Page extends { pageStatus?: string | null; continueCursor: string }>(
   page: Page,
   endCursor: string | null | undefined,
@@ -1033,8 +1034,9 @@ export const listStoredAssetDeletions = query({
 })
 
 /**
- * Call only after Storage confirmed the deletion. Rows become tombstones: they leave the ledger,
- * drop their ThumbHash and keep only the identity that stops late notifications resurrecting them.
+ * Call only after Storage confirmed the deletion. Rows become tombstones: they leave the ledger and
+ * drop their ThumbHash, but keep the rest of the receipt, its provenance and its album and user
+ * linkage, so a late notification cannot register the version again. Nothing purges tombstones.
  */
 export const completeStoredAssetDeletion = mutation({
   args: vCompleteStoredAssetDeletionArgs,

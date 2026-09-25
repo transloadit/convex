@@ -228,6 +228,20 @@ Codegen analyses the component on a deployment without changing the code it runs
 uses the deployment `convex init` or `convex dev` configured. CI repeats these steps against a
 local backend and fails when the committed output drifts.
 
+## Storage pagination
+
+`listStoredAssets` and `listStoredAssetDeletions` page with convex-helpers' `paginator`. The tested
+helper release is 0.1.124, whose `convex` peer (`^1.43.0`) sets this package's peer floor; raise
+the floor with the helper, not with whatever Convex happens to be installed.
+
+One behavior of that release needs a local repair. When a loaded page (`endCursor` set) has grown
+past `maximumRowsRead`, the paginator answers `SplitRequired` with `continueCursor` at the row where
+it stopped reading, not at `endCursor`. `usePaginatedQuery` would then split the page into halves
+that end there and silently drop the rest of the loaded range. `keepLoadedRange` in
+`src/component/lib.ts` restores the page's end. The test "a frozen page that outgrows the read limit
+splits without skipping a row" fails without it; keep both until an upgraded helper passes that test
+with the repair removed.
+
 ## Releases (Changesets)
 
 Releases are managed via Changesets and GitHub Actions. The package stays on 0.x while we iterate,
