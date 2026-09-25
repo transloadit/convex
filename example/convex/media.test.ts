@@ -133,11 +133,13 @@ describe('private Storage uploads', () => {
       robot: '/upload/handle',
       output_meta: { thumbhash: true },
     })
+    // Stores a photo filter of `:original`; see the watermark scope note on the Step.
     expect(params.steps.images_stored).toMatchObject({
       robot: '/transloadit/store',
       use: 'images_filtered',
       conflict_strategy: 'rename',
     })
+    expect(params.steps.images_filtered).toMatchObject({ robot: '/file/filter', use: ':original' })
     // Private photos must not also get public R2 renditions; video keeps its R2 path.
     expect(params.steps.images_output).toBeUndefined()
     expect(params.steps.images_resized).toBeUndefined()
@@ -169,7 +171,7 @@ describe('gallery and delivery authorization', () => {
     const alex = await admit(t, 'Alex')
     const { asset } = await upload(alex, t, 'a')
     const sam = await admit(t, 'Sam')
-    const page = await sam.query(api.media.list, { limit: 10 })
+    const page = await sam.query(api.media.list, { paginationOpts: { numItems: 10, cursor: null } })
     expect(page.page).toEqual([
       expect.objectContaining({
         uploadedBy: 'Alex',
@@ -190,7 +192,9 @@ describe('gallery and delivery authorization', () => {
     const expired = await admit(t, 'Late', -1)
     expect(await t.query(api.media.forDelivery, request(asset))).toBeNull()
     expect(await expired.query(api.media.forDelivery, request(asset))).toBeNull()
-    await expect(t.query(api.media.list, { limit: 10 })).rejects.toThrow('ACCESS_REQUIRED')
+    await expect(
+      t.query(api.media.list, { paginationOpts: { numItems: 10, cursor: null } }),
+    ).rejects.toThrow('ACCESS_REQUIRED')
     vi.stubEnv('WEDDING_UPLOAD_CODE', 'rotated-invitation')
     expect(await alex.query(api.media.forDelivery, request(asset, 'download'))).toBeNull()
   })
@@ -217,7 +221,9 @@ describe('gallery and delivery authorization', () => {
       await upload(alex, t, 'owner', undefined, { userId: 'someone-else' }),
       await upload(alex, t, 'forged', undefined, { uploadId: 'not-a-server-upload' }),
     ]
-    const page = await alex.query(api.media.list, { limit: 10 })
+    const page = await alex.query(api.media.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })
     expect(page.page).toEqual([])
     for (const { asset } of cases)
       expect(await alex.query(api.media.forDelivery, request(asset, 'original'))).toBeNull()
@@ -247,8 +253,33 @@ describe('gallery and delivery authorization', () => {
       createdBefore: Date.now() + 1,
     })
     expect(await alex.query(api.media.forDelivery, request(asset, 'original'))).toBeNull()
-    const page = await alex.query(api.media.list, { limit: 10 })
+    const page = await alex.query(api.media.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })
     expect(page.page).toEqual([])
+  })
+})
+
+describe('council regressions', () => {
+  test('the R2 gallery query never returns Storage receipts or their ThumbHash', async () => {
+    const t = setup()
+    const alex = await admit(t, 'Alex')
+    await upload(alex, t, 'a', (prefix) => ({ path: `${prefix}a.jpg`, thumbhash: 'AAAAAAAA' }))
+    const legacy = await alex.query(api.wedding.listGallery, {})
+    expect(legacy.map((result: { stepName: string }) => result.stepName)).not.toContain(
+      'images_stored',
+    )
+    expect(JSON.stringify(legacy)).not.toContain('AAAAAAAA')
+  })
+
+  test('private photos keep their Assembly provenance for the gallery', async () => {
+    const t = setup()
+    const alex = await admit(t, 'Alex')
+    await upload(alex, t, 'a')
+    const page = await alex.query(api.media.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    expect(page.page[0]).toMatchObject({ assemblyId: 'assembly-a' })
   })
 })
 

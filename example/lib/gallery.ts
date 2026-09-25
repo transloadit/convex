@@ -1,5 +1,6 @@
 import type { StoredAsset } from '@transloadit/convex'
 import type { StorageImageReceipt } from '@transloadit/viewer/react'
+import { galleryResultSteps } from './gallery-steps'
 import { type AssemblyResultResponse, getResultOriginalKey } from './transloadit'
 
 export type GalleryResult = AssemblyResultResponse & { uploadedBy?: string }
@@ -7,6 +8,7 @@ export type GalleryResult = AssemblyResultResponse & { uploadedBy?: string }
 /** One private Storage photo from `media:list`: a canonical receipt, never a URL. */
 export type StorageGalleryAsset = {
   id: string
+  assemblyId: string
   asset: StoredAsset
   uploadedBy: string
   createdAt: number
@@ -47,14 +49,7 @@ const getAspectRatio = (raw: unknown) => {
   return Number.isFinite(ratio) && ratio > 0 ? ratio : undefined
 }
 
-const steps = {
-  images_resized: { kind: 'image', stored: false },
-  images_output: { kind: 'image', stored: true },
-  videos_encoded: { kind: 'video', stored: false },
-  videos_output: { kind: 'video', stored: true },
-  videos_thumbs: { kind: 'poster', stored: false },
-  videos_thumbs_output: { kind: 'poster', stored: true },
-} as const
+const steps = galleryResultSteps
 
 // Keep Assembly/result shapes at the boundary so the viewer can also consume Storage assets.
 export const buildGalleryItems = (
@@ -108,12 +103,13 @@ export const buildStorageGalleryItems = (
   assets: StorageGalleryAsset[],
   { now = Date.now(), retentionMs = galleryRetentionMs } = {},
 ): GalleryItem[] =>
-  assets.flatMap(({ id, asset, uploadedBy, createdAt }) => {
+  assets.flatMap(({ id, assemblyId, asset, uploadedBy, createdAt }) => {
     const { width, height } = asset
     if (now - createdAt >= retentionMs || !width || !height) return []
     return [
       {
         id: `storage:${id}`,
+        assemblyId,
         name: asset.path.slice(asset.path.lastIndexOf('/') + 1),
         receipt: { ...asset, width, height },
         kind: 'image' as const,

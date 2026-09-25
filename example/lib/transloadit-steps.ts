@@ -50,6 +50,10 @@ const buildUploadStep = ({ thumbhash = false } = {}): RobotUploadHandleInput => 
 
 // Originals go to the upload's server-chosen prefix. Duplicate names within one batch are renamed;
 // the receipt records the final path, so nothing relies on the requested filename.
+// Scope: API2 currently exempts only store Steps that use `:original` directly from the
+// Community-plan upload watermark. This Step stores a filter of `:original` (photos only), so on
+// the Community plan the stored photo carries that watermark until API2 treats filtered uploads as
+// originals too. Paid plans store the uploaded bytes unchanged.
 const buildStorageStep = (use: string, prefix: string): RobotTransloaditStoreInput => {
   const step: RobotTransloaditStoreInput = {
     robot: '/transloadit/store',

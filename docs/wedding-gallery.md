@@ -45,9 +45,12 @@ guest uploads need dynamic receipts and private delivery, not a committed image 
 
 Status, 25 September 2026:
 
-- **Originals.** With `TRANSLOADIT_WORKSPACE` configured, photo originals are stored with
+- **Originals.** With `TRANSLOADIT_WORKSPACE` configured, photos are stored with
   `/transloadit/store` under a server-chosen `convex-demo/<deployment>/<album>/<upload>/` prefix,
-  with a ThumbHash. Without it, uploads keep the R2-only pipeline.
+  with a ThumbHash. Without it, uploads keep the R2-only pipeline. On paid plans the stored bytes
+  are the uploaded originals. On the Community plan, API2 currently exempts only store Steps that
+  use `:original` directly from the upload watermark; this album stores a photo filter of
+  `:original`, so those photos are watermarked until API2 also recognizes filtered originals.
 - **Receipts.** The component registers each verified receipt once, with its Assembly provenance.
   The app binds it to the server-created upload record (album, guest and prefix) before listing it.
 - **Sessions.** Hosted albums use the official Convex Auth Next.js integration: tokens live in
@@ -57,8 +60,15 @@ Status, 25 September 2026:
 - **Authorization.** `media:forDelivery` is the delivery route's single check: a live session with
   the current invitation, this album, the exact retained version and an explicit `preview`,
   `original` or `download` action. It returns the stored receipt or `null`.
-- **Pending.** The `/api/transloadit/media` route and the gallery switch to Viewer's React `Image`
-  wait for the Viewer alpha that ships them. Until then the gallery still shows the R2 renditions.
+- **Delivery.** `/api/transloadit/media` is Viewer's `createStorageRoute` with explicit,
+  server-only `TRANSLOADIT_SMART_CDN_KEY`, `TRANSLOADIT_SMART_CDN_SECRET` and
+  `TRANSLOADIT_SMART_CDN_WORKSPACE` (a least-privilege `smart_cdn:sign` key). The gallery renders
+  private photos with `@transloadit/viewer/react` `Image` and pages through `media:list` with
+  cursors, freezing loaded pages so live uploads never shift photos between pages. The Viewer
+  packages are vendored prereleases until the alpha is published.
+- **Activation order.** Enabling `TRANSLOADIT_WORKSPACE` on Convex replaces public R2 photo
+  renditions with private Storage originals. Configure the delivery key on the Next.js host first;
+  without it the route answers 404 and new photos cannot be shown.
 - **Video** stays on R2. The album is not private end to end while video uses public R2 URLs.
 
 Delivery semantics, as verified against production with synthetic assets:

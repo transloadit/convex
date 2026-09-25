@@ -1,12 +1,12 @@
 import type { AssemblyStatus } from '@transloadit/zod/v3/assemblyStatus'
 import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template'
+import type { IndexRangeBuilder } from 'convex/server'
 import { anyApi, type FunctionReference } from 'convex/server'
-import { v } from 'convex/values'
+import { type ObjectType, v } from 'convex/values'
 import { parseAssemblyStatus } from '../shared/assemblyUrls.ts'
 import { transloaditError } from '../shared/errors.ts'
 import { getResultUrl } from '../shared/resultUtils.ts'
 import {
-  maxStoredAssetListLimit,
   type ProcessWebhookResult,
   type StorageConfig,
   vAssembly,
@@ -37,7 +37,7 @@ import {
   vStoreAssemblyMetadataArgs,
   type vStoredAssetDeletion,
   vStoredAssetDeletionPage,
-  vStoredAssetList,
+  vStoredAssetPage,
   vStoredAssetRow,
   vTransloaditConfig,
   vUpsertAssemblyArgs,
@@ -45,7 +45,7 @@ import {
   vWebhookResponse,
 } from '../shared/schemas.ts'
 import { selectStoredAssets } from '../shared/storedAssets.ts'
-import type { Doc } from './_generated/dataModel.ts'
+import type { DataModel, Doc } from './_generated/dataModel.ts'
 import {
   action,
   internalAction,
@@ -81,6 +81,7 @@ type InternalApi = {
       Record<string, unknown>,
       { inserted: number; existing: number }
     >
+    persistAssemblyStatus: FunctionReference<'mutation', 'internal', Record<string, unknown>, null>
     processWebhook: FunctionReference<
       'action',
       'internal',
@@ -175,14 +176,19 @@ const applyAssemblyStatus = async (
 
   // Verify every Storage receipt before persisting anything: one invalid or cross-Workspace record
   // fails the whole status update. Unfinished or failed Assemblies register no assets.
+  // A completed Assembly whose status omits results simply has no receipts to register.
   const storedAssets =
-    storage && payload.ok === 'ASSEMBLY_COMPLETED' && typeof payload.error !== 'string'
+    storage &&
+    payload.ok === 'ASSEMBLY_COMPLETED' &&
+    typeof payload.error !== 'string' &&
+    payload.results
       ? selectStoredAssets(payload, storage)
       : []
 
   const results = flattenResults(payload.results ?? undefined)
 
-  await ctx.runMutation(internal.lib.upsertAssembly, {
+  // Status, results and receipts are one transaction: a completed status never lacks its receipts.
+  const assembly = {
     assemblyId,
     status: typeof payload.ok === 'string' ? payload.ok : undefined,
     ok: typeof payload.ok === 'string' ? payload.ok : undefined,
@@ -198,21 +204,17 @@ const applyAssemblyStatus = async (
       typeof payload.user_id === 'string'
         ? payload.user_id
         : getFieldString(payload.fields, 'userId'),
-  })
-
-  await ctx.runMutation(internal.lib.replaceResultsForAssembly, {
-    assemblyId,
+  }
+  await ctx.runMutation(internal.lib.persistAssemblyStatus, {
+    assembly,
     results,
-  })
-
-  if (storedAssets.length > 0) {
-    await ctx.runMutation(internal.lib.registerStoredAssets, {
+    storedAssets: {
       album: getFieldString(payload.fields, 'album'),
       userId: getFieldString(payload.fields, 'userId'),
       uploadId: getFieldString(payload.fields, 'uploadId'),
       assets: storedAssets,
-    })
-  }
+    },
+  })
 
   return {
     assemblyId,
@@ -235,141 +237,164 @@ const findStoredAssetRows = (
     )
     .collect()
 
+const writeAssembly = async (ctx: MutationCtx, args: ObjectType<typeof vUpsertAssemblyArgs>) => {
+  // Note: we persist full `raw` + `results` for debugging/fidelity. Large
+  // assemblies can hit Convex document size limits; trim or externalize
+  // payloads if this becomes an issue for your workload.
+  const existing = await ctx.db
+    .query('assemblies')
+    .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
+    .unique()
+
+  const now = Date.now()
+  if (!existing) {
+    return await ctx.db.insert('assemblies', {
+      assemblyId: args.assemblyId,
+      status: args.status,
+      ok: args.ok,
+      message: args.message,
+      templateId: args.templateId,
+      notifyUrl: args.notifyUrl,
+      numExpectedUploadFiles: args.numExpectedUploadFiles,
+      fields: args.fields,
+      uploads: args.uploads,
+      results: args.results,
+      error: args.error,
+      raw: args.raw,
+      userId: args.userId,
+      createdAt: now,
+      updatedAt: now,
+    })
+  }
+
+  await ctx.db.patch(existing._id, {
+    status: args.status ?? existing.status,
+    ok: args.ok ?? existing.ok,
+    message: args.message ?? existing.message,
+    templateId: args.templateId ?? existing.templateId,
+    notifyUrl: args.notifyUrl ?? existing.notifyUrl,
+    numExpectedUploadFiles: args.numExpectedUploadFiles ?? existing.numExpectedUploadFiles,
+    fields: args.fields ?? existing.fields,
+    uploads: args.uploads ?? existing.uploads,
+    results: args.results ?? existing.results,
+    error: args.error ?? existing.error,
+    raw: args.raw ?? existing.raw,
+    userId: args.userId ?? existing.userId,
+    updatedAt: now,
+  })
+
+  return existing._id
+}
+
 export const upsertAssembly = internalMutation({
   args: vUpsertAssemblyArgs,
   returns: v.id('assemblies'),
-  handler: async (ctx, args) => {
-    // Note: we persist full `raw` + `results` for debugging/fidelity. Large
-    // assemblies can hit Convex document size limits; trim or externalize
-    // payloads if this becomes an issue for your workload.
-    const existing = await ctx.db
-      .query('assemblies')
-      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
-      .unique()
-
-    const now = Date.now()
-    if (!existing) {
-      return await ctx.db.insert('assemblies', {
-        assemblyId: args.assemblyId,
-        status: args.status,
-        ok: args.ok,
-        message: args.message,
-        templateId: args.templateId,
-        notifyUrl: args.notifyUrl,
-        numExpectedUploadFiles: args.numExpectedUploadFiles,
-        fields: args.fields,
-        uploads: args.uploads,
-        results: args.results,
-        error: args.error,
-        raw: args.raw,
-        userId: args.userId,
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
-
-    await ctx.db.patch(existing._id, {
-      status: args.status ?? existing.status,
-      ok: args.ok ?? existing.ok,
-      message: args.message ?? existing.message,
-      templateId: args.templateId ?? existing.templateId,
-      notifyUrl: args.notifyUrl ?? existing.notifyUrl,
-      numExpectedUploadFiles: args.numExpectedUploadFiles ?? existing.numExpectedUploadFiles,
-      fields: args.fields ?? existing.fields,
-      uploads: args.uploads ?? existing.uploads,
-      results: args.results ?? existing.results,
-      error: args.error ?? existing.error,
-      raw: args.raw ?? existing.raw,
-      userId: args.userId ?? existing.userId,
-      updatedAt: now,
-    })
-
-    return existing._id
-  },
+  handler: writeAssembly,
 })
+
+const writeResults = async (ctx: MutationCtx, args: ObjectType<typeof vReplaceResultsArgs>) => {
+  // We store raw result payloads for fidelity. For very large assemblies,
+  // consider trimming or externalizing these fields to avoid size limits.
+  // This mutation replaces all results in one transaction; extremely large
+  // result sets may need batching or external storage to avoid Convex limits.
+  const existingResults = await ctx.db
+    .query('results')
+    .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
+    .collect()
+
+  for (const existing of existingResults) {
+    await ctx.db.delete(existing._id)
+  }
+
+  const assembly = await ctx.db
+    .query('assemblies')
+    .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
+    .unique()
+  const album = getFieldString(assembly?.fields, 'album')
+  const userId =
+    typeof assembly?.userId === 'string'
+      ? assembly.userId
+      : getFieldString(assembly?.fields, 'userId')
+
+  const now = Date.now()
+  for (const entry of args.results) {
+    const raw = entry.result as Record<string, unknown>
+    const sslUrl = getResultUrl(entry.result)
+    await ctx.db.insert('results', {
+      assemblyId: args.assemblyId,
+      album,
+      userId,
+      stepName: entry.stepName,
+      resultId: typeof raw.id === 'string' ? raw.id : undefined,
+      sslUrl,
+      name: typeof raw.name === 'string' ? raw.name : undefined,
+      size: typeof raw.size === 'number' ? raw.size : undefined,
+      mime: typeof raw.mime === 'string' ? raw.mime : undefined,
+      raw,
+      createdAt: now,
+    })
+  }
+
+  return null
+}
 
 export const replaceResultsForAssembly = internalMutation({
   args: vReplaceResultsArgs,
   returns: v.null(),
-  handler: async (ctx, args) => {
-    // We store raw result payloads for fidelity. For very large assemblies,
-    // consider trimming or externalizing these fields to avoid size limits.
-    // This mutation replaces all results in one transaction; extremely large
-    // result sets may need batching or external storage to avoid Convex limits.
-    const existingResults = await ctx.db
-      .query('results')
-      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
-      .collect()
-
-    for (const existing of existingResults) {
-      await ctx.db.delete(existing._id)
-    }
-
-    const assembly = await ctx.db
-      .query('assemblies')
-      .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
-      .unique()
-    const album = getFieldString(assembly?.fields, 'album')
-    const userId =
-      typeof assembly?.userId === 'string'
-        ? assembly.userId
-        : getFieldString(assembly?.fields, 'userId')
-
-    const now = Date.now()
-    for (const entry of args.results) {
-      const raw = entry.result as Record<string, unknown>
-      const sslUrl = getResultUrl(entry.result)
-      await ctx.db.insert('results', {
-        assemblyId: args.assemblyId,
-        album,
-        userId,
-        stepName: entry.stepName,
-        resultId: typeof raw.id === 'string' ? raw.id : undefined,
-        sslUrl,
-        name: typeof raw.name === 'string' ? raw.name : undefined,
-        size: typeof raw.size === 'number' ? raw.size : undefined,
-        mime: typeof raw.mime === 'string' ? raw.mime : undefined,
-        raw,
-        createdAt: now,
-      })
-    }
-
-    return null
-  },
+  handler: writeResults,
 })
 
 // Idempotent by Workspace, asset and version: notification retries and refreshes are harmless.
+const writeStoredAssets = async (
+  ctx: MutationCtx,
+  args: ObjectType<typeof vRegisterStoredAssetsArgs>,
+) => {
+  let inserted = 0
+  let existing = 0
+  const now = Date.now()
+  for (const entry of args.assets) {
+    const known = await findStoredAssetRows(ctx, entry.asset.workspace, entry.asset.asset_id)
+    // A known version is a replay. Any version of an asset that is being or has been deleted is
+    // never registered again: late notifications must not bring deleted media back.
+    if (
+      known.some(
+        (row) =>
+          row.asset.version_id === entry.asset.version_id || row.deletionRequestedAt !== undefined,
+      )
+    ) {
+      existing += 1
+      continue
+    }
+    await ctx.db.insert('storedAssets', {
+      ...entry,
+      album: args.album,
+      userId: args.userId,
+      uploadId: args.uploadId,
+      createdAt: now,
+    })
+    inserted += 1
+  }
+  return { inserted, existing }
+}
+
 export const registerStoredAssets = internalMutation({
   args: vRegisterStoredAssetsArgs,
   returns: vRegisterStoredAssetsResponse,
+  handler: writeStoredAssets,
+})
+
+export const persistAssemblyStatus = internalMutation({
+  args: {
+    assembly: v.object(vUpsertAssemblyArgs),
+    results: vReplaceResultsArgs.results,
+    storedAssets: v.object(vRegisterStoredAssetsArgs),
+  },
+  returns: v.null(),
   handler: async (ctx, args) => {
-    let inserted = 0
-    let existing = 0
-    const now = Date.now()
-    for (const entry of args.assets) {
-      const known = await findStoredAssetRows(ctx, entry.asset.workspace, entry.asset.asset_id)
-      // A known version is a replay. Any version of an asset that is being or has been deleted is
-      // never registered again: late notifications must not bring deleted media back.
-      if (
-        known.some(
-          (row) =>
-            row.asset.version_id === entry.asset.version_id ||
-            row.deletionRequestedAt !== undefined,
-        )
-      ) {
-        existing += 1
-        continue
-      }
-      await ctx.db.insert('storedAssets', {
-        ...entry,
-        album: args.album,
-        userId: args.userId,
-        uploadId: args.uploadId,
-        createdAt: now,
-      })
-      inserted += 1
-    }
-    return { inserted, existing }
+    await writeAssembly(ctx, args.assembly)
+    await writeResults(ctx, { assemblyId: args.assembly.assemblyId, results: args.results })
+    await writeStoredAssets(ctx, args.storedAssets)
+    return null
   },
 })
 
@@ -686,23 +711,107 @@ export const storeAssemblyMetadata = mutation({
   },
 })
 
+// Components cannot use the built-in `.paginate()`, so pages are index ranges with explicit cursors.
+// A position is [indexed time, _creationTime]; _creationTime breaks ties between rows registered
+// in the same instant.
+type Position = [number, number]
+type VisibleRange = IndexRangeBuilder<
+  Doc<'storedAssets'>,
+  DataModel['storedAssets']['indexes']['by_album_visibility']
+>
+
+const parsePosition = (cursor: string | null | undefined): Position | null => {
+  if (!cursor) return null
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(cursor)
+  } catch {
+    parsed = undefined
+  }
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length !== 2 ||
+    !parsed.every((value) => typeof value === 'number' && Number.isFinite(value))
+  ) {
+    throw transloaditError('storage', 'Invalid Storage cursor')
+  }
+  return [parsed[0], parsed[1]]
+}
+
+const pageSize = (numItems: number) => Math.min(Math.max(Math.floor(numItems), 1), 500)
+const emptyPosition = JSON.stringify([0, 0])
+
 /**
- * Visible Storage receipts of one album, newest first, from local indexed data only. Components
- * cannot use `.paginate()`, and a growing window keeps reactive galleries free of page gaps.
+ * Visible Storage receipts of one album, newest first, from local indexed data only. `cursor`
+ * starts after a position; an optional inclusive `endCursor` fixes a loaded page's range, so a
+ * reactive client can keep earlier pages stable while new photos arrive at the top.
  */
 export const listStoredAssets = query({
   args: vListStoredAssetsArgs,
-  returns: vStoredAssetList,
+  returns: vStoredAssetPage,
   handler: async (ctx, args) => {
-    const limit = Math.min(Math.max(Math.floor(args.limit ?? 50), 1), maxStoredAssetListLimit)
-    const rows = await ctx.db
-      .query('storedAssets')
-      .withIndex('by_album_visibility', (q) =>
-        q.eq('album', args.album).eq('deletionRequestedAt', undefined),
+    const start = parsePosition(args.paginationOpts.cursor)
+    const end = parsePosition(args.paginationOpts.endCursor)
+    const limit = end ? 1000 : pageSize(args.paginationOpts.numItems)
+    const visible = (q: VisibleRange) =>
+      q.eq('album', args.album).eq('deletionRequestedAt', undefined)
+    const inRange = (row: Doc<'storedAssets'>) =>
+      !end || row.createdAt > end[0] || (row.createdAt === end[0] && row._creationTime >= end[1])
+    const rows: Doc<'storedAssets'>[] = []
+    if (start && (!end || end[0] <= start[0])) {
+      // Rows sharing the cursor's instant but created before it come first.
+      rows.push(
+        ...(await ctx.db
+          .query('storedAssets')
+          .withIndex('by_album_visibility', (q) => {
+            const tied = visible(q).eq('createdAt', start[0])
+            return end && end[0] === start[0]
+              ? tied.gte('_creationTime', end[1]).lt('_creationTime', start[1])
+              : tied.lt('_creationTime', start[1])
+          })
+          .order('desc')
+          .take(limit + 1)),
       )
-      .order('desc')
-      .take(limit + 1)
-    return { page: rows.slice(0, limit), hasMore: rows.length > limit }
+    }
+    if (rows.length <= limit && (!start || !end || end[0] < start[0])) {
+      const older = await ctx.db
+        .query('storedAssets')
+        .withIndex('by_album_visibility', (q) => {
+          const all = visible(q)
+          if (end && start) return all.gte('createdAt', end[0]).lt('createdAt', start[0])
+          if (end) return all.gte('createdAt', end[0])
+          if (start) return all.lt('createdAt', start[0])
+          return all
+        })
+        .order('desc')
+        .take(limit + 1 - rows.length)
+      rows.push(...older.filter(inRange))
+    }
+    const page = rows.slice(0, limit)
+    const last = page[page.length - 1]
+    if (end) {
+      // A fixed page ends at its end cursor; later pages continue from there.
+      const beyond = await ctx.db
+        .query('storedAssets')
+        .withIndex('by_album_visibility', (q) => visible(q).lte('createdAt', end[0]))
+        .order('desc')
+        .filter((q) =>
+          q.or(q.lt(q.field('createdAt'), end[0]), q.lt(q.field('_creationTime'), end[1])),
+        )
+        .first()
+      return {
+        page,
+        isDone: beyond === null,
+        continueCursor: args.paginationOpts.endCursor ?? emptyPosition,
+      }
+    }
+    return {
+      page,
+      isDone: rows.length <= limit,
+      continueCursor: last
+        ? JSON.stringify([last.createdAt, last._creationTime])
+        : (args.paginationOpts.cursor ?? emptyPosition),
+    }
   },
 })
 
@@ -728,11 +837,11 @@ export const listStoredAssetsForAssembly = query({
   args: vListStoredAssetsForAssemblyArgs,
   returns: v.array(vStoredAssetRow),
   handler: async (ctx, args) => {
-    const rows = await ctx.db
+    return ctx.db
       .query('storedAssets')
       .withIndex('by_assemblyId', (q) => q.eq('assemblyId', args.assemblyId))
+      .filter((q) => q.eq(q.field('deletionRequestedAt'), undefined))
       .take(Math.min(Math.max(args.limit ?? 200, 1), 500))
-    return rows.filter((row) => row.deletionRequestedAt === undefined)
   },
 })
 
@@ -772,19 +881,6 @@ export const requestStoredAssetDeletion = mutation({
   },
 })
 
-const parseLedgerCursor = (cursor: string | null): [number, number] | null => {
-  if (!cursor) return null
-  const parsed: unknown = JSON.parse(cursor)
-  if (
-    !Array.isArray(parsed) ||
-    parsed.length !== 2 ||
-    !parsed.every((value) => typeof value === 'number' && Number.isFinite(value))
-  ) {
-    throw transloaditError('storage', 'Invalid deletion ledger cursor')
-  }
-  return [parsed[0], parsed[1]]
-}
-
 /**
  * One album's hidden assets still awaiting Storage deletion, paged by an explicit index cursor
  * (components cannot use `.paginate()`), so entries that keep failing never block later ones.
@@ -793,8 +889,8 @@ export const listStoredAssetDeletions = query({
   args: vListStoredAssetDeletionsArgs,
   returns: vStoredAssetDeletionPage,
   handler: async (ctx, args) => {
-    const numItems = Math.min(Math.max(Math.floor(args.paginationOpts.numItems), 1), 500)
-    const cursor = parseLedgerCursor(args.paginationOpts.cursor)
+    const numItems = pageSize(args.paginationOpts.numItems)
+    const cursor = parsePosition(args.paginationOpts.cursor)
     const ledger = () =>
       ctx.db.query('storedAssets').withIndex('by_album_pending_deletion', (q) => {
         const pending = q.eq('album', args.album).eq('deletedAt', undefined)
@@ -826,7 +922,7 @@ export const listStoredAssetDeletions = query({
       isDone: rows.length <= numItems,
       continueCursor: last
         ? JSON.stringify([last.deletionRequestedAt, last._creationTime])
-        : (args.paginationOpts.cursor ?? ''),
+        : (args.paginationOpts.cursor ?? emptyPosition),
     }
     // Versions of one asset are grouped per page; callers deduplicate assets across pages.
     const pending = new Map<string, typeof vStoredAssetDeletion.type>()

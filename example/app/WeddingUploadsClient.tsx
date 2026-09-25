@@ -5,6 +5,7 @@ import { makeFunctionReference } from 'convex/server'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GalleryResult, StorageGalleryAsset } from '../lib/gallery'
 import { getGuestName, isValidGuestName } from '../lib/guest-name'
+import type { PageResult } from '../lib/stable-pages'
 import {
   ASSEMBLY_STATUS_COMPLETED,
   type AssemblyOptions,
@@ -20,6 +21,7 @@ import { getUploadErrorCode, type UploadErrorCode } from '../lib/upload-errors'
 import { CloudAlbumGate, LocalAlbumGate } from './AlbumGate'
 import { Gallery } from './Gallery'
 import { Providers } from './providers'
+import { useStablePages } from './useStablePages'
 import {
   shouldAdvanceStage,
   type UploadStage,
@@ -108,8 +110,8 @@ const listGalleryRef = makeFunctionReference<'query', { limit?: number }, Galler
 )
 const listMediaRef = makeFunctionReference<
   'query',
-  { limit?: number },
-  { page: StorageGalleryAsset[]; hasMore: boolean }
+  { paginationOpts: { numItems: number; cursor: string | null; endCursor?: string } },
+  PageResult<StorageGalleryAsset>
 >('media:list')
 const galleryPageSize = 24
 const getAssemblyStatusRef = makeFunctionReference<
@@ -316,8 +318,7 @@ const CloudWeddingUploads = ({
   const results = useQuery(listResultsRef, assemblyId ? { assemblyId } : 'skip')
   const albumResults = useQuery(listGalleryRef, { limit: 80 })
   // Private photos: canonical receipts only; the media route authorizes every image request.
-  const [mediaLimit, setMediaLimit] = useState(galleryPageSize)
-  const media = useQuery(listMediaRef, { limit: mediaLimit })
+  const media = useStablePages(listMediaRef, galleryPageSize)
   const assemblies = useQuery(listAssembliesRef, {
     status: ASSEMBLY_STATUS_COMPLETED,
     limit: 12,
@@ -422,13 +423,7 @@ const CloudWeddingUploads = ({
       toasts={toasts}
       authState={isLoading ? 'loading' : isAuthenticated ? 'authenticated' : 'guest'}
     >
-      <Gallery
-        results={galleryResults}
-        storageAssets={media?.page}
-        onLoadMore={
-          media?.hasMore ? () => setMediaLimit((limit) => limit + galleryPageSize) : undefined
-        }
-      />
+      <Gallery results={galleryResults} storageAssets={media.items} onLoadMore={media.loadMore} />
     </WeddingLayout>
   )
 }

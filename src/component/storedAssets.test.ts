@@ -160,6 +160,62 @@ describe('stored asset ingestion', () => {
   })
 })
 
+describe('council regressions', () => {
+  test('a completed Assembly without results still records its status', async () => {
+    const t = convexTest(schema, modules)
+    const result = await t.action(api.lib.handleWebhook, {
+      ...signed(completed({}, { results: undefined })),
+      storage,
+    })
+    expect(result).toMatchObject({ assemblyId: 'assembly-1', storedAssetCount: 0 })
+    expect(await t.query(api.lib.getAssemblyStatus, { assemblyId: 'assembly-1' })).not.toBeNull()
+  })
+
+  test('receipts without an album can still be hidden and deleted', async () => {
+    const t = convexTest(schema, modules)
+    await t.action(api.lib.handleWebhook, {
+      ...signed({ ...completed({ stored: [receipt('loose')] }), fields: {} }),
+      storage,
+    })
+    const request = await t.mutation(api.lib.requestStoredAssetDeletion, {
+      createdBefore: Date.now() + 1,
+    })
+    expect(request.requested).toEqual([{ workspace, assetId: damId('assetloose') }])
+    const pending = await t.query(api.lib.listStoredAssetDeletions, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    expect(pending.page.map((entry) => entry.assetId)).toEqual([damId('assetloose')])
+  })
+
+  test('an Assembly listing skips hidden versions before applying its limit', async () => {
+    const t = await (async () => {
+      const t = convexTest(schema, modules)
+      await t.action(api.lib.handleWebhook, {
+        ...signed(completed({ stored: [receipt('x'), receipt('y'), receipt('z')] })),
+        storage,
+      })
+      return t
+    })()
+    const [first, second] = await t.query(api.lib.listStoredAssetsForAssembly, {
+      assemblyId: 'assembly-1',
+    })
+    for (const row of [first, second]) {
+      await t.mutation(api.lib.requestStoredAssetDeletion, {
+        album: 'wedding-gallery',
+        createdBefore: Date.now() + 1,
+        limit: 1,
+      })
+      expect(row).toBeDefined()
+    }
+    const visible = await t.query(api.lib.listStoredAssetsForAssembly, {
+      assemblyId: 'assembly-1',
+      limit: 1,
+    })
+    expect(visible).toHaveLength(1)
+    expect(visible[0]?.deletionRequestedAt).toBeUndefined()
+  })
+})
+
 describe('stored asset reads and deletion ledger', () => {
   const seed = async (count: number) => {
     const t = convexTest(schema, modules)
@@ -168,8 +224,8 @@ describe('stored asset reads and deletion ledger', () => {
     return t
   }
 
-  test('reads exact visible versions and pages through an album', async () => {
-    const t = await seed(5)
+  test('reads exact visible versions', async () => {
+    const t = await seed(3)
     const exact = await t.query(api.lib.getStoredAsset, {
       workspace,
       assetId: damId('assetn1'),
@@ -182,16 +238,108 @@ describe('stored asset reads and deletion ledger', () => {
     ] as const) {
       expect(await t.query(api.lib.getStoredAsset, { workspace, assetId, versionId })).toBeNull()
     }
-    const first = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 3 })
-    const all = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 5 })
-    expect(first.page).toHaveLength(3)
-    expect(first.hasMore).toBe(true)
-    expect(all.page).toHaveLength(5)
-    expect(all.hasMore).toBe(false)
-    // Newest first, and a larger window extends the same order instead of shifting pages.
-    expect(all.page.slice(0, 3).map((row) => row._id)).toEqual(first.page.map((row) => row._id))
-    const other = await t.query(api.lib.listStoredAssets, { album: 'another-album', limit: 10 })
-    expect(other.page).toHaveLength(0)
+  })
+
+  const pageThrough = async (
+    t: Awaited<ReturnType<typeof seed>>,
+    numItems: number,
+    album = 'wedding-gallery',
+  ) => {
+    const ids: string[] = []
+    let cursor: string | null = null
+    for (let guard = 0; guard < 100; guard += 1) {
+      const result: { page: { _id: string }[]; isDone: boolean; continueCursor: string } =
+        await t.query(api.lib.listStoredAssets, { album, paginationOpts: { numItems, cursor } })
+      ids.push(...result.page.map((row) => row._id))
+      if (result.isDone) return ids
+      cursor = result.continueCursor
+    }
+    throw new Error('pagination did not finish')
+  }
+
+  test('pages newest first across rows registered in the same instant', async () => {
+    // Seven receipts from one notification share createdAt; three more arrive later.
+    const t = await seed(7)
+    await t.action(api.lib.handleWebhook, {
+      ...signed({
+        ...completed({ stored: ['p', 'q', 'r'].map((seedName) => receipt(seedName)) }),
+        assembly_id: 'assembly-2',
+      }),
+      storage,
+    })
+    const all = await t.run((ctx) =>
+      ctx.db
+        .query('storedAssets')
+        .withIndex('by_album_visibility', (q) =>
+          q.eq('album', 'wedding-gallery').eq('deletionRequestedAt', undefined),
+        )
+        .order('desc')
+        .collect(),
+    )
+    for (const numItems of [1, 2, 3, 7, 10, 50]) {
+      expect(await pageThrough(t, numItems)).toEqual(all.map((row) => row._id))
+    }
+    expect(await pageThrough(t, 3, 'another-album')).toEqual([])
+  })
+
+  test('reaches every record beyond a 500-row page without rereading earlier pages', async () => {
+    const t = convexTest(schema, modules)
+    for (let batch = 0; batch < 3; batch += 1) {
+      const results = Array.from({ length: 400 }, (_, index) => receipt(`b${batch}n${index}`))
+      await t.action(api.lib.handleWebhook, {
+        ...signed({ ...completed({ stored: results }), assembly_id: `assembly-${batch}` }),
+        storage,
+      })
+    }
+    const ids = await pageThrough(t, 500)
+    expect(ids).toHaveLength(1200)
+    expect(new Set(ids).size).toBe(1200)
+  })
+
+  test('an end cursor keeps a loaded page stable while newer photos arrive', async () => {
+    const t = await seed(5)
+    const first = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 2, cursor: null },
+    })
+    const second = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 2, cursor: first.continueCursor },
+    })
+    await t.action(api.lib.handleWebhook, {
+      ...signed({ ...completed({ stored: [receipt('newest')] }), assembly_id: 'assembly-late' }),
+      storage,
+    })
+    const grown = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 2, cursor: null, endCursor: first.continueCursor },
+    })
+    const unchanged = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: {
+        numItems: 2,
+        cursor: first.continueCursor,
+        endCursor: second.continueCursor,
+      },
+    })
+    expect(grown.page.map((row) => row.asset.asset_id)).toEqual([
+      damId('assetnewest'),
+      ...first.page.map((row) => row.asset.asset_id),
+    ])
+    expect(grown.continueCursor).toBe(first.continueCursor)
+    expect(unchanged.page.map((row) => row._id)).toEqual(second.page.map((row) => row._id))
+    expect(unchanged.isDone).toBe(false)
+  })
+
+  test('rejects malformed cursors', async () => {
+    const t = await seed(1)
+    for (const cursor of ['not json', '[1]', '["a", 2]', '{}'])
+      await expect(
+        t.query(api.lib.listStoredAssets, {
+          album: 'wedding-gallery',
+          paginationOpts: { numItems: 2, cursor },
+        }),
+      ).rejects.toThrow('Invalid Storage cursor')
   })
 
   test('hides requested deletions at once and keeps references until Storage confirms', async () => {
@@ -205,7 +353,10 @@ describe('stored asset reads and deletion ledger', () => {
     expect(request.hasMore).toBe(true)
     const [first] = request.requested
     if (!first) throw new Error('expected a requested deletion')
-    const visible = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 10 })
+    const visible = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 10, cursor: null },
+    })
     expect(visible.page).toHaveLength(1)
     const hidden = await t.run((ctx) => ctx.db.query('storedAssets').collect())
     const hiddenRow = hidden.find((row) => row.asset.asset_id === first.assetId)
@@ -296,7 +447,10 @@ describe('stored asset reads and deletion ledger', () => {
         storage,
       })
     }
-    const page = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 10 })
+    const page = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 10, cursor: null },
+    })
     expect(page.page).toHaveLength(0)
     expect(
       await t.query(api.lib.getStoredAsset, {
@@ -321,7 +475,10 @@ describe('stored asset reads and deletion ledger', () => {
       ...signed(completed({ stored: [receipt('n0')] })),
       storage,
     })
-    const page = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 10 })
+    const page = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 10, cursor: null },
+    })
     expect(page.page).toHaveLength(0)
   })
 })

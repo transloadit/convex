@@ -6,6 +6,7 @@ import {
 import { ConvexError, v } from 'convex/values'
 import { album } from '../lib/album-access'
 import { parseDisplayParams } from '../lib/assembly-params'
+import { isGalleryResultStep } from '../lib/gallery-steps'
 import { getGuestName, isValidGuestName } from '../lib/guest-name'
 import { getStorageWorkspace, getUploadStoragePrefix } from '../lib/storage'
 import { buildWeddingSteps } from '../lib/transloadit-steps'
@@ -143,13 +144,14 @@ export const listGallery = query({
   ),
   handler: async (ctx, args) => {
     await requireGuest(ctx)
-    const results: AssemblyResultResponse[] = await ctx.runQuery(
-      components.transloadit.lib.listAlbumResults,
-      {
+    // Only the R2 renditions the gallery renders: Storage receipts (with their ThumbHash) are
+    // served by media:list after binding checks, never by this legacy result path.
+    const results: AssemblyResultResponse[] = (
+      await ctx.runQuery(components.transloadit.lib.listAlbumResults, {
         album,
         limit: args.limit ?? 80,
-      },
-    )
+      })
+    ).filter((result: AssemblyResultResponse) => isGalleryResultStep(result.stepName))
     const names = new Map(
       await Promise.all(
         [...new Set(results.map((result) => result.assemblyId))].map(async (assemblyId) => {

@@ -92,7 +92,7 @@ export type {
 export {
   vStoredAsset,
   vStoredAssetResponse,
-  vStoredAssetResponseList,
+  vStoredAssetResponsePage,
 } from '../shared/schemas.ts'
 export type { StoredAssemblyAsset, StoredAsset } from '../shared/storedAssets.ts'
 export { selectStoredAssets } from '../shared/storedAssets.ts'
@@ -232,7 +232,10 @@ export class TransloaditClient {
    * Visible Storage receipts of one album from local indexed data. Call it only from an app query
    * that has authorized the viewer; receipts are private metadata, not delivery credentials.
    */
-  async listStoredAssets(ctx: RunQueryCtx, args: { album: string; limit?: number }) {
+  async listStoredAssets(
+    ctx: RunQueryCtx,
+    args: { album: string; paginationOpts: PaginationOptions },
+  ) {
     return ctx.runQuery(this.component.lib.listStoredAssets, args)
   }
 

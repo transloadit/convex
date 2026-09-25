@@ -6,7 +6,8 @@ import { internalMutation, internalQuery } from './_generated/server'
 
 // Admin-only wrappers for scripts/cleanup-demo.ts. Guests can never hide or delete album media.
 
-const summaryLimit = 500
+const summaryPageSize = 500
+const summaryPageLimit = 20
 
 export const summary = internalQuery({
   args: { album: v.string(), createdBefore: v.number() },
@@ -18,20 +19,30 @@ export const summary = internalQuery({
     storagePrefix: v.string(),
   }),
   handler: async (ctx, args) => {
-    // A dry run reads the newest window only and says so: expired receipts are the oldest ones.
-    const visible = await ctx.runQuery(components.transloadit.lib.listStoredAssets, {
-      album: args.album,
-      limit: summaryLimit,
-    })
+    let visibleStoredAssets = 0
+    let expiredStoredAssets = 0
+    let cursor: string | null = null
+    let isDone = false
+    // Expired receipts are the oldest ones, so count across pages rather than the newest page.
+    for (let page = 0; page < summaryPageLimit && !isDone; page += 1) {
+      const result = await ctx.runQuery(components.transloadit.lib.listStoredAssets, {
+        album: args.album,
+        paginationOpts: { numItems: summaryPageSize, cursor },
+      })
+      visibleStoredAssets += result.page.length
+      expiredStoredAssets += result.page.filter((row) => row.createdAt < args.createdBefore).length
+      isDone = result.isDone
+      cursor = result.continueCursor
+    }
     const results = await ctx.runQuery(components.transloadit.lib.listAlbumResults, {
       album: args.album,
-      limit: summaryLimit,
+      limit: summaryPageSize,
     })
     return {
-      visibleStoredAssets: visible.page.length,
-      expiredStoredAssets: visible.page.filter((row) => row.createdAt < args.createdBefore).length,
+      visibleStoredAssets,
+      expiredStoredAssets,
       results: results.length,
-      truncated: visible.hasMore || results.length === summaryLimit,
+      truncated: !isDone || results.length === summaryPageSize,
       // Computed where upload paths are chosen, so custom client URLs cannot change the prefix.
       storagePrefix: getAlbumStoragePrefix(args.album),
     }

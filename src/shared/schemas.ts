@@ -89,14 +89,16 @@ export const vStoredAssetResponse = v.object({
 
 export type StoredAssetResponse = Infer<typeof vStoredAssetResponse>
 
-// A bounded, newest-first window. Growing `limit` keeps a reactive gallery free of page gaps.
-export const vStoredAssetList = v.object({ page: v.array(vStoredAssetRow), hasMore: v.boolean() })
-export const vStoredAssetResponseList = v.object({
-  page: v.array(vStoredAssetResponse),
-  hasMore: v.boolean(),
+export const vStoredAssetPage = v.object({
+  page: v.array(vStoredAssetRow),
+  isDone: v.boolean(),
+  continueCursor: v.string(),
 })
-
-export const maxStoredAssetListLimit = 500
+export const vStoredAssetResponsePage = v.object({
+  page: v.array(vStoredAssetResponse),
+  isDone: v.boolean(),
+  continueCursor: v.string(),
+})
 
 /** Enables Storage receipt ingestion; results from any other Workspace fail verification. */
 export const vStorageConfig = v.object({ workspace: v.string() })
@@ -105,7 +107,7 @@ export type StorageConfig = Infer<typeof vStorageConfig>
 
 export const vListStoredAssetsArgs = {
   album: v.string(),
-  limit: v.optional(v.number()),
+  paginationOpts: paginationOptsValidator,
 }
 
 export const vGetStoredAssetArgs = {
@@ -139,8 +141,9 @@ export const vRegisterStoredAssetsResponse = v.object({
   existing: v.number(),
 })
 
+// Receipts without an album are addressed by an omitted album.
 export const vRequestStoredAssetDeletionArgs = {
-  album: v.string(),
+  album: v.optional(v.string()),
   createdBefore: v.number(),
   limit: v.optional(v.number()),
 }
@@ -155,7 +158,7 @@ export const vRequestStoredAssetDeletionResponse = v.object({
 })
 
 export const vListStoredAssetDeletionsArgs = {
-  album: v.string(),
+  album: v.optional(v.string()),
   paginationOpts: paginationOptsValidator,
 }
 

@@ -224,7 +224,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "query",
         "internal",
         {
-          album: string;
+          album?: string;
           paginationOpts: {
             cursor: string | null;
             endCursor?: string | null;
@@ -252,9 +252,20 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listStoredAssets: FunctionReference<
         "query",
         "internal",
-        { album: string; limit?: number },
         {
-          hasMore: boolean;
+          album: string;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
           page: Array<{
             _creationTime: number;
             _id: string;
@@ -368,7 +379,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       requestStoredAssetDeletion: FunctionReference<
         "mutation",
         "internal",
-        { album: string; createdBefore: number; limit?: number },
+        { album?: string; createdBefore: number; limit?: number },
         {
           hasMore: boolean;
           requested: Array<{ assetId: string; workspace: string }>;

@@ -107,6 +107,7 @@ const stored = (
   overrides: Partial<StorageGalleryAsset['asset']> = {},
 ) => ({
   id,
+  assemblyId: `assembly-${id}`,
   uploadedBy: 'Alex',
   createdAt,
   asset: {
