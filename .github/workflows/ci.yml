@@ -283,6 +283,7 @@ jobs:
       - pack
       - biome
       - typescript
+      - codegen
       - unit
       - example
       - browser
