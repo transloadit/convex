@@ -73,3 +73,26 @@ test('opening and closing the viewer keeps every thumbnail on the same candidate
   fireEvent(container.querySelector('.gallery-viewer') as Element, new Event('cancel'))
   expect(thumbnails(container)).toEqual(before)
 })
+
+test('a page emptied by filtering still offers the next page instead of the empty album', () => {
+  const onLoadMore = vi.fn()
+  // No listable photos on this page (binding or geometry filtered every row), but more may follow.
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery results={[]} storageAssets={[photo(1, 0, 0)]} onLoadMore={onLoadMore} />
+    </AlbumIntlProvider>,
+  )
+  expect(screen.queryByTestId('gallery-empty')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Show more memories' }))
+  expect(onLoadMore).toHaveBeenCalledTimes(1)
+})
+
+test('an album without photos or later pages shows the empty state', () => {
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery results={[]} storageAssets={[]} />
+    </AlbumIntlProvider>,
+  )
+  expect(screen.getByTestId('gallery-empty')).not.toBeNull()
+  expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
+})

@@ -320,8 +320,21 @@ export const Gallery = ({
     </p>
   ) : null
 
+  const more = onLoadMore ? (
+    <button type="button" className="button gallery-more" onClick={onLoadMore}>
+      {t('loadMore')}
+    </button>
+  ) : null
+
   if (!items.length) {
-    if (failure) return failure
+    // Filtering can empty a page while later pages still hold photos: keep the way forward.
+    if (failure || more)
+      return (
+        <>
+          {failure}
+          {more}
+        </>
+      )
     return (
       <div className="gallery-empty" data-testid="gallery-empty">
         <span className="empty-flower" aria-hidden="true">
@@ -351,11 +364,7 @@ export const Gallery = ({
           />
         ))}
       </div>
-      {onLoadMore && (
-        <button type="button" className="button gallery-more" onClick={onLoadMore}>
-          {t('loadMore')}
-        </button>
-      )}
+      {more}
       {selected && (
         <GalleryViewer
           item={selected}
