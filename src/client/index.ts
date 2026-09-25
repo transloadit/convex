@@ -287,7 +287,7 @@ export class TransloaditClient {
 
   async listStoredAssetDeletions(
     ctx: RunQueryCtx,
-    args: { album: string; paginationOpts: PaginationOptions },
+    args: { album?: string; paginationOpts: PaginationOptions },
   ) {
     return ctx.runQuery(this.component.lib.listStoredAssetDeletions, args)
   }
