@@ -27,6 +27,7 @@ import {
   vWebhookActionArgs,
   vWebhookResponse,
 } from '../shared/schemas.ts'
+import type { StoredAsset } from '../shared/storedAssets.ts'
 import type { RunActionCtx, RunMutationCtx, RunQueryCtx } from './types.ts'
 
 export {
@@ -266,6 +267,22 @@ export class TransloaditClient {
     args: { album?: string; createdBefore: number; limit?: number; cursor?: string },
   ) {
     return ctx.runMutation(this.component.lib.requestStoredAssetDeletion, args)
+  }
+
+  /** Dry run of `requestStoredAssetDeletion`, with the same newest-version rule. */
+  async previewStoredAssetExpiry(
+    ctx: RunQueryCtx,
+    args: { album?: string; createdBefore: number; limit?: number; cursor?: string },
+  ) {
+    return ctx.runQuery(this.component.lib.previewStoredAssetExpiry, args)
+  }
+
+  /** Records unregistered Storage objects as hidden before deleting them. */
+  async adoptStoredAssetsForDeletion(
+    ctx: RunMutationCtx,
+    args: { album?: string; assets: StoredAsset[] },
+  ) {
+    return ctx.runMutation(this.component.lib.adoptStoredAssetsForDeletion, args)
   }
 
   async listStoredAssetDeletions(

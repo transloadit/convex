@@ -66,6 +66,25 @@ const fakeConvex = (rows: Row[]) => {
       const row = rows.find((candidate) => candidate.assetId === assetId)
       if (row) row.attempts += 1
     },
+    adoptForDeletion: async (assets) => {
+      calls.push(`adopt:${assets.map((asset) => asset.asset_id).join(',')}`)
+      let adopted = 0
+      for (const asset of assets) {
+        const known = rows.filter((row) => row.assetId === asset.asset_id)
+        for (const row of known) row.hidden = true
+        if (known.length === 0) {
+          rows.push({
+            assetId: asset.asset_id,
+            path: asset.path,
+            createdAt: 0,
+            hidden: true,
+            attempts: 0,
+          })
+          adopted += 1
+        }
+      }
+      return { adopted, alreadyKnown: assets.length - adopted }
+    },
     purgeAlbum: async () => {
       calls.push('purge')
       return { deletedResults: 3, deletedAssemblies: 1 }
@@ -86,8 +105,12 @@ const fakeStorage = (
       objects
         .filter(exists)
         .map((assetId) => ({
+          workspace: 'w',
           asset_id: assetId,
+          version_id: `${assetId}-v1`,
           path: moved.get(assetId) ?? `${prefix}${assetId}.jpg`,
+          size: 1,
+          mime: 'image/jpeg',
         }))
         .filter((object) => object.path.startsWith(listPrefix)),
     currentPath: async (assetId) =>
@@ -234,7 +257,7 @@ describe('demo cleanup', () => {
     expect(rows).toEqual([expect.objectContaining({ hidden: false })])
   })
 
-  test('a reset clears Storage orphans and R2 before purging Convex results', async () => {
+  test('a reset records orphans in the ledger, then clears Storage and R2 before results', async () => {
     const rows = [row('registered', 1)]
     const { convex, calls } = fakeConvex(rows)
     const { storage, deleted } = fakeStorage(['registered', 'orphan'])
@@ -249,20 +272,22 @@ describe('demo cleanup', () => {
     const report = await runDemoCleanup({ convex, storage, r2 }, { dryRun: false, now })
     expect(report).toMatchObject({
       mode: 'reset',
-      storage: { hidden: 1, deleted: 1, orphans: 1 },
+      storage: { hidden: 1, deleted: 2, orphans: 1 },
       r2: { deleted: 1 },
       convex: { deletedResults: 3 },
     })
     expect(deleted.sort()).toEqual(['orphan', 'registered'])
+    // The orphan is adopted before any byte is deleted, so a late notification cannot restore it.
+    expect(calls.indexOf('adopt:registered,orphan')).toBeLessThan(calls.indexOf('complete:orphan'))
+    expect(rows).toEqual([])
     expect(calls.indexOf('r2')).toBeLessThan(calls.indexOf('purge'))
   })
 
   test('a reset keeps Convex results while Storage deletions still need a retry', async () => {
     const { convex, calls } = fakeConvex([row('flaky', 1)])
     const { storage } = fakeStorage(['flaky'], { failing: new Set(['flaky']) })
-    await expect(runDemoCleanup({ convex, storage }, { dryRun: false, now })).rejects.toThrow(
-      'HTTP 503',
-    )
+    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now })
+    expect(report).toMatchObject({ retryNeeded: true, storage: { failed: 1 } })
     expect(calls).not.toContain('purge')
   })
 })

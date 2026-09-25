@@ -2,8 +2,14 @@
 
 import { useQueries } from 'convex/react'
 import type { FunctionReference } from 'convex/server'
-import { useMemo, useRef, useState } from 'react'
-import { freezeAndExtend, type PageRequest, type PageResult, pageArgs } from '../lib/stable-pages'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  freezeAndExtend,
+  type PageRequest,
+  type PageResult,
+  pageArgs,
+  splitPage,
+} from '../lib/stable-pages'
 
 /**
  * Reactive cursor pagination for component queries, which cannot use Convex's journaled
@@ -40,6 +46,16 @@ export const useStablePages = <T>(
     }
     return loaded.current.get(index)
   })
+  // A frozen page that outgrew the server limit is split, so no photo is skipped.
+  const splitAt = current.findIndex(
+    (result, index) => result?.splitCursor && pages[index]?.endCursor,
+  )
+  const splitCursor = splitAt >= 0 ? current[splitAt]?.splitCursor : undefined
+  useEffect(() => {
+    if (splitAt < 0 || !splitCursor) return
+    loaded.current.clear()
+    setPages((previous) => splitPage(previous, splitAt, splitCursor))
+  }, [splitAt, splitCursor])
   const last = current[current.length - 1]
   return {
     items: current.flatMap((result) => result?.page ?? []),

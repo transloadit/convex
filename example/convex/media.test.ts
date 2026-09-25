@@ -260,6 +260,31 @@ describe('gallery and delivery authorization', () => {
   })
 })
 
+describe('cleanup summary follows the expiry rules', () => {
+  test('an asset with a fresh version is not counted as expired', async () => {
+    const t = setup()
+    const alex = await admit(t, 'Alex')
+    const { asset } = await upload(alex, t, 'a')
+    const cutoff = Date.now() + 1
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    await t.action(components.transloadit.lib.handleWebhook, {
+      verifySignature: false,
+      storage: { workspace },
+      payload: {
+        assembly_id: 'assembly-overwrite',
+        ok: 'ASSEMBLY_COMPLETED',
+        fields: {},
+        results: { images_stored: [{ ...asset, id: 'v2', version_id: damId('fresh') }] },
+      },
+    })
+    const summary = await t.query(api.storageCleanup.summary, {
+      album: 'wedding-gallery',
+      createdBefore: cutoff,
+    })
+    expect(summary.expiredStoredAssets).toBe(0)
+  })
+})
+
 describe('council regressions', () => {
   test('the R2 gallery query never returns Storage receipts or their ThumbHash', async () => {
     const t = setup()

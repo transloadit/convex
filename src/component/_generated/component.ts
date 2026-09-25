@@ -24,6 +24,29 @@ import type { FunctionReference } from "convex/server";
 export type ComponentApi<Name extends string | undefined = string | undefined> =
   {
     lib: {
+      adoptStoredAssetsForDeletion: FunctionReference<
+        "mutation",
+        "internal",
+        {
+          album?: string;
+          assets: Array<{
+            asset_id: string;
+            has_alpha?: boolean;
+            height?: number;
+            md5hash?: string;
+            mime: string | null;
+            path: string;
+            sha256?: string;
+            size: number;
+            thumbhash?: string;
+            version_id: string;
+            width?: number;
+            workspace: string;
+          }>;
+        },
+        { adopted: number; alreadyKnown: number },
+        Name
+      >;
       completeStoredAssetDeletion: FunctionReference<
         "mutation",
         "internal",
@@ -296,8 +319,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
             uploadId?: string;
             userId?: string;
           }>;
-          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
-          splitCursor?: string | null;
+          splitCursor?: string;
         },
         Name
       >;
@@ -335,6 +357,22 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           uploadId?: string;
           userId?: string;
         }>,
+        Name
+      >;
+      previewStoredAssetExpiry: FunctionReference<
+        "query",
+        "internal",
+        {
+          album?: string;
+          createdBefore: number;
+          cursor?: string;
+          limit?: number;
+        },
+        {
+          continueCursor: string;
+          hasMore: boolean;
+          requested: Array<{ assetId: string; workspace: string }>;
+        },
         Name
       >;
       purgeAlbum: FunctionReference<

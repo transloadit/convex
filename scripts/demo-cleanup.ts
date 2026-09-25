@@ -2,6 +2,22 @@
 // tombstone) solely after Storage confirms the deletion, so an interrupted run is always safe to
 // repeat and nothing outside this deployment's demo prefix is ever deleted or forgotten.
 
+/** A canonical Storage receipt as the native catalog lists it. */
+export type StorageObject = {
+  workspace: string
+  asset_id: string
+  version_id: string
+  path: string
+  size: number
+  mime: string | null
+  md5hash?: string
+  sha256?: string
+  width?: number
+  height?: number
+  thumbhash?: string
+  has_alpha?: boolean
+}
+
 export type StorageDeletion = {
   workspace: string
   assetId: string
@@ -39,12 +55,14 @@ export type CleanupConvex = {
     assetId: string
     error: string
   }) => Promise<unknown>
+  /** Records unregistered objects as hidden ledger entries before anything deletes them. */
+  adoptForDeletion: (assets: StorageObject[]) => Promise<{ adopted: number; alreadyKnown: number }>
   purgeAlbum: () => Promise<{ deletedResults: number; deletedAssemblies: number }>
 }
 
 export type CleanupStorage = {
   workspace: string
-  list: (prefix: string) => Promise<{ asset_id: string; path: string }[]>
+  list: (prefix: string) => Promise<StorageObject[]>
   /** The asset's current path, or null when Storage no longer has it. */
   currentPath: (assetId: string) => Promise<string | null>
   delete: (assetId: string) => Promise<void>
@@ -178,22 +196,19 @@ export const runDemoCleanup = async (
           if (!batch.hasMore) break
           cursor = batch.continueCursor
         }
-        // 2. Delete Storage assets, then record it. Failures stay hidden and retryable.
-        const ledger = await drainStorageLedger(convex, storage, prefix, batchSize)
-        // 3. A reset also removes unregistered uploads under this prefix, such as failed
-        // Assemblies. It is an operator tool for an idle demo: an upload that completes during
-        // the sweep can lose its bytes, so pause uploads (or accept that) before resetting.
+        // 2. A reset also removes unregistered uploads under this prefix, such as failed
+        // Assemblies. They enter the ledger first, so a late notification finds a tombstone.
+        // It is an operator tool for an idle demo: pause uploads before resetting.
         let orphans = 0
         if (reset) {
-          for (const object of await storage.list(prefix)) {
-            try {
-              await storage.delete(object.asset_id)
-              orphans += 1
-            } catch (error) {
-              if (!isNotFound(error)) throw error
-            }
+          const objects = await storage.list(prefix)
+          for (let index = 0; index < objects.length; index += batchSize) {
+            orphans += (await convex.adoptForDeletion(objects.slice(index, index + batchSize)))
+              .adopted
           }
         }
+        // 3. Delete Storage assets, then record it. Failures stay hidden and retryable.
+        const ledger = await drainStorageLedger(convex, storage, prefix, batchSize)
         return { hidden, ...ledger, orphans }
       })()
     : undefined

@@ -9,6 +9,7 @@ import { getResultUrl } from '../shared/resultUtils.ts'
 import {
   type ProcessWebhookResult,
   type StorageConfig,
+  vAdoptStoredAssetsArgs,
   vAssembly,
   vAssemblyBaseArgs,
   vAssemblyIdArgs,
@@ -52,6 +53,7 @@ import {
   internalMutation,
   type MutationCtx,
   mutation,
+  type QueryCtx,
   query,
 } from './_generated/server.ts'
 import {
@@ -226,7 +228,7 @@ const applyAssemblyStatus = async (
 }
 
 const findStoredAssetRows = (
-  ctx: Pick<MutationCtx, 'db'>,
+  ctx: { db: QueryCtx['db'] },
   workspace: string,
   assetId: string,
 ): Promise<Doc<'storedAssets'>[]> =>
@@ -803,6 +805,10 @@ export const listStoredAssets = query({
         page,
         isDone: beyond === null,
         continueCursor: args.paginationOpts.endCursor ?? emptyPosition,
+        // A frozen range that outgrew the limit must be split there, never skipped.
+        ...(rows.length > limit && last
+          ? { splitCursor: JSON.stringify([last.createdAt, last._creationTime]) }
+          : {}),
       }
     }
     return {
@@ -849,61 +855,81 @@ export const listStoredAssetsForAssembly = query({
  * First step of the deletion ledger: hide every version of expired assets immediately. Rows stay
  * until the Storage deletion is confirmed, so an interrupted cleanup can always be retried.
  */
+// Selects expired assets oldest first, continuing after a cursor so skipped assets are never
+// scanned again. Shared by the deletion request and its read-only dry-run preview.
+const selectExpiredAssets = async (
+  ctx: { db: QueryCtx['db'] },
+  args: ObjectType<typeof vRequestStoredAssetDeletionArgs>,
+) => {
+  const limit = pageSize(args.limit ?? 100)
+  const scanBudget = limit * 4
+  const start = parsePosition(args.cursor)
+  const candidates = (q: VisibleRange) =>
+    q.eq('album', args.album).eq('deletionRequestedAt', undefined)
+  const rows: Doc<'storedAssets'>[] = start
+    ? await ctx.db
+        .query('storedAssets')
+        .withIndex('by_album_visibility', (q) =>
+          candidates(q).eq('createdAt', start[0]).gt('_creationTime', start[1]),
+        )
+        .take(scanBudget + 1)
+    : []
+  if (rows.length <= scanBudget) {
+    rows.push(
+      ...(await ctx.db
+        .query('storedAssets')
+        .withIndex('by_album_visibility', (q) =>
+          start
+            ? candidates(q).gt('createdAt', start[0]).lt('createdAt', args.createdBefore)
+            : candidates(q).lt('createdAt', args.createdBefore),
+        )
+        .take(scanBudget + 1 - rows.length)),
+    )
+  }
+  const expired = new Map<
+    string,
+    { workspace: string; assetId: string; versions: Doc<'storedAssets'>[] }
+  >()
+  const decided = new Set<string>()
+  let last: Doc<'storedAssets'> | undefined
+  let stoppedEarly = false
+  for (const row of rows.slice(0, scanBudget)) {
+    if (expired.size >= limit) {
+      stoppedEarly = true
+      break
+    }
+    last = row
+    const { workspace, asset_id: assetId } = row.asset
+    const key = JSON.stringify([workspace, assetId])
+    if (decided.has(key)) continue
+    decided.add(key)
+    const versions = await findStoredAssetRows(ctx, workspace, assetId)
+    // Expiry follows the newest version, in any album: an asset overwritten after the cutoff stays.
+    if (
+      versions.some(
+        (version) =>
+          version.deletionRequestedAt === undefined && version.createdAt >= args.createdBefore,
+      )
+    )
+      continue
+    expired.set(key, { workspace, assetId, versions })
+  }
+  return {
+    expired: [...expired.values()],
+    hasMore: stoppedEarly || rows.length > scanBudget,
+    continueCursor: last
+      ? JSON.stringify([last.createdAt, last._creationTime])
+      : (args.cursor ?? emptyPosition),
+  }
+}
+
 export const requestStoredAssetDeletion = mutation({
   args: vRequestStoredAssetDeletionArgs,
   returns: vRequestStoredAssetDeletionResponse,
   handler: async (ctx, args) => {
-    const limit = pageSize(args.limit ?? 100)
-    const scanBudget = limit * 4
-    const start = parsePosition(args.cursor)
-    const candidates = (q: VisibleRange) =>
-      q.eq('album', args.album).eq('deletionRequestedAt', undefined)
-    // Oldest first, continuing after the cursor so skipped assets are never scanned again.
-    const rows: Doc<'storedAssets'>[] = start
-      ? await ctx.db
-          .query('storedAssets')
-          .withIndex('by_album_visibility', (q) =>
-            candidates(q).eq('createdAt', start[0]).gt('_creationTime', start[1]),
-          )
-          .take(scanBudget + 1)
-      : []
-    if (rows.length <= scanBudget) {
-      rows.push(
-        ...(await ctx.db
-          .query('storedAssets')
-          .withIndex('by_album_visibility', (q) =>
-            start
-              ? candidates(q).gt('createdAt', start[0]).lt('createdAt', args.createdBefore)
-              : candidates(q).lt('createdAt', args.createdBefore),
-          )
-          .take(scanBudget + 1 - rows.length)),
-      )
-    }
+    const selection = await selectExpiredAssets(ctx, args)
     const now = Date.now()
-    const requested = new Map<string, { workspace: string; assetId: string }>()
-    const decided = new Set<string>()
-    let last: Doc<'storedAssets'> | undefined
-    let stoppedEarly = false
-    for (const row of rows.slice(0, scanBudget)) {
-      if (requested.size >= limit) {
-        stoppedEarly = true
-        break
-      }
-      last = row
-      const { workspace, asset_id: assetId } = row.asset
-      const key = JSON.stringify([workspace, assetId])
-      if (decided.has(key)) continue
-      decided.add(key)
-      const versions = await findStoredAssetRows(ctx, workspace, assetId)
-      // Expiry follows the newest version: an asset overwritten after the cutoff stays whole.
-      if (
-        versions.some(
-          (version) =>
-            version.deletionRequestedAt === undefined && version.createdAt >= args.createdBefore,
-        )
-      )
-        continue
-      requested.set(key, { workspace, assetId })
+    for (const { versions } of selection.expired) {
       // Storage deletes whole assets, so every locally known version is hidden together.
       for (const version of versions) {
         if (version.deletionRequestedAt === undefined) {
@@ -912,12 +938,62 @@ export const requestStoredAssetDeletion = mutation({
       }
     }
     return {
-      requested: [...requested.values()],
-      hasMore: stoppedEarly || rows.length > scanBudget,
-      continueCursor: last
-        ? JSON.stringify([last.createdAt, last._creationTime])
-        : (args.cursor ?? emptyPosition),
+      requested: selection.expired.map(({ workspace, assetId }) => ({ workspace, assetId })),
+      hasMore: selection.hasMore,
+      continueCursor: selection.continueCursor,
     }
+  },
+})
+
+/** Dry run of `requestStoredAssetDeletion`: the same selection, without hiding anything. */
+export const previewStoredAssetExpiry = query({
+  args: vRequestStoredAssetDeletionArgs,
+  returns: vRequestStoredAssetDeletionResponse,
+  handler: async (ctx, args) => {
+    const selection = await selectExpiredAssets(ctx, args)
+    return {
+      requested: selection.expired.map(({ workspace, assetId }) => ({ workspace, assetId })),
+      hasMore: selection.hasMore,
+      continueCursor: selection.continueCursor,
+    }
+  },
+})
+
+/**
+ * Brings Storage objects that no receipt registered (for example from failed Assemblies) into the
+ * deletion ledger before they are deleted, so a late notification cannot register them again.
+ */
+export const adoptStoredAssetsForDeletion = mutation({
+  args: vAdoptStoredAssetsArgs,
+  returns: v.object({ adopted: v.number(), alreadyKnown: v.number() }),
+  handler: async (ctx, args) => {
+    const now = Date.now()
+    let adopted = 0
+    let alreadyKnown = 0
+    for (const asset of args.assets) {
+      const versions = await findStoredAssetRows(ctx, asset.workspace, asset.asset_id)
+      if (versions.length > 0) {
+        alreadyKnown += 1
+        for (const version of versions) {
+          if (version.deletionRequestedAt === undefined) {
+            await ctx.db.patch(version._id, { deletionRequestedAt: now })
+          }
+        }
+        continue
+      }
+      // No Assembly provenance is known for an adopted object; empty strings say so explicitly.
+      await ctx.db.insert('storedAssets', {
+        asset,
+        assemblyId: '',
+        stepName: '',
+        resultId: '',
+        album: args.album,
+        createdAt: now,
+        deletionRequestedAt: now,
+      })
+      adopted += 1
+    }
+    return { adopted, alreadyKnown }
   },
 })
 

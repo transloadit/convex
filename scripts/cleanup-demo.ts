@@ -6,6 +6,7 @@ import {
   type CleanupR2,
   type CleanupStorage,
   runDemoCleanup,
+  type StorageObject,
 } from './demo-cleanup.ts'
 import { loadEnv } from './env.ts'
 
@@ -70,10 +71,25 @@ const convex: CleanupConvex = {
     }) as never,
   completeStorageDeletion: (args) => client.mutation('storageCleanup:complete', args),
   failStorageDeletion: (args) => client.mutation('storageCleanup:fail', args),
+  adoptForDeletion: (assets) => client.mutation('storageCleanup:adopt', { album, assets }) as never,
   purgeAlbum: () =>
     client.mutation('transloadit:purgeAlbum', { album, deleteAssemblies: true }) as never,
 }
 
+const canonicalFields = new Set([
+  'workspace',
+  'asset_id',
+  'version_id',
+  'path',
+  'size',
+  'mime',
+  'md5hash',
+  'sha256',
+  'width',
+  'height',
+  'thumbhash',
+  'has_alpha',
+])
 const workspace = process.env.TRANSLOADIT_WORKSPACE?.trim()
 const transloadit = workspace
   ? new Transloadit({
@@ -86,7 +102,7 @@ const storage: CleanupStorage | undefined =
     ? {
         workspace,
         list: async (storagePrefix) => {
-          const assets: { asset_id: string; path: string }[] = []
+          const assets: StorageObject[] = []
           let cursor: string | undefined
           do {
             const page = await transloadit.listStoredAssets({
@@ -97,7 +113,16 @@ const storage: CleanupStorage | undefined =
             if (page.workspace !== workspace) {
               throw new Error('TRANSLOADIT_KEY belongs to a different Storage Workspace')
             }
-            assets.push(...page.assets)
+            // Keep only canonical receipt fields; the ledger validates exactly this shape.
+            for (const asset of page.assets) {
+              assets.push(
+                Object.fromEntries(
+                  Object.entries(asset).filter(
+                    ([key, value]) => canonicalFields.has(key) && value !== undefined,
+                  ),
+                ) as StorageObject,
+              )
+            }
             cursor = page.next_cursor ?? undefined
           } while (cursor)
           return assets

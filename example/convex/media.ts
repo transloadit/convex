@@ -51,6 +51,7 @@ export const list = query({
     page: v.array(vGalleryAsset),
     isDone: v.boolean(),
     continueCursor: v.string(),
+    splitCursor: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
     await requireGuest(ctx)
@@ -71,7 +72,12 @@ export const list = query({
         createdAt: row.createdAt,
       })
     }
-    return { page, isDone: result.isDone, continueCursor: result.continueCursor }
+    return {
+      page,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+      ...(result.splitCursor ? { splitCursor: result.splitCursor } : {}),
+    }
   },
 })
 

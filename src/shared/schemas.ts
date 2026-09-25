@@ -93,11 +93,13 @@ export const vStoredAssetPage = v.object({
   page: v.array(vStoredAssetRow),
   isDone: v.boolean(),
   continueCursor: v.string(),
+  splitCursor: v.optional(v.string()),
 })
 export const vStoredAssetResponsePage = v.object({
   page: v.array(vStoredAssetResponse),
   isDone: v.boolean(),
   continueCursor: v.string(),
+  splitCursor: v.optional(v.string()),
 })
 
 /** Enables Storage receipt ingestion; results from any other Workspace fail verification. */
@@ -148,6 +150,11 @@ export const vRequestStoredAssetDeletionArgs = {
   limit: v.optional(v.number()),
   /** Continue scanning after the previous call's `continueCursor`. */
   cursor: v.optional(v.string()),
+}
+
+export const vAdoptStoredAssetsArgs = {
+  album: v.optional(v.string()),
+  assets: v.array(vStoredAsset),
 }
 
 export const vStoredAssetReference = v.object({ workspace: v.string(), assetId: v.string() })

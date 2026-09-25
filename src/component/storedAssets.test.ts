@@ -293,6 +293,70 @@ describe('expiry keeps assets with a fresh version', () => {
   })
 })
 
+describe('council 3 regressions', () => {
+  test('orphans adopted for deletion never come back through a late notification', async () => {
+    const t = convexTest(schema, modules)
+    const orphan = receipt('orphan')
+    const { id: _id, original_id: _originalId, ...asset } = orphan
+    const adopted = await t.mutation(api.lib.adoptStoredAssetsForDeletion, {
+      album: 'wedding-gallery',
+      assets: [asset],
+    })
+    expect(adopted).toEqual({ adopted: 1, alreadyKnown: 0 })
+    await t.action(api.lib.handleWebhook, { ...signed(completed({ stored: [orphan] })), storage })
+    const page = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    expect(page.page).toEqual([])
+    const pending = await t.query(api.lib.listStoredAssetDeletions, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    expect(pending.page.map((entry) => entry.assetId)).toEqual([damId('assetorphan')])
+  })
+
+  test('a frozen page that outgrows its limit reports where to split', async () => {
+    const t = convexTest(schema, modules)
+    const first = Array.from({ length: 5 }, (_, index) => receipt(`old${index}`))
+    await t.action(api.lib.handleWebhook, {
+      ...signed({ ...completed({ stored: first }), assembly_id: 'assembly-old' }),
+      storage,
+    })
+    const oldest = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 5, cursor: null },
+    })
+    const newer = Array.from({ length: 1050 }, (_, index) => receipt(`new${index}`))
+    for (let batch = 0; batch < newer.length; batch += 350) {
+      await t.action(api.lib.handleWebhook, {
+        ...signed({
+          ...completed({ stored: newer.slice(batch, batch + 350) }),
+          assembly_id: `a${batch}`,
+        }),
+        storage,
+      })
+    }
+    const frozen = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: { numItems: 5, cursor: null, endCursor: oldest.continueCursor },
+    })
+    expect(frozen.page).toHaveLength(1000)
+    expect(frozen.splitCursor).toBeDefined()
+    const rest = await t.query(api.lib.listStoredAssets, {
+      album: 'wedding-gallery',
+      paginationOpts: {
+        numItems: 5,
+        cursor: frozen.splitCursor ?? null,
+        endCursor: oldest.continueCursor,
+      },
+    })
+    const ids = [...frozen.page, ...rest.page].map((row) => row._id)
+    expect(ids).toHaveLength(1055)
+    expect(new Set(ids).size).toBe(1055)
+  })
+})
+
 describe('stored asset reads and deletion ledger', () => {
   const seed = async (count: number) => {
     const t = convexTest(schema, modules)
