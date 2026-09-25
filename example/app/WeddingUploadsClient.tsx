@@ -1,7 +1,7 @@
 'use client'
 
-import { useAction, useConvexAuth, usePaginatedQuery, useQuery } from 'convex/react'
-import { makeFunctionReference, type PaginationOptions, type PaginationResult } from 'convex/server'
+import { useAction, useConvexAuth, useQuery } from 'convex/react'
+import { makeFunctionReference } from 'convex/server'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { GalleryResult, StorageGalleryAsset } from '../lib/gallery'
 import { getGuestName, isValidGuestName } from '../lib/guest-name'
@@ -108,8 +108,8 @@ const listGalleryRef = makeFunctionReference<'query', { limit?: number }, Galler
 )
 const listMediaRef = makeFunctionReference<
   'query',
-  { paginationOpts: PaginationOptions },
-  PaginationResult<StorageGalleryAsset>
+  { limit?: number },
+  { page: StorageGalleryAsset[]; hasMore: boolean }
 >('media:list')
 const galleryPageSize = 24
 const getAssemblyStatusRef = makeFunctionReference<
@@ -316,7 +316,8 @@ const CloudWeddingUploads = ({
   const results = useQuery(listResultsRef, assemblyId ? { assemblyId } : 'skip')
   const albumResults = useQuery(listGalleryRef, { limit: 80 })
   // Private photos: canonical receipts only; the media route authorizes every image request.
-  const media = usePaginatedQuery(listMediaRef, {}, { initialNumItems: galleryPageSize })
+  const [mediaLimit, setMediaLimit] = useState(galleryPageSize)
+  const media = useQuery(listMediaRef, { limit: mediaLimit })
   const assemblies = useQuery(listAssembliesRef, {
     status: ASSEMBLY_STATUS_COMPLETED,
     limit: 12,
@@ -423,9 +424,9 @@ const CloudWeddingUploads = ({
     >
       <Gallery
         results={galleryResults}
-        storageAssets={media.results}
+        storageAssets={media?.page}
         onLoadMore={
-          media.status === 'CanLoadMore' ? () => media.loadMore(galleryPageSize) : undefined
+          media?.hasMore ? () => setMediaLimit((limit) => limit + galleryPageSize) : undefined
         }
       />
     </WeddingLayout>

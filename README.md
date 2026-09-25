@@ -109,8 +109,10 @@ const transloadit = new Transloadit(components.transloadit, { storageWorkspace: 
 - `storedAssets` keeps one row per Workspace, asset and version, with its Assembly, Step, result and
   original IDs, plus `album`, `userId` and `uploadId` copied from the signed Assembly fields.
   Notification retries are harmless.
-- `listStoredAssets` pages through an album's visible receipts from local data, newest first;
-  `getStoredAsset` returns one exact version. Neither contacts Storage or signs anything.
+- `listStoredAssets` returns a bounded, newest-first window of an album's visible receipts from
+  local data (grow `limit` to show more; components cannot use `.paginate()`, and a window keeps
+  reactive galleries gap-free); `getStoredAsset` returns one exact version. Neither contacts Storage
+  or signs anything.
 - Deletion is a ledger: `requestStoredAssetDeletion` hides every version of expired assets at once,
   your server deletes them from Storage, then `completeStoredAssetDeletion` turns the rows into
   tombstones (or `failStoredAssetDeletion` records a retryable error). A tombstone keeps only what

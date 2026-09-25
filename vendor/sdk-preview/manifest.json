@@ -1,34 +1,34 @@
 {
   "branch": "viewer-react",
-  "base_head": "34970b60c770a34c3dc227ad9ecb1ec9283ecd77",
-  "source_sha256": "581db8852e2154546b38c6be93643f3094b91f44555c0061bfa7770a72b08a21",
-  "kind": "working-tree preview; validation in progress",
-  "created_at": "2026-09-25T12:28:00.409Z",
+  "head": "4b904e5df15c2cccc2e73b85c4b916f8df8d1e41",
+  "source_sha256": "eab4d23d433ec0ed810bc38ddcbb9866ab3e74dfd7481c03b528cfb51aa1632e",
+  "kind": "clean committed package artifacts",
+  "created_at": "2026-09-25T12:45:34.095Z",
   "packages": [
     {
-      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-working/transloadit-node.tgz",
-      "bytes": 1308811,
-      "sha256": "24292fbc23eb9691da4232b9645421512b3b366d3a4418334bceda391c81905f"
+      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-final/transloadit-node.tgz",
+      "bytes": 1309030,
+      "sha256": "c4f4e6c0299aa7ae7419b3ff759a2228ceb510eb6a82731ec2c76bf085cc070a"
     },
     {
-      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-working/transloadit-types.tgz",
+      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-final/transloadit-types.tgz",
       "bytes": 184582,
       "sha256": "6e3a9d19d1c8245c66dc0996db813b5a7edf455f2f76560e5402837e8da4f2d7"
     },
     {
-      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-working/transloadit-utils.tgz",
+      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-final/transloadit-utils.tgz",
       "bytes": 23383,
       "sha256": "fc33ff930b66f020a5ba85d95885cc73e29f953371f0c69668782299c86d757a"
     },
     {
-      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-working/transloadit-viewer.tgz",
-      "bytes": 75140,
-      "sha256": "7dbec8d6a7d8ff5a2a75c20bb0fe762657de768b4a08bc5cef7357f0f1a3990a"
+      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-final/transloadit-viewer.tgz",
+      "bytes": 75415,
+      "sha256": "1c3ca2c7668a178a982011f8f6b4bfc73ec8e41065707ecedddbc6802697133b"
     },
     {
-      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-working/transloadit-zod.tgz",
-      "bytes": 958006,
-      "sha256": "d3884af2d8440b0af2e4a392d3a66671b16b325bce321a058f2baf579ef9c963"
+      "path": "/Users/kvz/code/node-sdk-clone-1/test-results/viewer-react/pack-final/transloadit-zod.tgz",
+      "bytes": 958208,
+      "sha256": "9b9307693d2424b4c379df350a1983087cc7cba74b0e72b02223e34bcef0a15a"
     }
   ]
 }

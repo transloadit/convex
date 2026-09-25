@@ -252,20 +252,9 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listStoredAssets: FunctionReference<
         "query",
         "internal",
+        { album: string; limit?: number },
         {
-          album: string;
-          paginationOpts: {
-            cursor: string | null;
-            endCursor?: string | null;
-            id?: number;
-            maximumBytesRead?: number;
-            maximumRowsRead?: number;
-            numItems: number;
-          };
-        },
-        {
-          continueCursor: string;
-          isDone: boolean;
+          hasMore: boolean;
           page: Array<{
             _creationTime: number;
             _id: string;

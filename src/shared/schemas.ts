@@ -1,5 +1,5 @@
 import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template'
-import { paginationOptsValidator, paginationResultValidator } from 'convex/server'
+import { paginationOptsValidator } from 'convex/server'
 import { type Infer, v } from 'convex/values'
 
 export const vAssemblyFields = {
@@ -89,8 +89,14 @@ export const vStoredAssetResponse = v.object({
 
 export type StoredAssetResponse = Infer<typeof vStoredAssetResponse>
 
-export const vStoredAssetPage = paginationResultValidator(vStoredAssetRow)
-export const vStoredAssetResponsePage = paginationResultValidator(vStoredAssetResponse)
+// A bounded, newest-first window. Growing `limit` keeps a reactive gallery free of page gaps.
+export const vStoredAssetList = v.object({ page: v.array(vStoredAssetRow), hasMore: v.boolean() })
+export const vStoredAssetResponseList = v.object({
+  page: v.array(vStoredAssetResponse),
+  hasMore: v.boolean(),
+})
+
+export const maxStoredAssetListLimit = 500
 
 /** Enables Storage receipt ingestion; results from any other Workspace fail verification. */
 export const vStorageConfig = v.object({ workspace: v.string() })
@@ -99,7 +105,7 @@ export type StorageConfig = Infer<typeof vStorageConfig>
 
 export const vListStoredAssetsArgs = {
   album: v.string(),
-  paginationOpts: paginationOptsValidator,
+  limit: v.optional(v.number()),
 }
 
 export const vGetStoredAssetArgs = {

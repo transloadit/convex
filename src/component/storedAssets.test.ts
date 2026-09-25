@@ -182,21 +182,15 @@ describe('stored asset reads and deletion ledger', () => {
     ] as const) {
       expect(await t.query(api.lib.getStoredAsset, { workspace, assetId, versionId })).toBeNull()
     }
-    const first = await t.query(api.lib.listStoredAssets, {
-      album: 'wedding-gallery',
-      paginationOpts: { numItems: 3, cursor: null },
-    })
-    const second = await t.query(api.lib.listStoredAssets, {
-      album: 'wedding-gallery',
-      paginationOpts: { numItems: 3, cursor: first.continueCursor },
-    })
+    const first = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 3 })
+    const all = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 5 })
     expect(first.page).toHaveLength(3)
-    expect(second.page).toHaveLength(2)
-    expect(second.isDone).toBe(true)
-    const other = await t.query(api.lib.listStoredAssets, {
-      album: 'another-album',
-      paginationOpts: { numItems: 10, cursor: null },
-    })
+    expect(first.hasMore).toBe(true)
+    expect(all.page).toHaveLength(5)
+    expect(all.hasMore).toBe(false)
+    // Newest first, and a larger window extends the same order instead of shifting pages.
+    expect(all.page.slice(0, 3).map((row) => row._id)).toEqual(first.page.map((row) => row._id))
+    const other = await t.query(api.lib.listStoredAssets, { album: 'another-album', limit: 10 })
     expect(other.page).toHaveLength(0)
   })
 
@@ -211,10 +205,7 @@ describe('stored asset reads and deletion ledger', () => {
     expect(request.hasMore).toBe(true)
     const [first] = request.requested
     if (!first) throw new Error('expected a requested deletion')
-    const visible = await t.query(api.lib.listStoredAssets, {
-      album: 'wedding-gallery',
-      paginationOpts: { numItems: 10, cursor: null },
-    })
+    const visible = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 10 })
     expect(visible.page).toHaveLength(1)
     const hidden = await t.run((ctx) => ctx.db.query('storedAssets').collect())
     const hiddenRow = hidden.find((row) => row.asset.asset_id === first.assetId)
@@ -305,10 +296,7 @@ describe('stored asset reads and deletion ledger', () => {
         storage,
       })
     }
-    const page = await t.query(api.lib.listStoredAssets, {
-      album: 'wedding-gallery',
-      paginationOpts: { numItems: 10, cursor: null },
-    })
+    const page = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 10 })
     expect(page.page).toHaveLength(0)
     expect(
       await t.query(api.lib.getStoredAsset, {
@@ -333,10 +321,7 @@ describe('stored asset reads and deletion ledger', () => {
       ...signed(completed({ stored: [receipt('n0')] })),
       storage,
     })
-    const page = await t.query(api.lib.listStoredAssets, {
-      album: 'wedding-gallery',
-      paginationOpts: { numItems: 10, cursor: null },
-    })
+    const page = await t.query(api.lib.listStoredAssets, { album: 'wedding-gallery', limit: 10 })
     expect(page.page).toHaveLength(0)
   })
 })

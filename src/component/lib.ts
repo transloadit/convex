@@ -6,6 +6,7 @@ import { parseAssemblyStatus } from '../shared/assemblyUrls.ts'
 import { transloaditError } from '../shared/errors.ts'
 import { getResultUrl } from '../shared/resultUtils.ts'
 import {
+  maxStoredAssetListLimit,
   type ProcessWebhookResult,
   type StorageConfig,
   vAssembly,
@@ -34,9 +35,9 @@ import {
   vRequestStoredAssetDeletionArgs,
   vRequestStoredAssetDeletionResponse,
   vStoreAssemblyMetadataArgs,
-  vStoredAssetDeletion,
+  type vStoredAssetDeletion,
   vStoredAssetDeletionPage,
-  vStoredAssetPage,
+  vStoredAssetList,
   vStoredAssetRow,
   vTransloaditConfig,
   vUpsertAssemblyArgs,
@@ -685,18 +686,23 @@ export const storeAssemblyMetadata = mutation({
   },
 })
 
-/** Visible Storage receipts of one album, newest first, from local indexed data only. */
+/**
+ * Visible Storage receipts of one album, newest first, from local indexed data only. Components
+ * cannot use `.paginate()`, and a growing window keeps reactive galleries free of page gaps.
+ */
 export const listStoredAssets = query({
   args: vListStoredAssetsArgs,
-  returns: vStoredAssetPage,
+  returns: vStoredAssetList,
   handler: async (ctx, args) => {
-    return ctx.db
+    const limit = Math.min(Math.max(Math.floor(args.limit ?? 50), 1), maxStoredAssetListLimit)
+    const rows = await ctx.db
       .query('storedAssets')
       .withIndex('by_album_visibility', (q) =>
         q.eq('album', args.album).eq('deletionRequestedAt', undefined),
       )
       .order('desc')
-      .paginate(args.paginationOpts)
+      .take(limit + 1)
+    return { page: rows.slice(0, limit), hasMore: rows.length > limit }
   },
 })
 
@@ -766,17 +772,62 @@ export const requestStoredAssetDeletion = mutation({
   },
 })
 
-/** One album's hidden assets still awaiting Storage deletion, paginated so failures never block. */
+const parseLedgerCursor = (cursor: string | null): [number, number] | null => {
+  if (!cursor) return null
+  const parsed: unknown = JSON.parse(cursor)
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length !== 2 ||
+    !parsed.every((value) => typeof value === 'number' && Number.isFinite(value))
+  ) {
+    throw transloaditError('storage', 'Invalid deletion ledger cursor')
+  }
+  return [parsed[0], parsed[1]]
+}
+
+/**
+ * One album's hidden assets still awaiting Storage deletion, paged by an explicit index cursor
+ * (components cannot use `.paginate()`), so entries that keep failing never block later ones.
+ */
 export const listStoredAssetDeletions = query({
   args: vListStoredAssetDeletionsArgs,
   returns: vStoredAssetDeletionPage,
   handler: async (ctx, args) => {
-    const result = await ctx.db
-      .query('storedAssets')
-      .withIndex('by_album_pending_deletion', (q) =>
-        q.eq('album', args.album).eq('deletedAt', undefined).gt('deletionRequestedAt', 0),
-      )
-      .paginate(args.paginationOpts)
+    const numItems = Math.min(Math.max(Math.floor(args.paginationOpts.numItems), 1), 500)
+    const cursor = parseLedgerCursor(args.paginationOpts.cursor)
+    const ledger = () =>
+      ctx.db.query('storedAssets').withIndex('by_album_pending_deletion', (q) => {
+        const pending = q.eq('album', args.album).eq('deletedAt', undefined)
+        return cursor
+          ? pending.gt('deletionRequestedAt', cursor[0])
+          : pending.gt('deletionRequestedAt', 0)
+      })
+    // Rows requested at the cursor's instant but created after its row come first.
+    const tied = cursor
+      ? await ctx.db
+          .query('storedAssets')
+          .withIndex('by_album_pending_deletion', (q) =>
+            q
+              .eq('album', args.album)
+              .eq('deletedAt', undefined)
+              .eq('deletionRequestedAt', cursor[0])
+              .gt('_creationTime', cursor[1]),
+          )
+          .take(numItems + 1)
+      : []
+    const rows =
+      tied.length > numItems
+        ? tied
+        : [...tied, ...(await ledger().take(numItems + 1 - tied.length))]
+    const page = rows.slice(0, numItems)
+    const last = page[page.length - 1]
+    const result = {
+      page,
+      isDone: rows.length <= numItems,
+      continueCursor: last
+        ? JSON.stringify([last.deletionRequestedAt, last._creationTime])
+        : (args.paginationOpts.cursor ?? ''),
+    }
     // Versions of one asset are grouped per page; callers deduplicate assets across pages.
     const pending = new Map<string, typeof vStoredAssetDeletion.type>()
     for (const row of result.page) {

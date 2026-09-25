@@ -1,5 +1,4 @@
 import { vStoredAsset, type vStoredAssetResponse } from '@transloadit/convex'
-import { paginationOptsValidator } from 'convex/server'
 import { type Infer, v } from 'convex/values'
 import { album } from '../lib/album-access'
 import { getStorageWorkspace, isInUploadStoragePrefix } from '../lib/storage'
@@ -40,19 +39,18 @@ const findBoundUpload = async (ctx: QueryCtx, row: StoredAssetRow) => {
   return upload
 }
 
-/** Newest private photos for admitted guests: canonical receipts, never URLs or credentials. */
+/**
+ * Newest private photos for admitted guests: canonical receipts, never URLs or credentials.
+ * "Show more" grows `limit`, so live uploads never shift items between separately loaded pages.
+ */
 export const list = query({
-  args: { paginationOpts: paginationOptsValidator },
-  returns: v.object({
-    page: v.array(vGalleryAsset),
-    isDone: v.boolean(),
-    continueCursor: v.string(),
-  }),
+  args: { limit: v.optional(v.number()) },
+  returns: v.object({ page: v.array(vGalleryAsset), hasMore: v.boolean() }),
   handler: async (ctx, args) => {
     await requireGuest(ctx)
     const result = await ctx.runQuery(components.transloadit.lib.listStoredAssets, {
       album,
-      paginationOpts: args.paginationOpts,
+      limit: args.limit,
     })
     const page = []
     for (const row of result.page) {
@@ -66,7 +64,7 @@ export const list = query({
         createdAt: row.createdAt,
       })
     }
-    return { page, isDone: result.isDone, continueCursor: result.continueCursor }
+    return { page, hasMore: result.hasMore }
   },
 })
 

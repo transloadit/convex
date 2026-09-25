@@ -2319,7 +2319,7 @@ __metadata:
 
 "@transloadit/viewer@file:./vendor/sdk-preview/transloadit-viewer.tgz::locator=%40transloadit%2Fconvex%40workspace%3A.":
   version: 0.0.2
-  resolution: "@transloadit/viewer@file:./vendor/sdk-preview/transloadit-viewer.tgz#./vendor/sdk-preview/transloadit-viewer.tgz::hash=9865d9&locator=%40transloadit%2Fconvex%40workspace%3A."
+  resolution: "@transloadit/viewer@file:./vendor/sdk-preview/transloadit-viewer.tgz#./vendor/sdk-preview/transloadit-viewer.tgz::hash=47c0e9&locator=%40transloadit%2Fconvex%40workspace%3A."
   dependencies:
     "@noble/ciphers": "npm:^1.3.0"
     "@transloadit/utils": "npm:^4.9.0"
@@ -2336,16 +2336,16 @@ __metadata:
       optional: true
     react-dom:
       optional: true
-  checksum: 10c0/145256d0d28068fd6ed1591e38aee736aec558a5f94a515fd7c766680548e628b187674d0200aeeaa03039765e2d0811ddc6e41ddd9c9466bb968ec949c91e03
+  checksum: 10c0/54df4e24eb2a6e1f702b09527838ca940fe929a48979b1602a465f0df4f6e4dd2d35edc8b5ca5d835590a9ff3024f871920faea056ef13054613294c130d2fac
   languageName: node
   linkType: hard
 
 "@transloadit/zod@file:./vendor/sdk-preview/transloadit-zod.tgz::locator=%40transloadit%2Fconvex%40workspace%3A.":
   version: 5.0.0
-  resolution: "@transloadit/zod@file:./vendor/sdk-preview/transloadit-zod.tgz#./vendor/sdk-preview/transloadit-zod.tgz::hash=babc0a&locator=%40transloadit%2Fconvex%40workspace%3A."
+  resolution: "@transloadit/zod@file:./vendor/sdk-preview/transloadit-zod.tgz#./vendor/sdk-preview/transloadit-zod.tgz::hash=0ff225&locator=%40transloadit%2Fconvex%40workspace%3A."
   dependencies:
     zod: "npm:^4.4.3"
-  checksum: 10c0/52f1e15a73660228926f4cd03e7422449d9bda9d3686ee9d41b9356fed0409a417320256a7303b3b9784337353f500663eb288504df811f4c01610cd468578ef
+  checksum: 10c0/6e8b68f61369ce691ea0a5399868d5795df46e97d3577be9c16a9d28d9bd187c3b781a4925cf3ec49f49888334e8108e7a0653de2c60457624e1838cfa4ed8f3
   languageName: node
   linkType: hard
 

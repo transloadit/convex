@@ -169,7 +169,7 @@ describe('gallery and delivery authorization', () => {
     const alex = await admit(t, 'Alex')
     const { asset } = await upload(alex, t, 'a')
     const sam = await admit(t, 'Sam')
-    const page = await sam.query(api.media.list, { paginationOpts: { numItems: 10, cursor: null } })
+    const page = await sam.query(api.media.list, { limit: 10 })
     expect(page.page).toEqual([
       expect.objectContaining({
         uploadedBy: 'Alex',
@@ -190,9 +190,7 @@ describe('gallery and delivery authorization', () => {
     const expired = await admit(t, 'Late', -1)
     expect(await t.query(api.media.forDelivery, request(asset))).toBeNull()
     expect(await expired.query(api.media.forDelivery, request(asset))).toBeNull()
-    await expect(
-      t.query(api.media.list, { paginationOpts: { numItems: 10, cursor: null } }),
-    ).rejects.toThrow('ACCESS_REQUIRED')
+    await expect(t.query(api.media.list, { limit: 10 })).rejects.toThrow('ACCESS_REQUIRED')
     vi.stubEnv('WEDDING_UPLOAD_CODE', 'rotated-invitation')
     expect(await alex.query(api.media.forDelivery, request(asset, 'download'))).toBeNull()
   })
@@ -219,9 +217,7 @@ describe('gallery and delivery authorization', () => {
       await upload(alex, t, 'owner', undefined, { userId: 'someone-else' }),
       await upload(alex, t, 'forged', undefined, { uploadId: 'not-a-server-upload' }),
     ]
-    const page = await alex.query(api.media.list, {
-      paginationOpts: { numItems: 10, cursor: null },
-    })
+    const page = await alex.query(api.media.list, { limit: 10 })
     expect(page.page).toEqual([])
     for (const { asset } of cases)
       expect(await alex.query(api.media.forDelivery, request(asset, 'original'))).toBeNull()
@@ -251,9 +247,7 @@ describe('gallery and delivery authorization', () => {
       createdBefore: Date.now() + 1,
     })
     expect(await alex.query(api.media.forDelivery, request(asset, 'original'))).toBeNull()
-    const page = await alex.query(api.media.list, {
-      paginationOpts: { numItems: 10, cursor: null },
-    })
+    const page = await alex.query(api.media.list, { limit: 10 })
     expect(page.page).toEqual([])
   })
 })
