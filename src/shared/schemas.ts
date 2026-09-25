@@ -146,6 +146,8 @@ export const vRequestStoredAssetDeletionArgs = {
   album: v.optional(v.string()),
   createdBefore: v.number(),
   limit: v.optional(v.number()),
+  /** Continue scanning after the previous call's `continueCursor`. */
+  cursor: v.optional(v.string()),
 }
 
 export const vStoredAssetReference = v.object({ workspace: v.string(), assetId: v.string() })
@@ -155,6 +157,7 @@ export type StoredAssetReference = Infer<typeof vStoredAssetReference>
 export const vRequestStoredAssetDeletionResponse = v.object({
   requested: v.array(vStoredAssetReference),
   hasMore: v.boolean(),
+  continueCursor: v.string(),
 })
 
 export const vListStoredAssetDeletionsArgs = {

@@ -22,7 +22,12 @@ export type CleanupConvex = {
   requestStorageDeletion: (args: {
     createdBefore: number
     limit: number
-  }) => Promise<{ requested: { workspace: string; assetId: string }[]; hasMore: boolean }>
+    cursor?: string
+  }) => Promise<{
+    requested: { workspace: string; assetId: string }[]
+    hasMore: boolean
+    continueCursor: string
+  }>
   pendingStorageDeletions: (args: { cursor: string | null; numItems: number }) => Promise<{
     page: StorageDeletion[]
     isDone: boolean
@@ -162,10 +167,16 @@ export const runDemoCleanup = async (
     ? await (async () => {
         // 1. Hide first: expired photos leave the gallery and delivery before bytes are deleted.
         let hidden = 0
+        let cursor: string | undefined
         for (;;) {
-          const batch = await convex.requestStorageDeletion({ createdBefore, limit: batchSize })
+          const batch = await convex.requestStorageDeletion({
+            createdBefore,
+            limit: batchSize,
+            ...(cursor ? { cursor } : {}),
+          })
           hidden += batch.requested.length
           if (!batch.hasMore) break
+          cursor = batch.continueCursor
         }
         // 2. Delete Storage assets, then record it. Failures stay hidden and retryable.
         const ledger = await drainStorageLedger(convex, storage, prefix, batchSize)

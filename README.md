@@ -118,6 +118,10 @@ const transloadit = new Transloadit(components.transloadit, { storageWorkspace: 
   tombstones (or `failStoredAssetDeletion` records a retryable error). A tombstone keeps only what
   stops a late notification from registering the deleted asset again; its ThumbHash is removed.
 
+Byte-identical originals depend on the Assembly: on the Community plan, API2 currently exempts
+only store Steps that use `:original` directly from its upload watermark, so a Step that stores a
+filter of `:original` (as the wedding example does for photos) stores watermarked photos there.
+
 Receipts are private metadata, not credentials. Signed Assembly fields are not ownership proof on
 their own: bind receipts to server-created upload records and authorize every read, as the
 example's `convex/media.ts` does. `makeTransloaditAPI` deliberately exposes no receipt queries.

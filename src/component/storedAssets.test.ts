@@ -216,6 +216,83 @@ describe('council regressions', () => {
   })
 })
 
+describe('expiry keeps assets with a fresh version', () => {
+  const at = async (t: ReturnType<typeof convexTest>, time: number, seeds: [string, string][]) => {
+    vi.setSystemTime(time)
+    await t.action(api.lib.handleWebhook, {
+      ...signed({
+        ...completed({
+          stored: seeds.map(([asset, version]) =>
+            receipt(asset, { asset_id: damId(`asset${asset}`), version_id: damId(version) }),
+          ),
+        }),
+        assembly_id: `assembly-${time}`,
+      }),
+      storage,
+    })
+  }
+  const requestAll = async (t: ReturnType<typeof convexTest>, createdBefore: number) => {
+    const requested: string[] = []
+    let cursor: string | undefined
+    for (let call = 0; call < 20; call += 1) {
+      const result: {
+        requested: { assetId: string }[]
+        hasMore: boolean
+        continueCursor: string
+      } = await t.mutation(api.lib.requestStoredAssetDeletion, {
+        album: 'wedding-gallery',
+        createdBefore,
+        limit: 1,
+        ...(cursor ? { cursor } : {}),
+      })
+      requested.push(...result.requested.map((entry) => entry.assetId))
+      if (!result.hasMore) return requested
+      cursor = result.continueCursor
+    }
+    throw new Error('expiry scanning did not finish')
+  }
+
+  test('an old version does not expire an asset overwritten after the cutoff', async () => {
+    vi.useFakeTimers()
+    try {
+      const t = convexTest(schema, modules)
+      await at(t, 1_000, [['kept', 'v1old']])
+      await at(t, 9_000, [['kept', 'v2fresh']])
+      expect(await requestAll(t, 5_000)).toEqual([])
+      const page = await t.query(api.lib.listStoredAssets, {
+        album: 'wedding-gallery',
+        paginationOpts: { numItems: 10, cursor: null },
+      })
+      expect(page.page.map((row) => row.asset.version_id).sort()).toEqual(
+        [damId('v1old'), damId('v2fresh')].sort(),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('skipped fresh assets never stall later eligible ones', async () => {
+    vi.useFakeTimers()
+    try {
+      const t = convexTest(schema, modules)
+      await at(t, 1_000, [
+        ['a', 'a1'],
+        ['b', 'b1'],
+        ['c', 'c1'],
+      ])
+      await at(t, 2_000, [['expired', 'e1']])
+      await at(t, 9_000, [
+        ['a', 'a2'],
+        ['b', 'b2'],
+        ['c', 'c2'],
+      ])
+      expect(await requestAll(t, 5_000)).toEqual([damId('assetexpired')])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
 describe('stored asset reads and deletion ledger', () => {
   const seed = async (count: number) => {
     const t = convexTest(schema, modules)

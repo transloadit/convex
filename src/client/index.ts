@@ -263,7 +263,7 @@ export class TransloaditClient {
   /** Hides expired assets immediately; their rows remain until Storage confirms deletion. */
   async requestStoredAssetDeletion(
     ctx: RunMutationCtx,
-    args: { album: string; createdBefore: number; limit?: number },
+    args: { album?: string; createdBefore: number; limit?: number; cursor?: string },
   ) {
     return ctx.runMutation(this.component.lib.requestStoredAssetDeletion, args)
   }

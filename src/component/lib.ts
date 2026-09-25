@@ -853,31 +853,71 @@ export const requestStoredAssetDeletion = mutation({
   args: vRequestStoredAssetDeletionArgs,
   returns: vRequestStoredAssetDeletionResponse,
   handler: async (ctx, args) => {
-    const limit = Math.min(Math.max(args.limit ?? 100, 1), 500)
-    const candidates = await ctx.db
-      .query('storedAssets')
-      .withIndex('by_album_visibility', (q) =>
-        q
-          .eq('album', args.album)
-          .eq('deletionRequestedAt', undefined)
-          .lt('createdAt', args.createdBefore),
+    const limit = pageSize(args.limit ?? 100)
+    const scanBudget = limit * 4
+    const start = parsePosition(args.cursor)
+    const candidates = (q: VisibleRange) =>
+      q.eq('album', args.album).eq('deletionRequestedAt', undefined)
+    // Oldest first, continuing after the cursor so skipped assets are never scanned again.
+    const rows: Doc<'storedAssets'>[] = start
+      ? await ctx.db
+          .query('storedAssets')
+          .withIndex('by_album_visibility', (q) =>
+            candidates(q).eq('createdAt', start[0]).gt('_creationTime', start[1]),
+          )
+          .take(scanBudget + 1)
+      : []
+    if (rows.length <= scanBudget) {
+      rows.push(
+        ...(await ctx.db
+          .query('storedAssets')
+          .withIndex('by_album_visibility', (q) =>
+            start
+              ? candidates(q).gt('createdAt', start[0]).lt('createdAt', args.createdBefore)
+              : candidates(q).lt('createdAt', args.createdBefore),
+          )
+          .take(scanBudget + 1 - rows.length)),
       )
-      .take(limit + 1)
+    }
     const now = Date.now()
     const requested = new Map<string, { workspace: string; assetId: string }>()
-    for (const candidate of candidates.slice(0, limit)) {
-      const { workspace, asset_id: assetId } = candidate.asset
+    const decided = new Set<string>()
+    let last: Doc<'storedAssets'> | undefined
+    let stoppedEarly = false
+    for (const row of rows.slice(0, scanBudget)) {
+      if (requested.size >= limit) {
+        stoppedEarly = true
+        break
+      }
+      last = row
+      const { workspace, asset_id: assetId } = row.asset
       const key = JSON.stringify([workspace, assetId])
-      if (requested.has(key)) continue
+      if (decided.has(key)) continue
+      decided.add(key)
+      const versions = await findStoredAssetRows(ctx, workspace, assetId)
+      // Expiry follows the newest version: an asset overwritten after the cutoff stays whole.
+      if (
+        versions.some(
+          (version) =>
+            version.deletionRequestedAt === undefined && version.createdAt >= args.createdBefore,
+        )
+      )
+        continue
       requested.set(key, { workspace, assetId })
       // Storage deletes whole assets, so every locally known version is hidden together.
-      for (const row of await findStoredAssetRows(ctx, workspace, assetId)) {
-        if (row.deletionRequestedAt === undefined) {
-          await ctx.db.patch(row._id, { deletionRequestedAt: now })
+      for (const version of versions) {
+        if (version.deletionRequestedAt === undefined) {
+          await ctx.db.patch(version._id, { deletionRequestedAt: now })
         }
       }
     }
-    return { requested: [...requested.values()], hasMore: candidates.length > limit }
+    return {
+      requested: [...requested.values()],
+      hasMore: stoppedEarly || rows.length > scanBudget,
+      continueCursor: last
+        ? JSON.stringify([last.createdAt, last._creationTime])
+        : (args.cursor ?? emptyPosition),
+    }
   },
 })
 

@@ -50,7 +50,12 @@ export const summary = internalQuery({
 })
 
 export const requestDeletion = internalMutation({
-  args: { album: v.string(), createdBefore: v.number(), limit: v.number() },
+  args: {
+    album: v.string(),
+    createdBefore: v.number(),
+    limit: v.number(),
+    cursor: v.optional(v.string()),
+  },
   handler: (ctx, args) =>
     ctx.runMutation(components.transloadit.lib.requestStoredAssetDeletion, args),
 })

@@ -379,8 +379,14 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       requestStoredAssetDeletion: FunctionReference<
         "mutation",
         "internal",
-        { album?: string; createdBefore: number; limit?: number },
         {
+          album?: string;
+          createdBefore: number;
+          cursor?: string;
+          limit?: number;
+        },
+        {
+          continueCursor: string;
           hasMore: boolean;
           requested: Array<{ assetId: string; workspace: string }>;
         },

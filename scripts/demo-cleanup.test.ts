@@ -25,27 +25,33 @@ const fakeConvex = (rows: Row[]) => {
       truncated: false,
       storagePrefix: prefix,
     }),
-    requestStorageDeletion: async ({ createdBefore, limit }) => {
-      calls.push('hide')
-      const expired = rows.filter((row) => !row.hidden && row.createdAt < createdBefore)
-      for (const row of expired.slice(0, limit)) row.hidden = true
+    requestStorageDeletion: async ({ createdBefore, limit, cursor }) => {
+      calls.push(cursor ? `hide:${cursor}` : 'hide')
+      const start = cursor === undefined ? 0 : Number(cursor)
+      const scanned = rows.slice(start, start + limit)
+      const expired = scanned.filter((row) => !row.hidden && row.createdAt < createdBefore)
+      for (const row of expired) row.hidden = true
       return {
-        requested: expired.slice(0, limit).map((row) => ({ workspace: 'w', assetId: row.assetId })),
-        hasMore: expired.length > limit,
+        requested: expired.map((row) => ({ workspace: 'w', assetId: row.assetId })),
+        hasMore: start + limit < rows.length,
+        continueCursor: String(start + limit),
       }
     },
+    // Like the component, pages continue after a stable position rather than an array offset.
     pendingStorageDeletions: async ({ cursor, numItems }) => {
-      const pending = rows.filter((row) => row.hidden)
-      const start = cursor === null ? 0 : Number(cursor)
+      const pending = rows
+        .filter((row) => row.hidden && (cursor === null || row.assetId > cursor))
+        .sort((a, b) => a.assetId.localeCompare(b.assetId))
+      const page = pending.slice(0, numItems)
       return {
-        page: pending.slice(start, start + numItems).map((row) => ({
+        page: page.map((row) => ({
           workspace: 'w',
           assetId: row.assetId,
           paths: [row.path],
           deletionAttempts: row.attempts,
         })),
-        isDone: start + numItems >= pending.length,
-        continueCursor: String(start + numItems),
+        isDone: pending.length <= numItems,
+        continueCursor: page.at(-1)?.assetId ?? cursor ?? '',
       }
     },
     completeStorageDeletion: async ({ assetId }) => {
@@ -195,6 +201,19 @@ describe('demo cleanup', () => {
     const report = await runDemoCleanup({ convex, storage }, { ...expire, batchSize: 100 })
     expect(report).toMatchObject({ retryNeeded: true, storage: { failed: 100, deleted: 50 } })
     expect(deleted).toEqual(assets.slice(100))
+  })
+
+  test("hiding continues from each call's cursor until the album is scanned", async () => {
+    const rows = [row('fresh', 1), row('old-a', 30), row('old-b', 30)]
+    const { convex, calls } = fakeConvex(rows)
+    const { storage, deleted } = fakeStorage(['fresh', 'old-a', 'old-b'])
+    const report = await runDemoCleanup(
+      { convex, storage },
+      { dryRun: false, olderThanMs: 24 * hour, now, batchSize: 1 },
+    )
+    expect(report).toMatchObject({ storage: { hidden: 2, deleted: 2 } })
+    expect(calls.filter((call) => call.startsWith('hide'))).toEqual(['hide', 'hide:1', 'hide:2'])
+    expect(deleted).toEqual(['old-a', 'old-b'])
   })
 
   test('assets already gone from Storage still record their deletion', async () => {
