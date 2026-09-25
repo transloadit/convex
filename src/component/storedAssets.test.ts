@@ -359,6 +359,18 @@ describe('council 3 regressions', () => {
     expect(splits).toBeGreaterThan(0)
     expect(ids).toHaveLength(1055)
     expect(new Set(ids).size).toBe(1055)
+    // NaN passes Math.min and Math.max; with an end cursor it would lift the read limit entirely.
+    await expect(
+      t.query(api.lib.listStoredAssets, {
+        album: 'wedding-gallery',
+        paginationOpts: {
+          numItems: 5,
+          maximumRowsRead: Number.NaN,
+          cursor: null,
+          endCursor: oldest.continueCursor,
+        },
+      }),
+    ).rejects.toThrow('Invalid Storage page limits')
   })
 })
 
@@ -445,6 +457,19 @@ describe('stored asset reads and deletion ledger', () => {
       paginationOpts: { numItems: 5000, cursor: null },
     })
     expect(capped.page).toHaveLength(500)
+    // A NaN page size would read the whole album in one query; non-finite limits are refused.
+    for (const limits of [
+      { numItems: Number.NaN },
+      { numItems: 5, maximumRowsRead: Number.NaN },
+      { numItems: Number.POSITIVE_INFINITY },
+    ]) {
+      await expect(
+        t.query(api.lib.listStoredAssets, {
+          album: 'wedding-gallery',
+          paginationOpts: { ...limits, cursor: null },
+        }),
+      ).rejects.toThrow('Invalid Storage page limits')
+    }
   })
 
   test('an end cursor keeps a loaded page stable while newer photos arrive', async () => {
@@ -643,6 +668,12 @@ describe('stored asset reads and deletion ledger', () => {
       ['a', 'b', 'c'].map((seedName) => damId(`asset${seedName}`)).sort(),
     )
     expect(second.isDone).toBe(true)
+    await expect(
+      t.query(api.lib.listStoredAssetDeletions, {
+        album: 'wedding-gallery',
+        paginationOpts: { numItems: Number.NaN, cursor: null },
+      }),
+    ).rejects.toThrow('Invalid Storage page limits')
   })
 
   test('refuses to complete a deletion that was never requested', async () => {

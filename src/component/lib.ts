@@ -774,6 +774,14 @@ const paginationFor = (album: string | undefined, opts: PaginationOptions) => {
       throw new ConvexError('InvalidCursor: restart Storage pagination')
     }
   }
+  // Convex numbers include NaN and the infinities. NaN passes Math.min and Math.max and would lift
+  // both limits below, so only finite limits are accepted.
+  if (
+    !Number.isFinite(opts.numItems) ||
+    (opts.maximumRowsRead !== undefined && !Number.isFinite(opts.maximumRowsRead))
+  ) {
+    throw transloaditError('storage', 'Invalid Storage page limits')
+  }
   const numItems = pageSize(opts.numItems)
   return {
     numItems,
