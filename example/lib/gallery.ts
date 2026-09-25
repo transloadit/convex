@@ -123,3 +123,10 @@ export const buildStorageGalleryItems = (
 /** Newest first across private photos and R2 media; equal times keep their incoming order. */
 export const mergeGalleryItems = (...lists: GalleryItem[][]) =>
   lists.flat().sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+
+// Mirrors `.gallery` in globals.css: rows are --row-height tall (250px, or 150px up to 640px) and
+// spare width grows each card in proportion to its ratio, measured below 1.25x on desktop. On
+// narrow screens one photo can fill the row. Fixed sizes, never `auto`, keep the chosen candidate
+// identical when opening the viewer remounts thumbnails, so no larger rendition is requested.
+export const thumbnailSizes = (aspectRatio = 3 / 2) =>
+  `(max-width: 640px) 100vw, ${Math.round(250 * aspectRatio * 1.25)}px`

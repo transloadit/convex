@@ -4,6 +4,7 @@ import {
   buildStorageGalleryItems,
   mergeGalleryItems,
   type StorageGalleryAsset,
+  thumbnailSizes,
 } from './gallery'
 import type { AssemblyResultResponse } from './transloadit'
 
@@ -153,4 +154,10 @@ describe('private Storage photos', () => {
       'storage:same',
     ])
   })
+})
+
+test('thumbnail sizes follow the justified row layout, without auto sizing', () => {
+  expect(thumbnailSizes(3 / 2)).toBe('(max-width: 640px) 100vw, 469px')
+  expect(thumbnailSizes(2 / 3)).toBe('(max-width: 640px) 100vw, 208px')
+  expect(thumbnailSizes()).toBe(thumbnailSizes(3 / 2))
 })

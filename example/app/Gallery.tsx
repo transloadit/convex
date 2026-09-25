@@ -21,6 +21,7 @@ import {
   type GalleryResult,
   mergeGalleryItems,
   type StorageGalleryAsset,
+  thumbnailSizes,
 } from '../lib/gallery'
 
 const motionPreference = '(prefers-reduced-motion: reduce)'
@@ -53,7 +54,7 @@ const Media = ({
       <Image
         src={item.receipt}
         alt={item.name || t('moment')}
-        sizes={viewing ? '100vw' : 'auto, (max-width: 640px) 50vw, 33vw'}
+        sizes={viewing ? '100vw' : thumbnailSizes(item.aspectRatio)}
         loading={viewing ? 'eager' : 'lazy'}
       />
     )
