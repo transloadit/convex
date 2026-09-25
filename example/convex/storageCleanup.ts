@@ -7,59 +7,52 @@ import { internalMutation, internalQuery } from './_generated/server'
 
 // Admin-only wrappers for scripts/cleanup-demo.ts. Guests can never hide or delete album media.
 
-const summaryPageSize = 500
-const summaryPageLimit = 20
+const pageSize = 500
 
+// Each call reads one page in its own transaction; the script combines pages, so large albums
+// never exceed a single query's read limits.
 export const summary = internalQuery({
-  args: { album: v.string(), createdBefore: v.number() },
+  args: { album: v.string() },
   returns: v.object({
-    visibleStoredAssets: v.number(),
-    expiredStoredAssets: v.number(),
     results: v.number(),
-    truncated: v.boolean(),
-    storagePrefix: v.string(),
+    resultsTruncated: v.boolean(),
+    // Null when this deployment has no unambiguous Storage namespace.
+    storagePrefix: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args) => {
-    let visibleStoredAssets = 0
-    let cursor: string | null = null
-    let isDone = false
-    for (let page = 0; page < summaryPageLimit && !isDone; page += 1) {
-      const result = await ctx.runQuery(components.transloadit.lib.listStoredAssets, {
-        album: args.album,
-        paginationOpts: { numItems: summaryPageSize, cursor },
-      })
-      visibleStoredAssets += result.page.length
-      isDone = result.isDone
-      cursor = result.continueCursor
-    }
-    // The same selection as the real run: distinct assets whose newest version has expired.
-    let expiredStoredAssets = 0
-    let expiryCursor: string | undefined
-    let expiryDone = false
-    for (let page = 0; page < summaryPageLimit && !expiryDone; page += 1) {
-      const preview = await ctx.runQuery(components.transloadit.lib.previewStoredAssetExpiry, {
-        album: args.album,
-        createdBefore: args.createdBefore,
-        limit: summaryPageSize,
-        ...(expiryCursor ? { cursor: expiryCursor } : {}),
-      })
-      expiredStoredAssets += preview.requested.length
-      expiryDone = !preview.hasMore
-      expiryCursor = preview.continueCursor
-    }
     const results = await ctx.runQuery(components.transloadit.lib.listAlbumResults, {
       album: args.album,
-      limit: summaryPageSize,
+      limit: pageSize,
     })
     return {
-      visibleStoredAssets,
-      expiredStoredAssets,
       results: results.length,
-      truncated: !isDone || !expiryDone || results.length === summaryPageSize,
+      resultsTruncated: results.length === pageSize,
       // Computed where upload paths are chosen, so custom client URLs cannot change the prefix.
-      storagePrefix: getAlbumStoragePrefix(args.album),
+      storagePrefix: getAlbumStoragePrefix(args.album) ?? null,
     }
   },
+})
+
+export const visiblePage = internalQuery({
+  args: { album: v.string(), cursor: v.union(v.string(), v.null()) },
+  returns: v.object({ count: v.number(), isDone: v.boolean(), continueCursor: v.string() }),
+  handler: async (ctx, args) => {
+    const page = await ctx.runQuery(components.transloadit.lib.listStoredAssets, {
+      album: args.album,
+      paginationOpts: { numItems: pageSize, cursor: args.cursor },
+    })
+    return { count: page.page.length, isDone: page.isDone, continueCursor: page.continueCursor }
+  },
+})
+
+export const previewExpiry = internalQuery({
+  args: {
+    album: v.string(),
+    createdBefore: v.number(),
+    limit: v.number(),
+    cursor: v.optional(v.string()),
+  },
+  handler: (ctx, args) => ctx.runQuery(components.transloadit.lib.previewStoredAssetExpiry, args),
 })
 
 export const requestDeletion = internalMutation({

@@ -118,6 +118,7 @@ beforeEach(() => {
   vi.stubEnv('TRANSLOADIT_NOTIFY_URL', 'https://example.com/notify')
   vi.stubEnv('TRANSLOADIT_R2_CREDENTIALS', 'test-r2')
   vi.stubEnv('TRANSLOADIT_WORKSPACE', workspace)
+  vi.stubEnv('CONVEX_CLOUD_URL', 'https://happy-otter-123.convex.cloud')
 })
 
 afterEach(() => vi.unstubAllEnvs())
@@ -127,7 +128,7 @@ describe('private Storage uploads', () => {
     const t = setup()
     const guest = await admit(t, 'Alex')
     const { params, prefix } = await upload(guest, t, 'a')
-    expect(prefix).toMatch(/^convex-demo\/local\/wedding-gallery\/[0-9a-f-]{36}\/$/)
+    expect(prefix).toMatch(/^convex-demo\/happy-otter-123\/wedding-gallery\/[0-9a-f-]{36}\/$/)
     expect(params.fields.uploadId).toBe(prefix.split('/')[3])
     expect(params.steps[':original']).toEqual({
       robot: '/upload/handle',
@@ -148,6 +149,29 @@ describe('private Storage uploads', () => {
     expect(uploads).toEqual([
       expect.objectContaining({ uploadId: params.fields.uploadId, storagePrefix: prefix }),
     ])
+  })
+
+  test('local deployments need an explicit Storage namespace before using a shared Workspace', async () => {
+    vi.stubEnv('CONVEX_CLOUD_URL', 'http://127.0.0.1:3210')
+    const t = setup()
+    const guest = await admit(t, 'Alex')
+    const signed = async () =>
+      JSON.parse(
+        (
+          await guest.action(api.wedding.createWeddingAssemblyOptions, {
+            guestName: 'Alex',
+            fileCount: 1,
+          })
+        ).assemblyOptions.params,
+      )
+    expect((await signed()).steps.images_stored).toBeUndefined()
+    expect(await t.query(api.storageCleanup.summary, { album: 'wedding-gallery' })).toMatchObject({
+      storagePrefix: null,
+    })
+    vi.stubEnv('TRANSLOADIT_STORAGE_NAMESPACE', 'kvz-laptop')
+    expect((await signed()).steps.images_stored.path).toMatch(
+      /^convex-demo\/kvz-laptop\/wedding-gallery\//,
+    )
   })
 
   test('keeps the R2-only pipeline when no Storage Workspace is configured', async () => {
@@ -215,7 +239,9 @@ describe('gallery and delivery authorization', () => {
     const t = setup()
     const alex = await admit(t, 'Alex')
     const cases = [
-      await upload(alex, t, 'outside', () => ({ path: 'convex-demo/local/elsewhere/x.jpg' })),
+      await upload(alex, t, 'outside', () => ({
+        path: 'convex-demo/happy-otter-123/elsewhere/x.jpg',
+      })),
       await upload(alex, t, 'nested', (prefix) => ({ path: `${prefix}nested/x.jpg` })),
       await upload(alex, t, 'album', undefined, { album: 'another-album' }),
       await upload(alex, t, 'owner', undefined, { userId: 'someone-else' }),
@@ -260,8 +286,8 @@ describe('gallery and delivery authorization', () => {
   })
 })
 
-describe('cleanup summary follows the expiry rules', () => {
-  test('an asset with a fresh version is not counted as expired', async () => {
+describe('cleanup previews follow the expiry rules', () => {
+  test('an asset with a fresh version is not previewed as expired', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')
     const { asset } = await upload(alex, t, 'a')
@@ -277,11 +303,12 @@ describe('cleanup summary follows the expiry rules', () => {
         results: { images_stored: [{ ...asset, id: 'v2', version_id: damId('fresh') }] },
       },
     })
-    const summary = await t.query(api.storageCleanup.summary, {
+    const preview = await t.query(api.storageCleanup.previewExpiry, {
       album: 'wedding-gallery',
       createdBefore: cutoff,
+      limit: 100,
     })
-    expect(summary.expiredStoredAssets).toBe(0)
+    expect(preview.requested).toEqual([])
   })
 })
 
@@ -309,21 +336,19 @@ describe('council regressions', () => {
 })
 
 describe('cleanup summary', () => {
-  test('reports the backend prefix and counts per album, including the oldest receipts', async () => {
+  test('reports the backend prefix and pages visible receipts per album', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')
     await upload(alex, t, 'a')
-    const later = Date.now() + 1
-    expect(
-      await t.query(api.storageCleanup.summary, { album: 'wedding-gallery', createdBefore: later }),
-    ).toMatchObject({
-      visibleStoredAssets: 1,
-      expiredStoredAssets: 1,
-      truncated: false,
-      storagePrefix: 'convex-demo/local/wedding-gallery/',
+    expect(await t.query(api.storageCleanup.summary, { album: 'wedding-gallery' })).toMatchObject({
+      resultsTruncated: false,
+      storagePrefix: 'convex-demo/happy-otter-123/wedding-gallery/',
     })
     expect(
-      await t.query(api.storageCleanup.summary, { album: 'another-album', createdBefore: later }),
-    ).toMatchObject({ visibleStoredAssets: 0, storagePrefix: 'convex-demo/local/another-album/' })
+      await t.query(api.storageCleanup.visiblePage, { album: 'wedding-gallery', cursor: null }),
+    ).toMatchObject({ count: 1, isDone: true })
+    expect(
+      await t.query(api.storageCleanup.visiblePage, { album: 'another-album', cursor: null }),
+    ).toMatchObject({ count: 0, isDone: true })
   })
 })

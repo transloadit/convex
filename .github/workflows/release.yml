@@ -25,6 +25,8 @@ jobs:
       - run: npm install --global corepack@0.36.0
       - run: corepack enable
       - run: yarn install --immutable
+      # Vendored prerelease tarballs are for CI only; never version or publish a manifest using them.
+      - run: node scripts/assert-publishable.ts
       - uses: changesets/action@66d7d1ddafddf1ef45f98ee51a7496f9cdadb2f4 # v2.1.2
         with:
           version-script: corepack yarn changeset version

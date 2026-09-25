@@ -16,10 +16,12 @@ loadEnv()
 //   node scripts/cleanup-demo.ts --dry-run            reset preview across Convex, Storage and R2
 //   node scripts/cleanup-demo.ts                      reset the whole demo album
 //   node scripts/cleanup-demo.ts --older-than=24      expire Storage photos older than 24 hours
+// A missing Storage or R2 configuration is refused unless skipped on purpose with --skip-storage
+// or --skip-r2: references are never forgotten while their media stays reachable.
 const argMap = new Map<string, string | boolean>()
 for (const arg of process.argv.slice(2)) {
-  if (arg === '--dry-run') {
-    argMap.set('dry-run', true)
+  if (arg === '--dry-run' || arg === '--skip-r2' || arg === '--skip-storage') {
+    argMap.set(arg.slice(2), true)
     continue
   }
   if (arg.startsWith('--')) {
@@ -61,7 +63,11 @@ const client = new ConvexHttpClient(convexUrl, {
 client.setAdminAuth(convexAdminKey)
 
 const convex: CleanupConvex = {
-  summary: (args) => client.query('storageCleanup:summary', { album, ...args }) as never,
+  summary: () => client.query('storageCleanup:summary', { album }) as never,
+  visiblePage: ({ cursor }) =>
+    client.query('storageCleanup:visiblePage', { album, cursor }) as never,
+  previewExpiry: (args) =>
+    client.query('storageCleanup:previewExpiry', { album, ...args }) as never,
   requestStorageDeletion: (args) =>
     client.mutation('storageCleanup:requestDeletion', { album, ...args }) as never,
   pendingStorageDeletions: ({ cursor, numItems }) =>
@@ -196,6 +202,8 @@ runDemoCleanup(
   { convex, storage, r2 },
   {
     dryRun,
+    skipR2: argMap.get('skip-r2') === true,
+    skipStorage: argMap.get('skip-storage') === true,
     ...(olderThanHours === undefined ? {} : { olderThanMs: olderThanHours * 60 * 60 * 1000 }),
   },
 )

@@ -277,10 +277,12 @@ export const Gallery = ({
   results,
   storageAssets = [],
   onLoadMore,
+  loadFailed = false,
 }: {
   results: GalleryResult[]
   storageAssets?: StorageGalleryAsset[]
   onLoadMore?: () => void
+  loadFailed?: boolean
 }) => {
   const t = useTranslations('album')
   const items = mergeGalleryItems(
@@ -312,7 +314,14 @@ export const Gallery = ({
   const transitionName = (id: string) =>
     `photo-${Array.from(`${instanceId}-${id}`, (char) => char.codePointAt(0)?.toString(16)).join('-')}`
 
+  const failure = loadFailed ? (
+    <p className="gallery-error" role="alert">
+      {t('loadFailed')}
+    </p>
+  ) : null
+
   if (!items.length) {
+    if (failure) return failure
     return (
       <div className="gallery-empty" data-testid="gallery-empty">
         <span className="empty-flower" aria-hidden="true">
@@ -326,6 +335,7 @@ export const Gallery = ({
 
   return (
     <>
+      {failure}
       <p className="gallery-count">{t('count', { count: items.length })}</p>
       <div className="gallery" data-testid="gallery">
         {items.map((item) => (

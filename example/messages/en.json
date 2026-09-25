@@ -22,7 +22,8 @@
     "emptyHint": "Use Share photos to add your favorite photos and videos from the day.",
     "unavailable": "Gallery temporarily unavailable",
     "unavailableHint": "Uploads are unavailable right now. Please try again later.",
-    "loadMore": "Show more memories"
+    "loadMore": "Show more memories",
+    "loadFailed": "Some photos could not be loaded. Please reload the page."
   },
   "language": { "label": "Language: {language}" },
   "access": {

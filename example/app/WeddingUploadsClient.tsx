@@ -423,7 +423,12 @@ const CloudWeddingUploads = ({
       toasts={toasts}
       authState={isLoading ? 'loading' : isAuthenticated ? 'authenticated' : 'guest'}
     >
-      <Gallery results={galleryResults} storageAssets={media.items} onLoadMore={media.loadMore} />
+      <Gallery
+        results={galleryResults}
+        storageAssets={media.items}
+        onLoadMore={media.loadMore}
+        loadFailed={Boolean(media.error)}
+      />
     </WeddingLayout>
   )
 }

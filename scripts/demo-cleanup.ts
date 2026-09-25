@@ -27,13 +27,23 @@ export type StorageDeletion = {
 }
 
 export type CleanupConvex = {
-  summary: (args: { createdBefore: number }) => Promise<{
-    visibleStoredAssets: number
-    expiredStoredAssets: number
+  /** Result count and this deployment's album prefix, as the backend that chose upload paths. */
+  summary: () => Promise<{
     results: number
-    truncated: boolean
-    /** This deployment's album prefix, computed by the backend that chose the upload paths. */
-    storagePrefix: string
+    resultsTruncated: boolean
+    storagePrefix: string | null
+  }>
+  /** One page of visible receipt versions per call, so large albums stay within transaction limits. */
+  visiblePage: (args: { cursor: string | null }) => Promise<{
+    count: number
+    isDone: boolean
+    continueCursor: string
+  }>
+  /** One page of the exact expiry selection, without hiding anything. */
+  previewExpiry: (args: { createdBefore: number; limit: number; cursor?: string }) => Promise<{
+    requested: { workspace: string; assetId: string }[]
+    hasMore: boolean
+    continueCursor: string
   }>
   requestStorageDeletion: (args: {
     createdBefore: number
@@ -75,6 +85,10 @@ export type CleanupR2 = {
 
 export type CleanupOptions = {
   dryRun: boolean
+  /** Explicitly leave R2 objects untouched; otherwise a reset without R2 access refuses to run. */
+  skipR2?: boolean
+  /** Explicitly leave Storage untouched; otherwise cleanup without Storage access refuses to run. */
+  skipStorage?: boolean
   /** Undefined resets the whole demo album; a number expires Storage assets older than this. */
   olderThanMs?: number
   now?: number
@@ -157,26 +171,56 @@ export const runDemoCleanup = async (
   const batchSize = options.batchSize ?? 100
   const reset = options.olderThanMs === undefined
   const createdBefore = reset ? now + 1 : now - (options.olderThanMs ?? 0)
-  const summary = await convex.summary({ createdBefore })
-  const prefix = summary.storagePrefix
+  // A missing backend must be skipped on purpose: forgetting references to media that cannot be
+  // deleted would leave it public or orphaned.
+  if (!storage && !options.skipStorage) {
+    throw new Error('Storage is not configured: set TRANSLOADIT_WORKSPACE or pass --skip-storage')
+  }
+  if (reset && !r2 && !options.skipR2) {
+    throw new Error('R2 is not configured: set the R2 variables or pass --skip-r2')
+  }
+  const summary = await convex.summary()
+  const prefix = summary.storagePrefix ?? ''
+  if (storage && !summary.storagePrefix) {
+    throw new Error('This deployment has no unambiguous Storage namespace to clean up')
+  }
   const storageObjects = storage ? await storage.list(prefix) : []
   const r2Keys = reset && r2 ? await r2.list() : []
 
   if (options.dryRun) {
+    // Page by page in separate transactions; each asset counts once, as in the real run.
+    let visibleStoredAssets = 0
+    for (let cursor: string | null = null; ; ) {
+      const page = await convex.visiblePage({ cursor })
+      visibleStoredAssets += page.count
+      if (page.isDone) break
+      cursor = page.continueCursor
+    }
+    const expired = new Set<string>()
+    for (let cursor: string | undefined; ; ) {
+      const page = await convex.previewExpiry({
+        createdBefore,
+        limit: batchSize,
+        ...(cursor ? { cursor } : {}),
+      })
+      for (const entry of page.requested) expired.add(`${entry.workspace}:${entry.assetId}`)
+      if (!page.hasMore) break
+      cursor = page.continueCursor
+    }
     return {
       dryRun: true,
       mode: reset ? 'reset' : 'expire',
       createdBefore,
-      convex: summary,
+      convex: { ...summary, visibleStoredAssets },
       storage: storage
         ? {
             workspace: storage.workspace,
             prefix,
             objects: storageObjects.length,
-            wouldHide: reset ? summary.visibleStoredAssets : summary.expiredStoredAssets,
+            wouldHide: expired.size,
           }
-        : 'disabled',
-      r2: r2 ? { objects: r2Keys.length } : reset ? 'disabled' : 'unchanged',
+        : 'skipped',
+      r2: r2 ? { objects: r2Keys.length } : reset ? 'skipped' : 'unchanged',
     }
   }
 
@@ -233,8 +277,8 @@ export const runDemoCleanup = async (
     dryRun: false,
     mode: reset ? 'reset' : 'expire',
     createdBefore,
-    storage: storageReport ?? 'disabled',
-    r2: reset ? (r2 ? { deleted: r2Deleted } : 'disabled') : 'unchanged',
+    storage: storageReport ?? 'skipped',
+    r2: reset ? (r2 ? { deleted: r2Deleted } : 'skipped') : 'unchanged',
     convex: purged,
     retryNeeded,
   }

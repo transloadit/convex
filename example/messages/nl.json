@@ -22,7 +22,8 @@
     "emptyHint": "Voeg via Foto’s delen je favoriete foto’s en video’s van de dag toe.",
     "unavailable": "De galerij is tijdelijk niet beschikbaar",
     "unavailableHint": "Uploaden is momenteel niet mogelijk. Probeer het later opnieuw.",
-    "loadMore": "Meer herinneringen tonen"
+    "loadMore": "Meer herinneringen tonen",
+    "loadFailed": "Sommige foto's konden niet worden geladen. Laad de pagina opnieuw."
   },
   "language": { "label": "Taal: {language}" },
   "access": {

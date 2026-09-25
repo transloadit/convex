@@ -37,13 +37,18 @@ export const useStablePages = <T>(
     [pages, query, numItems],
   )
   const results = useQueries(requests)
-  // Keep a page's previous result while its re-subscription (with an end cursor) loads.
+  // Keep a page's previous result while its re-subscription (with an end cursor) loads, but never
+  // after it failed: a failed page is dropped and its error surfaced instead of stale photos.
   const loaded = useRef(new Map<number, PageResult<T>>())
+  let error: Error | undefined
   const current = pages.map((_, index) => {
     const result = results[String(index)]
-    if (result !== undefined && !(result instanceof Error)) {
-      loaded.current.set(index, result as PageResult<T>)
+    if (result instanceof Error) {
+      loaded.current.delete(index)
+      error ??= result
+      return undefined
     }
+    if (result !== undefined) loaded.current.set(index, result as PageResult<T>)
     return loaded.current.get(index)
   })
   // A frozen page that outgrew the server limit is split, so no photo is skipped.
@@ -59,8 +64,9 @@ export const useStablePages = <T>(
   const last = current[current.length - 1]
   return {
     items: current.flatMap((result) => result?.page ?? []),
+    error,
     loadMore:
-      last && !last.isDone
+      !error && last && !last.isDone
         ? () => setPages((previous) => freezeAndExtend(previous, last))
         : undefined,
   }

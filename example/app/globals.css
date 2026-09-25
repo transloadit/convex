@@ -808,6 +808,12 @@ summary:focus-visible {
   margin: 24px auto 0;
 }
 
+.gallery-error {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font: 13px / 1.5 var(--ui-font);
+}
+
 /* On narrow screens the photo name gets its own line instead of being cut off by the actions. */
 @media (max-width: 640px) {
   .viewer-toolbar:not(.viewer-navigation) {

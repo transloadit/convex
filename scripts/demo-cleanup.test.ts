@@ -17,13 +17,18 @@ type Row = { assetId: string; path: string; createdAt: number; hidden: boolean; 
 const fakeConvex = (rows: Row[]) => {
   const calls: string[] = []
   const convex: CleanupConvex = {
-    summary: async ({ createdBefore }) => ({
-      visibleStoredAssets: rows.filter((row) => !row.hidden).length,
-      expiredStoredAssets: rows.filter((row) => !row.hidden && row.createdAt < createdBefore)
-        .length,
-      results: 3,
-      truncated: false,
-      storagePrefix: prefix,
+    summary: async () => ({ results: 3, resultsTruncated: false, storagePrefix: prefix }),
+    visiblePage: async () => ({
+      count: rows.filter((row) => !row.hidden).length,
+      isDone: true,
+      continueCursor: '',
+    }),
+    previewExpiry: async ({ createdBefore }) => ({
+      requested: rows
+        .filter((row) => !row.hidden && row.createdAt < createdBefore)
+        .map((row) => ({ workspace: 'w', assetId: row.assetId })),
+      hasMore: false,
+      continueCursor: '',
     }),
     requestStorageDeletion: async ({ createdBefore, limit, cursor }) => {
       calls.push(cursor ? `hide:${cursor}` : 'hide')
@@ -251,10 +256,42 @@ describe('demo cleanup', () => {
   test('without Storage configuration nothing is hidden, so receipts cannot get stranded', async () => {
     const rows = [row('old', 30)]
     const { convex, calls } = fakeConvex(rows)
-    const report = await runDemoCleanup({ convex }, expire)
-    expect(report).toMatchObject({ storage: 'disabled', retryNeeded: false })
+    await expect(runDemoCleanup({ convex }, expire)).rejects.toThrow('--skip-storage')
+    const report = await runDemoCleanup({ convex }, { ...expire, skipStorage: true })
+    expect(report).toMatchObject({ storage: 'skipped', retryNeeded: false })
     expect(calls).toEqual([])
     expect(rows).toEqual([expect.objectContaining({ hidden: false })])
+  })
+
+  test('a reset refuses to forget results while their R2 objects are unreachable', async () => {
+    const { convex, calls } = fakeConvex([row('old', 30)])
+    const { storage, deleted } = fakeStorage(['old'])
+    await expect(runDemoCleanup({ convex, storage }, { dryRun: false, now })).rejects.toThrow(
+      '--skip-r2',
+    )
+    expect(calls).toEqual([])
+    expect(deleted).toEqual([])
+    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now, skipR2: true })
+    expect(report).toMatchObject({ r2: 'skipped', convex: { deletedResults: 3 } })
+  })
+
+  test('dry runs count each expired asset once across preview pages', async () => {
+    const { convex } = fakeConvex([row('a', 30), row('b', 30)])
+    const pages = [
+      { requested: [{ workspace: 'w', assetId: 'a' }], hasMore: true, continueCursor: '1' },
+      {
+        requested: [
+          { workspace: 'w', assetId: 'a' },
+          { workspace: 'w', assetId: 'b' },
+        ],
+        hasMore: false,
+        continueCursor: '2',
+      },
+    ]
+    convex.previewExpiry = async ({ cursor }) => pages[cursor ? 1 : 0] as (typeof pages)[number]
+    const { storage } = fakeStorage(['a', 'b'])
+    const report = await runDemoCleanup({ convex, storage }, { ...expire, dryRun: true })
+    expect(report).toMatchObject({ storage: { wouldHide: 2 } })
   })
 
   test('a reset records orphans in the ledger, then clears Storage and R2 before results', async () => {
@@ -286,7 +323,7 @@ describe('demo cleanup', () => {
   test('a reset keeps Convex results while Storage deletions still need a retry', async () => {
     const { convex, calls } = fakeConvex([row('flaky', 1)])
     const { storage } = fakeStorage(['flaky'], { failing: new Set(['flaky']) })
-    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now })
+    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now, skipR2: true })
     expect(report).toMatchObject({ retryNeeded: true, storage: { failed: 1 } })
     expect(calls).not.toContain('purge')
   })
