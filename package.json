@@ -24,6 +24,7 @@
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "changeset": "changeset",
     "changeset:version": "changeset version",
+    "codegen": "CONVEX_DEPLOY_KEY= convex codegen --component-dir ./src/component",
     "typecheck": "tsc --noEmit && yarn typecheck:example",
     "test": "vitest run --typecheck",
     "test:watch": "vitest --typecheck",

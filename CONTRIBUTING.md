@@ -214,9 +214,19 @@ const t = createTransloaditTest();
 ## Generated files
 
 `src/component/_generated` is Convex codegen output. It is checked in so tests and component
-consumers have stable API references. If you change component functions or schemas, regenerate with
-Convex codegen (for example via `npx convex dev` or `npx convex codegen`) and commit the updated
-files.
+consumers have stable API references. If you change component functions or schemas, regenerate it
+with the official Convex CLI and commit the result:
+
+```bash
+CONVEX_AGENT_MODE=anonymous npx convex init   # once: a throwaway local backend, no account needed
+yarn codegen                                  # convex codegen --component-dir ./src/component
+```
+
+Codegen analyses the component on a deployment without changing the code it runs. The root
+`convex.json` points the CLI at the example app, which mounts the component from `src/`.
+`yarn codegen` ignores `CONVEX_DEPLOY_KEY` so a key in `.env` never becomes the codegen target; it
+uses the deployment `convex init` or `convex dev` configured. CI repeats these steps against a
+local backend and fails when the committed output drifts.
 
 ## Releases (Changesets)
 
