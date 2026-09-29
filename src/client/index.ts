@@ -11,6 +11,7 @@ import {
   type StorageConfig,
   type StoredAssetReference,
   type StoredAssetResponse,
+  vAlbumResultResponse,
   vAssemblyIdArgs,
   vAssemblyOptions,
   vAssemblyResponse,
@@ -82,6 +83,7 @@ export {
   getResultUrl,
 } from '../shared/resultUtils.ts'
 export type {
+  AlbumResultResponse,
   ParsedWebhookRequest,
   StorageConfig,
   StoredAssetDeletion,
@@ -98,7 +100,7 @@ export {
 export type { StoredAssemblyAsset, StoredAsset } from '../shared/storedAssets.ts'
 export { selectStoredAssets } from '../shared/storedAssets.ts'
 export type { AssemblyInstructionsInput, AssemblyStatus }
-export { vAssemblyResponse, vAssemblyResultResponse, vCreateAssemblyArgs }
+export { vAlbumResultResponse, vAssemblyResponse, vAssemblyResultResponse, vCreateAssemblyArgs }
 
 export interface TransloaditConfig {
   authKey: string
@@ -225,7 +227,14 @@ export class TransloaditClient {
     return ctx.runQuery(this.component.lib.listResults, args)
   }
 
-  async listAlbumResults(ctx: RunQueryCtx, args: { album: string; limit?: number }) {
+  /**
+   * Newest album results, at most 500. `createdAfter` skips older rows in the index, and
+   * `assemblyFields` joins those keys of each result's Assembly `fields` in the same call.
+   */
+  async listAlbumResults(
+    ctx: RunQueryCtx,
+    args: { album: string; limit?: number; createdAfter?: number; assemblyFields?: string[] },
+  ) {
     return ctx.runQuery(this.component.lib.listAlbumResults, args)
   }
 
@@ -422,7 +431,7 @@ export function makeTransloaditAPI(
     }),
     listAlbumResults: queryGeneric({
       args: vListAlbumResultsArgs,
-      returns: v.array(vAssemblyResultResponse),
+      returns: v.array(vAlbumResultResponse),
       handler: async (ctx, args) => {
         return ctx.runQuery(component.lib.listAlbumResults, args)
       },

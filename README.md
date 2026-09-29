@@ -97,6 +97,11 @@ Lifecycle:
 1. `createAssembly` inserts the initial `assemblies` row.
 2. `handleWebhook`, `queueWebhook`, or `refreshAssembly` upserts the assembly + replaces results.
 3. `listResults` returns flattened step outputs for use in UIs.
+4. `listAlbumResults` returns an album's newest results, at most 500, from the
+   `by_album_and_createdAt` index. `createdAfter` skips older rows in that index, and
+   `assemblyFields` joins the named keys of each result's Assembly `fields` (such as a
+   contributor's display name), so an album page needs one component call instead of one per
+   Assembly. Non-finite limits or cutoffs are refused.
 
 ## Storage receipts
 

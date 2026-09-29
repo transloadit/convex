@@ -169,6 +169,66 @@ describe('Transloadit component lib', () => {
     expect(results[0]?.userId).toBe('user_123')
   })
 
+  test('listAlbumResults bounds and ages rows in the index and joins only requested fields', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const t = convexTest(schema, modules)
+      const persist = async (assemblyId: string, fields: Record<string, unknown>, count = 1) => {
+        await t.action(api.lib.handleWebhook, {
+          verifySignature: false,
+          payload: {
+            assembly_id: assemblyId,
+            ok: 'ASSEMBLY_COMPLETED',
+            fields: { album: 'wedding-gallery', ...fields },
+            results: {
+              images_output: Array.from({ length: count }, (_, index) => ({
+                id: `${assemblyId}-${index}`,
+                ssl_url: `https://example.com/${assemblyId}-${index}.jpg`,
+              })),
+            },
+          },
+        })
+      }
+      vi.setSystemTime(1000)
+      await persist('old', { guestName: 'Old' })
+      vi.setSystemTime(2000)
+      await persist('named', { guestName: 'Олена', privateMetadata: 'not-joined' }, 2)
+      vi.setSystemTime(3000)
+      await persist('legacy', {})
+      await persist('elsewhere', { album: 'another-album', guestName: 'Other' })
+
+      const recent = await t.query(api.lib.listAlbumResults, {
+        album: 'wedding-gallery',
+        createdAfter: 1000,
+        assemblyFields: ['guestName', 'missing'],
+      })
+      expect(recent.map((result) => [result.assemblyId, result.assemblyFields])).toEqual([
+        ['legacy', {}],
+        ['named', { guestName: 'Олена' }],
+        ['named', { guestName: 'Олена' }],
+      ])
+      const all = await t.query(api.lib.listAlbumResults, { album: 'wedding-gallery' })
+      expect(all.map((result) => result.assemblyId)).toEqual(['legacy', 'named', 'named', 'old'])
+      expect(all.every((result) => !('assemblyFields' in result))).toBe(true)
+      const bounded = (limit: number) =>
+        t.query(api.lib.listAlbumResults, { album: 'wedding-gallery', limit })
+      expect(await bounded(2.5)).toHaveLength(2)
+      expect(await bounded(0)).toHaveLength(1)
+      for (const args of [
+        { limit: Number.NaN },
+        { limit: Number.POSITIVE_INFINITY },
+        { createdAfter: Number.NaN },
+        { createdAfter: Number.NEGATIVE_INFINITY },
+      ]) {
+        await expect(
+          t.query(api.lib.listAlbumResults, { album: 'wedding-gallery', ...args }),
+        ).rejects.toThrow('Invalid album result')
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('handleWebhook stores url when ssl_url missing', async () => {
     const t = convexTest(schema, modules)
 

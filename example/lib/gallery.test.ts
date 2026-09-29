@@ -2,10 +2,12 @@ import { describe, expect, test } from 'vitest'
 import {
   buildGalleryItems,
   buildStorageGalleryItems,
+  galleryCreatedAfter,
   mergeGalleryItems,
   type StorageGalleryAsset,
   thumbnailSizes,
 } from './gallery'
+import { toGalleryResult } from './gallery-results'
 import type { AssemblyResultResponse } from './transloadit'
 
 const result = (
@@ -99,6 +101,60 @@ describe('gallery media', () => {
     const results = [result('images_output')]
     expect(buildGalleryItems(results, { now: 2000, retentionMs: 1000 })).toEqual([])
     expect(buildGalleryItems(results, { now: 2000, retentionMs: Infinity })).toHaveLength(1)
+  })
+})
+
+describe('gallery result projection', () => {
+  test('keeps exactly what the gallery renders, so projected results build identical items', () => {
+    const results = [
+      result('images_resized', {
+        _id: 'resized',
+        raw: { original_id: ['first'], meta: { width: 4000, height: 3000, exif: 'private' } },
+      }),
+      result('images_output', {
+        _id: 'output',
+        resultId: 'output-result',
+        album: 'wedding-gallery',
+        userId: 'guest',
+        size: 1,
+        mime: 'image/jpeg',
+        raw: { original_id: ['first'], meta: { width: 4000, height: 3000 } },
+      }),
+      result('images_output', { _id: 'pair', raw: { original_id: ['a', 'b'] } }),
+      result('images_output', {
+        _id: 'invalid',
+        raw: { original_id: [null], original_basename: 'photo', meta: { width: '1', height: 2 } },
+      }),
+      result('videos_output', { _id: 'video', raw: 'unexpected' }),
+      result('videos_thumbs_output', { _id: 'poster' }),
+    ]
+    const projected = results.map((full) => toGalleryResult(full, 'Alex'))
+    expect(buildGalleryItems(projected, { now: 1000 })).toEqual(
+      buildGalleryItems(
+        results.map((full) => ({ ...full, uploadedBy: 'Alex' })),
+        { now: 1000 },
+      ),
+    )
+    expect(projected[1]).toEqual({
+      _id: 'output',
+      assemblyId: 'first',
+      stepName: 'images_output',
+      resultId: 'output-result',
+      sslUrl: 'https://example.com/images_output',
+      name: 'photo.jpg',
+      createdAt: 1000,
+      uploadedBy: 'Alex',
+      raw: { original_id: ['first'], meta: { width: 4000, height: 3000 } },
+    })
+    expect(projected[3]?.raw).toEqual({ meta: { height: 2 } })
+    expect(projected[4]?.raw).toEqual({})
+  })
+
+  test('asks the server for an hourly cutoff that never hides what the exact boundary shows', () => {
+    const hour = 60 * 60 * 1000
+    expect(galleryCreatedAfter(100 * hour + 59 * 60 * 1000, 24 * hour)).toBe(76 * hour)
+    expect(galleryCreatedAfter(100 * hour, 24 * hour)).toBe(76 * hour)
+    expect(galleryCreatedAfter(100 * hour, Number.POSITIVE_INFINITY)).toBeUndefined()
   })
 })
 

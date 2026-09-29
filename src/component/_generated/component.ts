@@ -179,11 +179,17 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       listAlbumResults: FunctionReference<
         "query",
         "internal",
-        { album: string; limit?: number },
+        {
+          album: string;
+          assemblyFields?: Array<string>;
+          createdAfter?: number;
+          limit?: number;
+        },
         Array<{
           _creationTime: number;
           _id: string;
           album?: string;
+          assemblyFields?: Record<string, any>;
           assemblyId: string;
           createdAt: number;
           mime?: string;

@@ -73,7 +73,9 @@ export R2_PUBLIC_URL=...   # optional public URL prefix
 ```
 
 The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default: 24) to discourage
-spam/abuse. The demo bucket auto-expires objects after 1 day via an R2 lifecycle rule (reapply with
+spam/abuse. The album query receives that cutoff, rounded down to the hour, so expired results are
+not sent to the browser; it is a display policy, not access control, and deletion remains the
+lifecycle's job. The demo bucket auto-expires objects after 1 day via an R2 lifecycle rule (reapply with
 `yarn r2:lifecycle` or override with `R2_RETENTION_DAYS`). If you set `WEDDING_UPLOAD_CODE` on the
 Convex deployment, guests must enter the code and a name before viewing or uploading. Without a
 code, entering a name is sufficient. Set the variable in your local environment for local development.

@@ -1,9 +1,13 @@
+// Subpaths, not the `@transloadit/zod/v3` barrel: that also bundles every Robot schema, and
+// evaluating them slows each cold component and app function.
 import {
-  ASSEMBLY_STATUS_COMPLETED,
-  ASSEMBLY_STATUS_UPLOADING,
   type AssemblyStatus,
   type AssemblyStatusResults,
   assemblyStatusSchema,
+} from '@transloadit/zod/v3/assemblyStatus'
+import {
+  ASSEMBLY_STATUS_COMPLETED,
+  ASSEMBLY_STATUS_UPLOADING,
   getAssemblyStage,
   isAssemblyCompletedStatus,
   isAssemblyUploadingStatus,
@@ -12,7 +16,7 @@ import {
   type AssemblyStage as ZodAssemblyStage,
   type AssemblyUrls as ZodAssemblyUrls,
   type NormalizedAssemblyUrls as ZodNormalizedAssemblyUrls,
-} from '@transloadit/zod/v3'
+} from '@transloadit/zod/v3/assemblyUrls'
 
 export type AssemblyUrls = ZodAssemblyUrls
 export type NormalizedAssemblyUrls = ZodNormalizedAssemblyUrls

@@ -8,9 +8,11 @@ import { parseAssemblyStatus } from '../shared/assemblyUrls.ts'
 import { transloaditError } from '../shared/errors.ts'
 import { getResultUrl } from '../shared/resultUtils.ts'
 import {
+  type AlbumResult,
   type ProcessWebhookResult,
   type StorageConfig,
   vAdoptStoredAssetsArgs,
+  vAlbumResult,
   vAssembly,
   vAssemblyBaseArgs,
   vAssemblyIdArgs,
@@ -643,15 +645,46 @@ export const listResults = query({
   },
 })
 
+const MAX_ALBUM_RESULTS = 500
+
+// One bounded, indexed read for an album page. Requested Assembly fields are joined here, so an
+// app query does not add a component call per Assembly, and no other Assembly data leaves.
 export const listAlbumResults = query({
   args: vListAlbumResultsArgs,
-  returns: v.array(vAssemblyResult),
-  handler: async (ctx, args) => {
-    return ctx.db
+  returns: v.array(vAlbumResult),
+  handler: async (ctx, args): Promise<AlbumResult[]> => {
+    const { assemblyFields, createdAfter, limit = 200 } = args
+    // NaN passes Math.min/Math.max, so refuse non-finite values before they reach the index.
+    if (!Number.isFinite(limit) || (createdAfter !== undefined && !Number.isFinite(createdAfter))) {
+      throw transloaditError('status', 'Invalid album result limit or cutoff')
+    }
+    const results = await ctx.db
       .query('results')
-      .withIndex('by_album', (q) => q.eq('album', args.album))
+      .withIndex('by_album_and_createdAt', (q) =>
+        createdAfter === undefined
+          ? q.eq('album', args.album)
+          : q.eq('album', args.album).gt('createdAt', createdAfter),
+      )
       .order('desc')
-      .take(args.limit ?? 200)
+      .take(Math.min(Math.max(Math.floor(limit), 1), MAX_ALBUM_RESULTS))
+    if (!assemblyFields) return results
+
+    const wanted = new Set(assemblyFields)
+    const joined = new Map(
+      await Promise.all(
+        [...new Set(results.map((result) => result.assemblyId))].map(async (assemblyId) => {
+          const fields = (
+            await ctx.db
+              .query('assemblies')
+              .withIndex('by_assemblyId', (q) => q.eq('assemblyId', assemblyId))
+              .unique()
+          )?.fields
+          const picked = Object.entries(fields ?? {}).filter(([key]) => wanted.has(key))
+          return [assemblyId, Object.fromEntries(picked)] as const
+        }),
+      ),
+    )
+    return results.map((result) => ({ ...result, assemblyFields: joined.get(result.assemblyId) }))
   },
 })
 
@@ -661,7 +694,7 @@ export const purgeAlbum = mutation({
   handler: async (ctx, args) => {
     const results = await ctx.db
       .query('results')
-      .withIndex('by_album', (q) => q.eq('album', args.album))
+      .withIndex('by_album_and_createdAt', (q) => q.eq('album', args.album))
       .collect()
     const assemblyIds = new Set<string>()
 

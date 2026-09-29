@@ -241,6 +241,23 @@ export const vAssemblyResultResponse = v.object({
 
 export type AssemblyResultResponse = Infer<typeof vAssemblyResultResponse>
 
+// Only the keys an album listing asked for, copied from each result's Assembly `fields`.
+const vAlbumResultAssemblyFields = v.optional(v.record(v.string(), v.any()))
+
+export const vAlbumResult = v.object({
+  ...vAssemblyResult.fields,
+  assemblyFields: vAlbumResultAssemblyFields,
+})
+
+export type AlbumResult = Infer<typeof vAlbumResult>
+
+export const vAlbumResultResponse = v.object({
+  ...vAssemblyResultResponse.fields,
+  assemblyFields: vAlbumResultAssemblyFields,
+})
+
+export type AlbumResultResponse = Infer<typeof vAlbumResultResponse>
+
 export const vTransloaditConfig = v.object({
   authKey: v.string(),
   authSecret: v.string(),
@@ -341,6 +358,10 @@ export const vListResultsArgs = {
 export const vListAlbumResultsArgs = {
   album: v.string(),
   limit: v.optional(v.number()),
+  /** Only results persisted after this time (ms). Floor it, e.g. to the hour, for stable args. */
+  createdAfter: v.optional(v.number()),
+  /** Assembly `fields` keys to join onto each result, e.g. a contributor's display name. */
+  assemblyFields: v.optional(v.array(v.string())),
 }
 
 export const vPurgeAlbumArgs = {

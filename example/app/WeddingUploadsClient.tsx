@@ -3,7 +3,7 @@
 import { useAction, useConvexAuth, useQuery } from 'convex/react'
 import { makeFunctionReference } from 'convex/server'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { GalleryResult } from '../lib/gallery'
+import { type GalleryResult, galleryCreatedAfter } from '../lib/gallery'
 import { getGuestName, isValidGuestName } from '../lib/guest-name'
 import {
   ASSEMBLY_STATUS_COMPLETED,
@@ -104,9 +104,11 @@ const listResultsRef = makeFunctionReference<
   { assemblyId: string; stepName?: string; limit?: number },
   AssemblyResultResponse[]
 >('transloadit:listResults')
-const listGalleryRef = makeFunctionReference<'query', { limit?: number }, GalleryResult[]>(
-  'wedding:listGallery',
-)
+const listGalleryRef = makeFunctionReference<
+  'query',
+  { limit?: number; createdAfter?: number },
+  GalleryResult[]
+>('wedding:listGallery')
 const getAssemblyStatusRef = makeFunctionReference<
   'query',
   { assemblyId: string },
@@ -309,7 +311,9 @@ const CloudWeddingUploads = ({
   const uppy = useWeddingUppy(getAssemblyOptions)
   const status = useQuery(getAssemblyStatusRef, assemblyId ? { assemblyId } : 'skip')
   const results = useQuery(listResultsRef, assemblyId ? { assemblyId } : 'skip')
-  const albumResults = useQuery(listGalleryRef, { limit: 80 })
+  // Fixed for this visit: the gallery applies the exact retention boundary as time passes.
+  const [createdAfter] = useState(() => galleryCreatedAfter())
+  const albumResults = useQuery(listGalleryRef, { limit: 80, createdAfter })
   const assemblies = useQuery(listAssembliesRef, {
     status: ASSEMBLY_STATUS_COMPLETED,
     limit: 12,
