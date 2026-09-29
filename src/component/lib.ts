@@ -2,7 +2,7 @@ import type { AssemblyStatus } from '@transloadit/zod/v3/assemblyStatus'
 import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template'
 import type { IndexRangeBuilder, PaginationOptions } from 'convex/server'
 import { anyApi, type FunctionReference } from 'convex/server'
-import { ConvexError, type ObjectType, v } from 'convex/values'
+import { ConvexError, getConvexSize, type ObjectType, type Value, v } from 'convex/values'
 import { paginator } from 'convex-helpers/server/pagination'
 import { parseAssemblyStatus } from '../shared/assemblyUrls.ts'
 import { transloaditError } from '../shared/errors.ts'
@@ -674,6 +674,9 @@ export const listAlbumResults = query({
     const steps = stepNames && new Set(stepNames)
     const results = steps ? newest.filter((result) => steps.has(result.stepName)) : newest
     if (!assemblyFields) return results
+    // No fields to join, so no Assembly needs reading.
+    if (assemblyFields.length === 0)
+      return results.map((result) => ({ ...result, assemblyFields: {} }))
 
     // Convex reads whole documents, so this reads each distinct Assembly once: the same reads as the
     // per-Assembly getAssemblyStatus calls it replaces. Those calls, like this one, share the calling
@@ -681,7 +684,7 @@ export const listAlbumResults = query({
     // maximum document size, and the page ends before the first Assembly that no longer fits.
     const wanted = new Set(assemblyFields)
     const pending = [...new Set(results.map((result) => result.assemblyId))]
-    const joined = new Map<string, Record<string, unknown>>()
+    const joined = new Map<string, Record<string, Value>>()
     while (pending.length > 0) {
       const { bytesRead } = await ctx.meta.getTransactionMetrics()
       const batch = pending.splice(0, Math.floor(bytesRead.remaining / MAX_DOCUMENT_BYTES))
@@ -699,11 +702,20 @@ export const listAlbumResults = query({
         }),
       )
     }
-    const end = results.findIndex((result) => !joined.has(result.assemblyId))
-    return (end === -1 ? results : results.slice(0, end)).map((result) => ({
-      ...result,
-      assemblyFields: joined.get(result.assemblyId),
-    }))
+    // Each row repeats its Assembly's fields, so a large field on many rows could exceed the 16 MiB
+    // return limit although its Assembly was read once. Each row's `assemblyFields` entry spends
+    // what the read limit has left, and the rest of a row costs no more than reading it did, so the
+    // page returns at most what a query may read. It ends before the first row that doesn't fit.
+    let { remaining } = (await ctx.meta.getTransactionMetrics()).bytesRead
+    const page: AlbumResult[] = []
+    for (const result of results) {
+      const fields = joined.get(result.assemblyId)
+      if (!fields) break
+      remaining -= getConvexSize({ assemblyFields: fields })
+      if (remaining < 0) break
+      page.push({ ...result, assemblyFields: fields })
+    }
+    return page
   },
 })
 

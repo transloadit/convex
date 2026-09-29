@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 import { createHmac } from 'node:crypto'
+import { getConvexSize } from 'convex/values'
 import { convexTest } from 'convex-test'
 import { describe, expect, test, vi } from 'vitest'
 import { api } from './_generated/api.ts'
@@ -282,6 +283,15 @@ describe('Transloadit component lib', () => {
       newestFirst.slice(0, joined.length).map((id) => [id, { guestName: `Guest ${id.slice(6)}` }]),
     )
 
+    // Asking for no fields reads no Assemblies, so it cannot end the page early.
+    const unjoined = await t.query(api.lib.listAlbumResults, {
+      album: 'wedding-gallery',
+      assemblyFields: [],
+    })
+    expect(unjoined.map((result) => [result.assemblyId, result.assemblyFields])).toEqual(
+      [...newestFirst, 'video'].map((id) => [id, {}]),
+    )
+
     // Steps are filtered among the `limit` newest rows before the join, so the large Assemblies
     // of other Steps are never read.
     const videos = {
@@ -294,6 +304,36 @@ describe('Transloadit component lib', () => {
       ['video', { guestName: 'Sam' }],
     ])
     expect(await t.query(api.lib.listAlbumResults, { ...videos, limit: 20 })).toEqual([])
+  })
+
+  test('listAlbumResults keeps the fields it repeats on each row within the return limit', async () => {
+    // An Assembly is read once, but its fields are copied onto each of its results.
+    const t = convexTest({ schema, modules, transactionLimits: true })
+    await t.run(async (ctx) => {
+      await ctx.db.insert('assemblies', {
+        assemblyId: 'many',
+        fields: { album: 'wedding-gallery', note: 'x'.repeat(400_000) },
+        createdAt: 0,
+        updatedAt: 0,
+      })
+      for (let index = 0; index < 50; index++) {
+        await ctx.db.insert('results', {
+          assemblyId: 'many',
+          album: 'wedding-gallery',
+          stepName: 'images_output',
+          raw: {},
+          createdAt: index,
+        })
+      }
+    })
+    const rows = await t.query(api.lib.listAlbumResults, {
+      album: 'wedding-gallery',
+      assemblyFields: ['note'],
+    })
+    // 50 copies would return ~20 MB: the page ends at the newest rows that fit in 16 MiB.
+    expect(getConvexSize(rows)).toBeLessThanOrEqual(1 << 24)
+    expect(rows.length).toBeGreaterThanOrEqual(30)
+    expect(rows.map((row) => row.createdAt)).toEqual(rows.map((_, index) => 49 - index))
   })
 
   test('handleWebhook stores url when ssl_url missing', async () => {
