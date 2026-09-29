@@ -669,6 +669,9 @@ export const listAlbumResults = query({
       .take(Math.min(Math.max(Math.floor(limit), 1), MAX_ALBUM_RESULTS))
     if (!assemblyFields) return results
 
+    // Convex reads whole documents, so this reads each distinct Assembly once: the same reads as the
+    // per-Assembly getAssemblyStatus calls it replaces. They count toward the query's read limits,
+    // so callers joining large Assemblies keep `limit` low (the example gallery asks for 80).
     const wanted = new Set(assemblyFields)
     const joined = new Map(
       await Promise.all(

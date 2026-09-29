@@ -348,6 +348,9 @@ export function makeTransloaditAPI(
   const resolveStorage = (resolved: TransloaditConfig): StorageConfig | undefined =>
     resolved.storageWorkspace ? { workspace: resolved.storageWorkspace } : undefined
   // Stored asset reads are intentionally absent: expose receipts only through app-authorized queries.
+  // Likewise, callers cannot pick Assembly `fields` to join onto album results: an app query that
+  // authorizes the caller can, as the example gallery does.
+  const { assemblyFields: _assemblyFields, ...albumResultsArgs } = vListAlbumResultsArgs
 
   return {
     createAssembly: actionGeneric({
@@ -430,8 +433,8 @@ export function makeTransloaditAPI(
       },
     }),
     listAlbumResults: queryGeneric({
-      args: vListAlbumResultsArgs,
-      returns: v.array(vAlbumResultResponse),
+      args: albumResultsArgs,
+      returns: v.array(vAssemblyResultResponse),
       handler: async (ctx, args) => {
         return ctx.runQuery(component.lib.listAlbumResults, args)
       },

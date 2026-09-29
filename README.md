@@ -102,6 +102,9 @@ Lifecycle:
    `assemblyFields` joins the named keys of each result's Assembly `fields` (such as a
    contributor's display name), so an album page needs one component call instead of one per
    Assembly. Non-finite limits or cutoffs are refused.
+   The join reads each distinct Assembly document, so keep `limit` modest when Assemblies are
+   large. The `makeTransloaditAPI` wrapper does not accept `assemblyFields`: join Assembly
+   fields in an app query that authorizes the caller.
 
 ## Storage receipts
 
