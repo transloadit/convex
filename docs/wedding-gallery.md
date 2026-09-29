@@ -23,7 +23,7 @@ An animation library handles presentation; it does not provide albums, access co
 
 | Area | Current demo | Wedding instance |
 | --- | --- | --- |
-| Retention | The UI defaults to 24 hours; the demo R2 lifecycle deletes objects after one day. | Separate bucket/workspace with explicit permanent retention. Setting the gallery retention to zero only removes the UI cutoff; it cannot undo bucket deletion. Exclude it from demo cleanup. |
+| Retention | The UI and its album query default to 24 hours; the demo R2 lifecycle deletes objects after one day. | Separate bucket/workspace with explicit permanent retention. Setting the gallery retention to zero only removes the UI and query cutoff; it cannot undo bucket deletion. Exclude it from demo cleanup. |
 | Originals | Processing persists resized photos, encoded videos, and posters. | Preserve untouched originals and checksums as well as viewing derivatives. Keep an independent backup and demonstrate a restore. |
 | Viewing privacy | Album queries require a named guest session and the invitation code when configured. Direct media links remain public. | Configure a strong invitation code, private storage, and authorized delivery/downloads. Protect thumbnails and video URLs too. Without a code, anyone can enter a name. |
 | Backend authorization | Album reads require admission; status/results/refresh require ownership. Signing uses a fixed wedding action; ingestion and cleanup are internal. Logout and code changes revoke album access. | Extend membership checks to future editing and delivery paths. Names are self-reported. Use named Template credentials: raw R2 keys in inline instructions are visible to the uploader even when the diagnostic display is redacted. |

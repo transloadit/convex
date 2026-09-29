@@ -2,15 +2,17 @@ import type { AssemblyStatus } from '@transloadit/zod/v3/assemblyStatus'
 import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template'
 import type { IndexRangeBuilder, PaginationOptions } from 'convex/server'
 import { anyApi, type FunctionReference } from 'convex/server'
-import { ConvexError, type ObjectType, v } from 'convex/values'
+import { ConvexError, getConvexSize, type ObjectType, type Value, v } from 'convex/values'
 import { paginator } from 'convex-helpers/server/pagination'
 import { parseAssemblyStatus } from '../shared/assemblyUrls.ts'
 import { transloaditError } from '../shared/errors.ts'
 import { getResultUrl } from '../shared/resultUtils.ts'
 import {
+  type AlbumResult,
   type ProcessWebhookResult,
   type StorageConfig,
   vAdoptStoredAssetsArgs,
+  vAlbumResult,
   vAssembly,
   vAssemblyBaseArgs,
   vAssemblyIdArgs,
@@ -643,15 +645,85 @@ export const listResults = query({
   },
 })
 
+const MAX_ALBUM_RESULTS = 500
+// Convex's largest document, system fields included, so the most that reading one can cost.
+const MAX_DOCUMENT_BYTES = 1 << 20
+// Convex's return value limit, which is separate from its 16 MiB read limit.
+const MAX_RESPONSE_BYTES = 1 << 24
+
+// Each row repeats its Assembly's fields, so a large field on many rows could exceed the return
+// limit although its Assembly was read once. This keeps the newest rows that fit.
+const withinResponseLimit = (rows: AlbumResult[]): AlbumResult[] => {
+  let size = getConvexSize([])
+  const page: AlbumResult[] = []
+  for (const row of rows) {
+    size += getConvexSize(row)
+    if (size > MAX_RESPONSE_BYTES) break
+    page.push(row)
+  }
+  return page
+}
+
+// One bounded, indexed read for an album page. Requested Assembly fields are joined here, so an
+// app query does not add a component call per Assembly, and no other Assembly data leaves.
 export const listAlbumResults = query({
   args: vListAlbumResultsArgs,
-  returns: v.array(vAssemblyResult),
-  handler: async (ctx, args) => {
-    return ctx.db
+  returns: v.array(vAlbumResult),
+  handler: async (ctx, args): Promise<AlbumResult[]> => {
+    const { assemblyFields, createdAfter, limit = 200, stepNames } = args
+    // NaN passes Math.min/Math.max, so refuse non-finite values before they reach the index.
+    if (!Number.isFinite(limit) || (createdAfter !== undefined && !Number.isFinite(createdAfter))) {
+      throw transloaditError('status', 'Invalid album result limit or cutoff')
+    }
+    const newest = await ctx.db
       .query('results')
-      .withIndex('by_album', (q) => q.eq('album', args.album))
+      .withIndex('by_album_and_createdAt', (q) =>
+        createdAfter === undefined
+          ? q.eq('album', args.album)
+          : q.eq('album', args.album).gt('createdAt', createdAfter),
+      )
       .order('desc')
-      .take(args.limit ?? 200)
+      .take(Math.min(Math.max(Math.floor(limit), 1), MAX_ALBUM_RESULTS))
+    // Steps are filtered within the bounded page, so the read stays at `limit` rows, and before the
+    // join, so the Assemblies of dropped results are never read.
+    const steps = stepNames && new Set(stepNames)
+    const results = steps ? newest.filter((result) => steps.has(result.stepName)) : newest
+    if (!assemblyFields) return results
+    // No fields to join, so no Assembly needs reading.
+    if (assemblyFields.length === 0)
+      return withinResponseLimit(results.map((result) => ({ ...result, assemblyFields: {} })))
+
+    // Convex reads whole documents, so this reads each distinct Assembly once: the same reads as the
+    // per-Assembly getAssemblyStatus calls it replaces. Those calls, like this one, share the calling
+    // query's 16 MiB read limit, so Assemblies are read in batches that fit what remains even at the
+    // maximum document size, and the page ends before the first Assembly that no longer fits.
+    const wanted = new Set(assemblyFields)
+    const pending = [...new Set(results.map((result) => result.assemblyId))]
+    const joined = new Map<string, Record<string, Value>>()
+    while (pending.length > 0) {
+      const { bytesRead } = await ctx.meta.getTransactionMetrics()
+      const batch = pending.splice(0, Math.floor(bytesRead.remaining / MAX_DOCUMENT_BYTES))
+      if (batch.length === 0) break
+      await Promise.all(
+        batch.map(async (assemblyId) => {
+          const fields = (
+            await ctx.db
+              .query('assemblies')
+              .withIndex('by_assemblyId', (q) => q.eq('assemblyId', assemblyId))
+              .unique()
+          )?.fields
+          const picked = Object.entries(fields ?? {}).filter(([key]) => wanted.has(key))
+          joined.set(assemblyId, Object.fromEntries(picked))
+        }),
+      )
+    }
+    const joinedRows: AlbumResult[] = []
+    for (const result of results) {
+      const fields = joined.get(result.assemblyId)
+      if (!fields) break
+      joinedRows.push({ ...result, assemblyFields: fields })
+    }
+    return withinResponseLimit(joinedRows)
   },
 })
 
@@ -661,7 +733,7 @@ export const purgeAlbum = mutation({
   handler: async (ctx, args) => {
     const results = await ctx.db
       .query('results')
-      .withIndex('by_album', (q) => q.eq('album', args.album))
+      .withIndex('by_album_and_createdAt', (q) => q.eq('album', args.album))
       .collect()
     const assemblyIds = new Set<string>()
 

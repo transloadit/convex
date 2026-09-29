@@ -1,12 +1,9 @@
-import {
-  type AssemblyResultResponse,
-  vAssemblyOptions,
-  vAssemblyResultResponse,
-} from '@transloadit/convex'
+import { type AlbumResultResponse, vAssemblyOptions } from '@transloadit/convex'
 import { ConvexError, v } from 'convex/values'
 import { album } from '../lib/album-access'
 import { parseDisplayParams } from '../lib/assembly-params'
-import { isGalleryResultStep } from '../lib/gallery-steps'
+import { toGalleryResult, vGalleryResult } from '../lib/gallery-results'
+import { galleryResultSteps, isGalleryResultStep } from '../lib/gallery-steps'
 import { getGuestName, isValidGuestName } from '../lib/guest-name'
 import { getStorageWorkspace, getUploadStoragePrefix } from '../lib/storage'
 import { buildWeddingSteps } from '../lib/transloadit-steps'
@@ -16,6 +13,7 @@ import { requireGuest } from './guests'
 
 const MAX_UPLOADS_PER_HOUR = 6
 const WINDOW_MS = 60 * 60 * 1000
+const GALLERY_LIMIT = 80
 
 const requireEnv = (name: string) => {
   const value = process.env[name]
@@ -139,33 +137,30 @@ export const createWeddingAssemblyOptions = action({
   },
 })
 
-// Names are persisted in each Assembly's signed fields. Join only the display name, rather than
-// exposing arbitrary Assembly fields or copying wedding-specific metadata into the component.
+// Names are persisted in each Assembly's signed fields. The component joins only the display name
+// within this one bounded call, rather than exposing arbitrary Assembly fields or copying
+// wedding-specific metadata into the component.
 export const listGallery = query({
-  args: { limit: v.optional(v.number()) },
-  returns: v.array(
-    v.object({ ...vAssemblyResultResponse.fields, uploadedBy: v.optional(v.string()) }),
-  ),
+  args: { limit: v.optional(v.number()), createdAfter: v.optional(v.number()) },
+  returns: v.array(vGalleryResult),
   handler: async (ctx, args) => {
     await requireGuest(ctx)
+    const results: AlbumResultResponse[] = await ctx.runQuery(
+      components.transloadit.lib.listAlbumResults,
+      {
+        album,
+        limit: Math.min(args.limit ?? GALLERY_LIMIT, GALLERY_LIMIT),
+        createdAfter: args.createdAfter,
+        // Filtered before the join, so Assemblies without gallery results (such as Storage-only
+        // uploads) never spend this query's read limit.
+        stepNames: Object.keys(galleryResultSteps),
+        assemblyFields: ['guestName'],
+      },
+    )
     // Only the R2 renditions the gallery renders: Storage receipts (with their ThumbHash) are
     // served by media:list after binding checks, never by this legacy result path.
-    const results: AssemblyResultResponse[] = (
-      await ctx.runQuery(components.transloadit.lib.listAlbumResults, {
-        album,
-        limit: args.limit ?? 80,
-      })
-    ).filter((result: AssemblyResultResponse) => isGalleryResultStep(result.stepName))
-    const names = new Map(
-      await Promise.all(
-        [...new Set(results.map((result) => result.assemblyId))].map(async (assemblyId) => {
-          const assembly = await ctx.runQuery(components.transloadit.lib.getAssemblyStatus, {
-            assemblyId,
-          })
-          return [assemblyId, getGuestName(assembly?.fields?.guestName)] as const
-        }),
-      ),
-    )
-    return results.map((result) => ({ ...result, uploadedBy: names.get(result.assemblyId) }))
+    return results
+      .filter((result) => isGalleryResultStep(result.stepName))
+      .map((result) => toGalleryResult(result, getGuestName(result.assemblyFields?.guestName)))
   },
 })
