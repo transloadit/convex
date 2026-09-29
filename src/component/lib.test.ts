@@ -229,6 +229,45 @@ describe('Transloadit component lib', () => {
     }
   })
 
+  test('listAlbumResults ends the page before joined Assemblies exceed the read limit', async () => {
+    // Convex's 16 MiB read limit is per query: nested component calls share the caller's budget.
+    const t = convexTest({ schema, modules, transactionLimits: true })
+    const assemblyIds = Array.from({ length: 20 }, (_, index) => `large-${index}`)
+    for (const [index, assemblyId] of assemblyIds.entries()) {
+      await t.run(async (ctx) => {
+        // Near Convex's 1 MiB document limit, like an Assembly with hundreds of files.
+        await ctx.db.insert('assemblies', {
+          assemblyId,
+          fields: { album: 'wedding-gallery', guestName: `Guest ${index}` },
+          raw: 'x'.repeat(900_000),
+          createdAt: index,
+          updatedAt: index,
+        })
+        await ctx.db.insert('results', {
+          assemblyId,
+          album: 'wedding-gallery',
+          stepName: 'images_output',
+          raw: {},
+          createdAt: index,
+        })
+      })
+    }
+    const newestFirst = [...assemblyIds].reverse()
+    const rows = await t.query(api.lib.listAlbumResults, { album: 'wedding-gallery' })
+    expect(rows.map((result) => result.assemblyId)).toEqual(newestFirst)
+
+    // Joining all 20 would read ~17 MiB: the page ends at the newest Assemblies that fit.
+    const joined = await t.query(api.lib.listAlbumResults, {
+      album: 'wedding-gallery',
+      assemblyFields: ['guestName'],
+    })
+    expect(joined.length).toBeGreaterThanOrEqual(15)
+    expect(joined.length).toBeLessThan(20)
+    expect(joined.map((result) => [result.assemblyId, result.assemblyFields])).toEqual(
+      newestFirst.slice(0, joined.length).map((id) => [id, { guestName: `Guest ${id.slice(6)}` }]),
+    )
+  })
+
   test('handleWebhook stores url when ssl_url missing', async () => {
     const t = convexTest(schema, modules)
 

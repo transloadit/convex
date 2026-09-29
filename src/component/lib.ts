@@ -646,6 +646,8 @@ export const listResults = query({
 })
 
 const MAX_ALBUM_RESULTS = 500
+// Convex's largest document, system fields included, so the most that reading one can cost.
+const MAX_DOCUMENT_BYTES = 1 << 20
 
 // One bounded, indexed read for an album page. Requested Assembly fields are joined here, so an
 // app query does not add a component call per Assembly, and no other Assembly data leaves.
@@ -670,12 +672,18 @@ export const listAlbumResults = query({
     if (!assemblyFields) return results
 
     // Convex reads whole documents, so this reads each distinct Assembly once: the same reads as the
-    // per-Assembly getAssemblyStatus calls it replaces. They count toward the query's read limits,
-    // so callers joining large Assemblies keep `limit` low (the example gallery asks for 80).
+    // per-Assembly getAssemblyStatus calls it replaces. Those calls, like this one, share the calling
+    // query's 16 MiB read limit, so Assemblies are read in batches that fit what remains even at the
+    // maximum document size, and the page ends before the first Assembly that no longer fits.
     const wanted = new Set(assemblyFields)
-    const joined = new Map(
+    const pending = [...new Set(results.map((result) => result.assemblyId))]
+    const joined = new Map<string, Record<string, unknown>>()
+    while (pending.length > 0) {
+      const { bytesRead } = await ctx.meta.getTransactionMetrics()
+      const batch = pending.splice(0, Math.floor(bytesRead.remaining / MAX_DOCUMENT_BYTES))
+      if (batch.length === 0) break
       await Promise.all(
-        [...new Set(results.map((result) => result.assemblyId))].map(async (assemblyId) => {
+        batch.map(async (assemblyId) => {
           const fields = (
             await ctx.db
               .query('assemblies')
@@ -683,11 +691,15 @@ export const listAlbumResults = query({
               .unique()
           )?.fields
           const picked = Object.entries(fields ?? {}).filter(([key]) => wanted.has(key))
-          return [assemblyId, Object.fromEntries(picked)] as const
+          joined.set(assemblyId, Object.fromEntries(picked))
         }),
-      ),
-    )
-    return results.map((result) => ({ ...result, assemblyFields: joined.get(result.assemblyId) }))
+      )
+    }
+    const end = results.findIndex((result) => !joined.has(result.assemblyId))
+    return (end === -1 ? results : results.slice(0, end)).map((result) => ({
+      ...result,
+      assemblyFields: joined.get(result.assemblyId),
+    }))
   },
 })
 
