@@ -184,6 +184,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           assemblyFields?: Array<string>;
           createdAfter?: number;
           limit?: number;
+          stepNames?: Array<string>;
         },
         Array<{
           _creationTime: number;

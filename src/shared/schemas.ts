@@ -360,6 +360,8 @@ export const vListAlbumResultsArgs = {
   limit: v.optional(v.number()),
   /** Only results persisted after this time (ms). Floor it, e.g. to the hour, for stable args. */
   createdAfter: v.optional(v.number()),
+  /** Keep only these Steps' results among the `limit` newest, before `assemblyFields` joins. */
+  stepNames: v.optional(v.array(v.string())),
   /** Assembly `fields` keys to join onto each result, e.g. a contributor's display name. */
   assemblyFields: v.optional(v.array(v.string())),
 }

@@ -229,9 +229,24 @@ describe('Transloadit component lib', () => {
     }
   })
 
-  test('listAlbumResults ends the page before joined Assemblies exceed the read limit', async () => {
+  test('listAlbumResults filters Steps before joining and keeps the join within the read limit', async () => {
     // Convex's 16 MiB read limit is per query: nested component calls share the caller's budget.
     const t = convexTest({ schema, modules, transactionLimits: true })
+    await t.run(async (ctx) => {
+      await ctx.db.insert('assemblies', {
+        assemblyId: 'video',
+        fields: { album: 'wedding-gallery', guestName: 'Sam' },
+        createdAt: -1,
+        updatedAt: -1,
+      })
+      await ctx.db.insert('results', {
+        assemblyId: 'video',
+        album: 'wedding-gallery',
+        stepName: 'videos_output',
+        raw: {},
+        createdAt: -1,
+      })
+    })
     const assemblyIds = Array.from({ length: 20 }, (_, index) => `large-${index}`)
     for (const [index, assemblyId] of assemblyIds.entries()) {
       await t.run(async (ctx) => {
@@ -254,7 +269,7 @@ describe('Transloadit component lib', () => {
     }
     const newestFirst = [...assemblyIds].reverse()
     const rows = await t.query(api.lib.listAlbumResults, { album: 'wedding-gallery' })
-    expect(rows.map((result) => result.assemblyId)).toEqual(newestFirst)
+    expect(rows.map((result) => result.assemblyId)).toEqual([...newestFirst, 'video'])
 
     // Joining all 20 would read ~17 MiB: the page ends at the newest Assemblies that fit.
     const joined = await t.query(api.lib.listAlbumResults, {
@@ -266,6 +281,19 @@ describe('Transloadit component lib', () => {
     expect(joined.map((result) => [result.assemblyId, result.assemblyFields])).toEqual(
       newestFirst.slice(0, joined.length).map((id) => [id, { guestName: `Guest ${id.slice(6)}` }]),
     )
+
+    // Steps are filtered among the `limit` newest rows before the join, so the large Assemblies
+    // of other Steps are never read.
+    const videos = {
+      album: 'wedding-gallery',
+      stepNames: ['videos_output'],
+      assemblyFields: ['guestName'],
+    }
+    const video = await t.query(api.lib.listAlbumResults, videos)
+    expect(video.map((result) => [result.assemblyId, result.assemblyFields])).toEqual([
+      ['video', { guestName: 'Sam' }],
+    ])
+    expect(await t.query(api.lib.listAlbumResults, { ...videos, limit: 20 })).toEqual([])
   })
 
   test('handleWebhook stores url when ssl_url missing', async () => {

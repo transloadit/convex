@@ -59,13 +59,17 @@ const countComponentCalls = () => {
   return { calls, modules }
 }
 
-const setup = (modules = componentModules) => {
-  const t = convexTest(schema, {
-    './wedding.ts': () => import('./wedding'),
-    './guests.ts': () => import('./guests'),
-    './transloadit.ts': () => import('./transloadit'),
-    './auth.ts': () => import('./auth'),
-    './_generated/server.ts': () => import('convex/server'),
+const setup = (modules = componentModules, transactionLimits = false) => {
+  const t = convexTest({
+    schema,
+    modules: {
+      './wedding.ts': () => import('./wedding'),
+      './guests.ts': () => import('./guests'),
+      './transloadit.ts': () => import('./transloadit'),
+      './auth.ts': () => import('./auth'),
+      './_generated/server.ts': () => import('convex/server'),
+    },
+    transactionLimits,
   })
   t.registerComponent('transloadit', componentSchema, modules)
   return t
@@ -201,6 +205,53 @@ test('joins contributor names inside one component call, however many Assemblies
     'Олена',
   ])
   expect(calls).toEqual(['listAlbumResults'])
+})
+
+test('joins contributor names only for gallery results, so large Storage Assemblies hide none', async () => {
+  // Convex's 16 MiB read limit is per query: the component's Assembly join shares listGallery's.
+  const t = setup(componentModules, true)
+  await persist(
+    t,
+    'video',
+    { guestName: 'Sam' },
+    {
+      videos_output: [{ id: 'video-0', ssl_url: 'https://example.com/video-0.mp4' }],
+    },
+  )
+  const upload = {
+    name: 'IMG_0001.jpg',
+    basename: 'IMG_0001',
+    ext: 'jpg',
+    size: 1,
+    mime: 'image/jpeg',
+    type: 'image',
+    field: 'files[]',
+    original_id: 'upload',
+    url: 'https://example.com/upload.jpg',
+  }
+  for (let index = 0; index < 20; index += 1) {
+    // Newer Storage-only Assemblies near Convex's 1 MiB document limit, as with hundreds of
+    // uploads (the webhook stores `uploads` twice: as is and inside `raw`).
+    await t.action(components.transloadit.lib.handleWebhook, {
+      verifySignature: false,
+      payload: {
+        assembly_id: `stored-${index}`,
+        ok: 'ASSEMBLY_COMPLETED',
+        fields: { album: 'wedding-gallery', guestName: 'Alex' },
+        uploads: [{ ...upload, meta: { padding: 'x'.repeat(450_000) } }],
+        results: {
+          images_stored: [{ id: `stored-${index}`, ssl_url: `https://example.com/${index}.jpg` }],
+        },
+      },
+    })
+  }
+  const results = await (await admitted(t)).query(api.wedding.listGallery, {})
+  expect(
+    results.map((result: { assemblyId: string; uploadedBy?: string }) => [
+      result.assemblyId,
+      result.uploadedBy,
+    ]),
+  ).toEqual([['video', 'Sam']])
 })
 
 test('returns only the fields the gallery renders', async () => {

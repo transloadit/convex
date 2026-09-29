@@ -3,7 +3,7 @@ import { ConvexError, v } from 'convex/values'
 import { album } from '../lib/album-access'
 import { parseDisplayParams } from '../lib/assembly-params'
 import { toGalleryResult, vGalleryResult } from '../lib/gallery-results'
-import { isGalleryResultStep } from '../lib/gallery-steps'
+import { galleryResultSteps, isGalleryResultStep } from '../lib/gallery-steps'
 import { getGuestName, isValidGuestName } from '../lib/guest-name'
 import { getStorageWorkspace, getUploadStoragePrefix } from '../lib/storage'
 import { buildWeddingSteps } from '../lib/transloadit-steps'
@@ -151,6 +151,9 @@ export const listGallery = query({
         album,
         limit: Math.min(args.limit ?? GALLERY_LIMIT, GALLERY_LIMIT),
         createdAfter: args.createdAfter,
+        // Filtered before the join, so Assemblies without gallery results (such as Storage-only
+        // uploads) never spend this query's read limit.
+        stepNames: Object.keys(galleryResultSteps),
         assemblyFields: ['guestName'],
       },
     )

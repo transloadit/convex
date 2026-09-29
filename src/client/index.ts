@@ -228,12 +228,19 @@ export class TransloaditClient {
   }
 
   /**
-   * Newest album results, at most 500. `createdAfter` skips older rows in the index, and
-   * `assemblyFields` joins those keys of each result's Assembly `fields` in the same call.
+   * Newest album results, at most 500. `createdAfter` skips older rows in the index, `stepNames`
+   * keeps only those Steps' results among them, and `assemblyFields` joins those keys of each
+   * remaining result's Assembly `fields` in the same call.
    */
   async listAlbumResults(
     ctx: RunQueryCtx,
-    args: { album: string; limit?: number; createdAfter?: number; assemblyFields?: string[] },
+    args: {
+      album: string
+      limit?: number
+      createdAfter?: number
+      stepNames?: string[]
+      assemblyFields?: string[]
+    },
   ) {
     return ctx.runQuery(this.component.lib.listAlbumResults, args)
   }

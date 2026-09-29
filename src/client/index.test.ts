@@ -12,6 +12,7 @@ describe('makeTransloaditAPI', () => {
       'album',
       'createdAfter',
       'limit',
+      'stepNames',
     ])
   })
 })

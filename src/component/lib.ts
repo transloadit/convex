@@ -655,12 +655,12 @@ export const listAlbumResults = query({
   args: vListAlbumResultsArgs,
   returns: v.array(vAlbumResult),
   handler: async (ctx, args): Promise<AlbumResult[]> => {
-    const { assemblyFields, createdAfter, limit = 200 } = args
+    const { assemblyFields, createdAfter, limit = 200, stepNames } = args
     // NaN passes Math.min/Math.max, so refuse non-finite values before they reach the index.
     if (!Number.isFinite(limit) || (createdAfter !== undefined && !Number.isFinite(createdAfter))) {
       throw transloaditError('status', 'Invalid album result limit or cutoff')
     }
-    const results = await ctx.db
+    const newest = await ctx.db
       .query('results')
       .withIndex('by_album_and_createdAt', (q) =>
         createdAfter === undefined
@@ -669,6 +669,10 @@ export const listAlbumResults = query({
       )
       .order('desc')
       .take(Math.min(Math.max(Math.floor(limit), 1), MAX_ALBUM_RESULTS))
+    // Steps are filtered within the bounded page, so the read stays at `limit` rows, and before the
+    // join, so the Assemblies of dropped results are never read.
+    const steps = stepNames && new Set(stepNames)
+    const results = steps ? newest.filter((result) => steps.has(result.stepName)) : newest
     if (!assemblyFields) return results
 
     // Convex reads whole documents, so this reads each distinct Assembly once: the same reads as the
