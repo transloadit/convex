@@ -19,6 +19,10 @@ const getRoute = () => {
           authSecret,
           authorizeAsset: ({ asset_id, version_id, action }) =>
             authorizeAsset({ asset_id, version_id, action }),
+          // Five-minute grants signed per 150 s window: repeat views can reuse cached CDN URLs,
+          // every request still reauthorizes, and a new URL keeps at least half its lifetime.
+          lifetimeMs: 300_000,
+          rotationIntervalMs: 150_000,
           diagnostics: process.env.NODE_ENV === 'development',
         })
       : null
