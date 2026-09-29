@@ -648,6 +648,21 @@ export const listResults = query({
 const MAX_ALBUM_RESULTS = 500
 // Convex's largest document, system fields included, so the most that reading one can cost.
 const MAX_DOCUMENT_BYTES = 1 << 20
+// Convex's return value limit, which is separate from its 16 MiB read limit.
+const MAX_RESPONSE_BYTES = 1 << 24
+
+// Each row repeats its Assembly's fields, so a large field on many rows could exceed the return
+// limit although its Assembly was read once. This keeps the newest rows that fit.
+const withinResponseLimit = (rows: AlbumResult[]): AlbumResult[] => {
+  let size = getConvexSize([])
+  const page: AlbumResult[] = []
+  for (const row of rows) {
+    size += getConvexSize(row)
+    if (size > MAX_RESPONSE_BYTES) break
+    page.push(row)
+  }
+  return page
+}
 
 // One bounded, indexed read for an album page. Requested Assembly fields are joined here, so an
 // app query does not add a component call per Assembly, and no other Assembly data leaves.
@@ -676,7 +691,7 @@ export const listAlbumResults = query({
     if (!assemblyFields) return results
     // No fields to join, so no Assembly needs reading.
     if (assemblyFields.length === 0)
-      return results.map((result) => ({ ...result, assemblyFields: {} }))
+      return withinResponseLimit(results.map((result) => ({ ...result, assemblyFields: {} })))
 
     // Convex reads whole documents, so this reads each distinct Assembly once: the same reads as the
     // per-Assembly getAssemblyStatus calls it replaces. Those calls, like this one, share the calling
@@ -702,20 +717,13 @@ export const listAlbumResults = query({
         }),
       )
     }
-    // Each row repeats its Assembly's fields, so a large field on many rows could exceed the 16 MiB
-    // return limit although its Assembly was read once. Each row's `assemblyFields` entry spends
-    // what the read limit has left, and the rest of a row costs no more than reading it did, so the
-    // page returns at most what a query may read. It ends before the first row that doesn't fit.
-    let { remaining } = (await ctx.meta.getTransactionMetrics()).bytesRead
-    const page: AlbumResult[] = []
+    const joinedRows: AlbumResult[] = []
     for (const result of results) {
       const fields = joined.get(result.assemblyId)
       if (!fields) break
-      remaining -= getConvexSize({ assemblyFields: fields })
-      if (remaining < 0) break
-      page.push({ ...result, assemblyFields: fields })
+      joinedRows.push({ ...result, assemblyFields: fields })
     }
-    return page
+    return withinResponseLimit(joinedRows)
   },
 })
 

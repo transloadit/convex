@@ -336,6 +336,35 @@ describe('Transloadit component lib', () => {
     expect(rows.map((row) => row.createdAt)).toEqual(rows.map((_, index) => 49 - index))
   })
 
+  test('listAlbumResults bounds the response apart from the read limit', async () => {
+    // Nearly the whole read limit goes to these Assemblies, but their rows still fit in 16 MiB.
+    const t = convexTest({ schema, modules, transactionLimits: true })
+    const assemblyIds = Array.from({ length: 19 }, (_, index) => `wide-${index}`)
+    for (const [index, assemblyId] of assemblyIds.entries()) {
+      await t.run(async (ctx) => {
+        await ctx.db.insert('assemblies', {
+          assemblyId,
+          fields: { album: 'wedding-gallery', note: 'x'.repeat(850_000) },
+          createdAt: index,
+          updatedAt: index,
+        })
+        await ctx.db.insert('results', {
+          assemblyId,
+          album: 'wedding-gallery',
+          stepName: 'images_output',
+          raw: {},
+          createdAt: index,
+        })
+      })
+    }
+    const rows = await t.query(api.lib.listAlbumResults, {
+      album: 'wedding-gallery',
+      assemblyFields: ['note'],
+    })
+    expect(rows.map((row) => row.assemblyId)).toEqual([...assemblyIds].reverse())
+    expect(getConvexSize(rows)).toBeLessThanOrEqual(1 << 24)
+  })
+
   test('handleWebhook stores url when ssl_url missing', async () => {
     const t = convexTest(schema, modules)
 

@@ -9,8 +9,9 @@ Convex backfills on deploy), `stepNames` keeps only the named Steps' results amo
 `fields`, so apps no longer call `getAssemblyStatus` once per Assembly to credit contributors.
 Steps are filtered before the join, so the Assemblies of dropped results are not read. The join
 reads Assemblies in batches that fit the calling query's remaining read limit, so large
-Assemblies end the page early with the newest rows that fit instead of failing the query. The
-fields each row repeats count against that limit too, so a page never returns more than 16 MiB.
+Assemblies end the page early with the newest rows that fit instead of failing the query. Each
+row repeats its Assembly's fields, so a page also ends before it would pass the separate 16 MiB
+return limit.
 The limit is clamped to 1–500 and non-finite limits or cutoffs are refused. `AlbumResultResponse`
 and `vAlbumResultResponse` describe the joined rows. The `makeTransloaditAPI` wrapper accepts
 `createdAfter` and `stepNames` but not `assemblyFields`, so exporting it does not let callers

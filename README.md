@@ -105,10 +105,11 @@ Lifecycle:
    cutoffs are refused.
    The join reads each distinct Assembly document. Component calls share the calling query's
    16 MiB read limit, so when joining large Assemblies would exceed what remains, the page ends
-   early with the newest rows that fit instead of failing. Each row repeats its Assembly's
-   fields, and those copies count against what remains too, so the page never returns more than
-   16 MiB. Pass `stepNames` so the Assemblies of results the page drops are not read. Reads the
-   app query makes after the call share that limit too. An empty `assemblyFields` reads nothing.
+   early with the newest rows that fit instead of failing. Pass `stepNames` so the Assemblies of
+   results the page drops are not read. Reads the app query makes after the call share that
+   limit too. Each row repeats its Assembly's fields, so the page also ends before the first row
+   that would take the response past Convex's separate 16 MiB return limit. An empty
+   `assemblyFields` reads nothing.
    The `makeTransloaditAPI` wrapper does not accept `assemblyFields`: join Assembly fields in an
    app query that authorizes the caller.
 
