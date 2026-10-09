@@ -1,3 +1,4 @@
+// Source bundles include a few KiB of public metadata so this version always matches the release.
 import packageJson from '@transloadit/convex/package.json' with { type: 'json' }
 import type { AssemblyStatus } from '@transloadit/zod/v3/assemblyStatus'
 import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template'
