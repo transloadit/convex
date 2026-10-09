@@ -1,5 +1,11 @@
 # @transloadit/convex
 
+## 0.4.1
+
+### Patch Changes
+
+- 7df7ade: Send the Convex SDK name and package version in the `Transloadit-Client` header on Assembly creation and status requests.
+
 ## 0.4.0
 
 ### Minor Changes
