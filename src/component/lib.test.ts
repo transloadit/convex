@@ -1,9 +1,10 @@
 /// <reference types="vite/client" />
 
 import { createHmac } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { getConvexSize } from 'convex/values'
 import { convexTest } from 'convex-test'
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, type Mock, test, vi } from 'vitest'
 import { api } from './_generated/api.ts'
 import schema from './schema.ts'
 import { modules } from './setup.test.ts'
@@ -11,7 +12,87 @@ import { modules } from './setup.test.ts'
 process.env.TRANSLOADIT_KEY = 'test-key'
 process.env.TRANSLOADIT_SECRET = 'test-secret'
 
+const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
+const expectedClient = `convex-sdk:${version}`
+
+const getRequest = (fetchMock: Mock<typeof fetch>): Request => {
+  expect(fetchMock).toHaveBeenCalledOnce()
+  const call = fetchMock.mock.calls[0]
+  if (!call) throw new Error('Expected a Transloadit API request')
+  return new Request(...call)
+}
+
 describe('Transloadit component lib', () => {
+  test('createAssembly identifies the SDK and preserves the signed multipart request', async () => {
+    const t = convexTest(schema, modules)
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      Response.json({ assembly_id: 'asm_created', ok: 'ASSEMBLY_UPLOADING' }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const result = await t.action(api.lib.createAssembly, {
+        config: { authKey: 'test-key', authSecret: 'test-secret' },
+        templateId: 'test-template',
+        fields: { caller: 'wedding-gallery' },
+        numExpectedUploadFiles: 2,
+      })
+
+      expect(result.assemblyId).toBe('asm_created')
+      const request = getRequest(fetchMock)
+      expect(request.url).toBe('https://api2.transloadit.com/assemblies')
+      expect(request.method).toBe('POST')
+      expect(request.headers.get('content-type')).toMatch(/^multipart\/form-data; boundary=/)
+      const formData = await request.formData()
+      const paramsString = String(formData.get('params'))
+      expect(JSON.parse(paramsString)).toMatchObject({
+        auth: { key: 'test-key' },
+        template_id: 'test-template',
+        fields: { caller: 'wedding-gallery' },
+        num_expected_upload_files: 2,
+      })
+      expect(formData.get('signature')).toBe(
+        `sha384:${createHmac('sha384', 'test-secret').update(paramsString).digest('hex')}`,
+      )
+      expect(formData.get('tus_num_expected_upload_files')).toBe('2')
+      expect(request.headers.get('Transloadit-Client')).toBe(expectedClient)
+      expect(await t.query(api.lib.getAssemblyStatus, { assemblyId: 'asm_created' })).not.toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  test.each([true, false])(
+    'refreshAssembly identifies the SDK with environment credentials: %s',
+    async (signed) => {
+      const t = convexTest(schema, modules)
+      const fetchMock = vi.fn<typeof fetch>(async () =>
+        Response.json({ assembly_id: 'asm_refreshed', ok: 'ASSEMBLY_COMPLETED' }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      vi.stubEnv('TRANSLOADIT_KEY', signed ? 'test-key' : undefined)
+      vi.stubEnv('TRANSLOADIT_SECRET', signed ? 'test-secret' : undefined)
+
+      try {
+        await t.action(api.lib.refreshAssembly, { assemblyId: 'asm_refreshed' })
+        const request = getRequest(fetchMock)
+        const url = new URL(request.url)
+        expect(url.origin).toBe('https://api2.transloadit.com')
+        expect(url.pathname).toBe('/assemblies/asm_refreshed')
+        expect(request.method).toBe('GET')
+        expect(url.searchParams.has('signature')).toBe(signed)
+        expect(url.searchParams.has('params')).toBe(signed)
+        expect(request.headers.get('Transloadit-Client')).toBe(expectedClient)
+        expect(
+          await t.query(api.lib.getAssemblyStatus, { assemblyId: 'asm_refreshed' }),
+        ).not.toBeNull()
+      } finally {
+        vi.unstubAllGlobals()
+        vi.unstubAllEnvs()
+      }
+    },
+  )
+
   test('checks expected upload fields before persisting a refreshed assembly', async () => {
     const t = convexTest(schema, modules)
     vi.stubGlobal(
@@ -585,22 +666,12 @@ describe('Transloadit component lib', () => {
       expect(result.assemblyId).toBe('asm_456')
       expect(result.ok).toBe('ASSEMBLY_COMPLETED')
 
-      const requestInfo = fetchMock.mock.calls[0]?.[0]
-      const requestUrl =
-        typeof requestInfo === 'string'
-          ? requestInfo
-          : requestInfo instanceof URL
-            ? requestInfo.toString()
-            : requestInfo instanceof Request
-              ? requestInfo.url
-              : ''
-      if (!requestUrl) {
-        throw new Error('Expected fetch to be called with a URL string')
-      }
-      const url = new URL(requestUrl)
+      const request = getRequest(fetchMock)
+      const url = new URL(request.url)
       expect(url.origin).toBe('https://api2.transloadit.com')
       expect(url.searchParams.get('signature')).toBeTruthy()
       expect(url.searchParams.get('params')).toBeTruthy()
+      expect(request.headers.get('Transloadit-Client')).toBe(expectedClient)
 
       const assembly = await t.query(api.lib.getAssemblyStatus, {
         assemblyId: 'asm_456',

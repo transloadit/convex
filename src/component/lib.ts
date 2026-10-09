@@ -1,3 +1,5 @@
+// Source bundles include a few KiB of public metadata so this version always matches the release.
+import packageJson from '@transloadit/convex/package.json' with { type: 'json' }
 import type { AssemblyStatus } from '@transloadit/zod/v3/assemblyStatus'
 import type { AssemblyInstructionsInput } from '@transloadit/zod/v3/template'
 import type { IndexRangeBuilder, PaginationOptions } from 'convex/server'
@@ -68,6 +70,7 @@ import {
 import schema from './schema.ts'
 
 const TRANSLOADIT_ASSEMBLY_URL = 'https://api2.transloadit.com/assemblies'
+const TRANSLOADIT_CLIENT = `convex-sdk:${packageJson.version}`
 
 export type { Assembly, AssemblyResult } from '../shared/schemas.ts'
 export { vAssembly, vAssemblyResult, vTransloaditConfig }
@@ -433,6 +436,7 @@ export const createAssembly = action({
 
     const response = await fetch(TRANSLOADIT_ASSEMBLY_URL, {
       method: 'POST',
+      headers: { 'Transloadit-Client': TRANSLOADIT_CLIENT },
       body: formData,
     })
 
@@ -568,7 +572,9 @@ export const refreshAssembly = action({
         ? await buildSignedAssemblyUrl(assemblyId, authKey, authSecret)
         : `${TRANSLOADIT_ASSEMBLY_URL}/${assemblyId}`
 
-    const response = await fetch(url)
+    const response = await fetch(url, {
+      headers: { 'Transloadit-Client': TRANSLOADIT_CLIENT },
+    })
     const payload = parseAssemblyPayload(await response.json())
     if (!response.ok) {
       throw transloaditError('status', `HTTP ${response.status}: ${JSON.stringify(payload)}`)
