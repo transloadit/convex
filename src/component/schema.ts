@@ -9,7 +9,7 @@ export default defineSchema({
   results: defineTable(vAssemblyResultFields)
     .index('by_assemblyId', ['assemblyId'])
     .index('by_assemblyId_and_step', ['assemblyId', 'stepName'])
-    .index('by_album', ['album']),
+    .index('by_album_and_createdAt', ['album', 'createdAt']),
   storedAssets: defineTable(vStoredAssetFields)
     .index('by_version', ['asset.workspace', 'asset.asset_id', 'asset.version_id'])
     .index('by_assemblyId', ['assemblyId'])

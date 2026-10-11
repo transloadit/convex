@@ -31,22 +31,72 @@ vi.mock('./_generated/server', async () => {
 })
 const api = anyApi
 const components = componentsGeneric()
+const componentModules = import.meta.glob('../../src/component/**/*.*s')
 
-const setup = () => {
-  const t = convexTest(schema, {
-    './wedding.ts': () => import('./wedding'),
-    './guests.ts': () => import('./guests'),
-    './transloadit.ts': () => import('./transloadit'),
-    './auth.ts': () => import('./auth'),
-    './_generated/server.ts': () => import('convex/server'),
-  })
-  t.registerComponent(
-    'transloadit',
-    componentSchema,
-    import.meta.glob('../../src/component/**/*.*s'),
+// convex-test resolves every call into the component from its module export, so reading those
+// exports counts the app's component calls.
+const countComponentCalls = () => {
+  const calls: string[] = []
+  const modules = Object.fromEntries(
+    Object.entries(componentModules).map(([path, load]) => [
+      path,
+      async () =>
+        new Proxy((await load()) as Record<string, unknown>, {
+          get: (module, name) => {
+            const value = Reflect.get(module, name)
+            if (
+              typeof name === 'string' &&
+              typeof value === 'function' &&
+              ('isQuery' in value || 'isMutation' in value || 'isAction' in value)
+            ) {
+              calls.push(name)
+            }
+            return value
+          },
+        }),
+    ]),
   )
+  return { calls, modules }
+}
+
+const setup = (modules = componentModules, transactionLimits = false) => {
+  const t = convexTest({
+    schema,
+    modules: {
+      './wedding.ts': () => import('./wedding'),
+      './guests.ts': () => import('./guests'),
+      './transloadit.ts': () => import('./transloadit'),
+      './auth.ts': () => import('./auth'),
+      './_generated/server.ts': () => import('convex/server'),
+    },
+    transactionLimits,
+  })
+  t.registerComponent('transloadit', componentSchema, modules)
   return t
 }
+
+const persist = (
+  t: ReturnType<typeof setup>,
+  assemblyId: string,
+  fields: Record<string, unknown>,
+  results: Record<string, Record<string, unknown>[]>,
+) =>
+  t.action(components.transloadit.lib.handleWebhook, {
+    verifySignature: false,
+    payload: {
+      assembly_id: assemblyId,
+      ok: 'ASSEMBLY_COMPLETED',
+      fields: { album: 'wedding-gallery', ...fields },
+      results,
+    },
+  })
+
+const photos = (assemblyId: string, count = 1) => ({
+  images_output: Array.from({ length: count }, (_, index) => ({
+    id: `${assemblyId}-${index}`,
+    ssl_url: `https://example.com/${assemblyId}-${index}.jpg`,
+  })),
+})
 
 const admitted = async (t = setup()) => {
   const subject = await t.run(async (ctx) => {
@@ -134,6 +184,147 @@ test('reads contributors from persisted assemblies and scopes the gallery to thi
   expect(activity).toHaveLength(3)
   expect(JSON.stringify(activity)).not.toContain('not-for-gallery')
   expect(activity.every((item) => item.raw === undefined && item.results === undefined)).toBe(true)
+})
+
+test('joins contributor names inside one component call, however many Assemblies', async () => {
+  const { calls, modules } = countComponentCalls()
+  const t = setup(modules)
+  for (const [assemblyId, guestName] of [
+    ['first', 'Олена'],
+    ['second', 'Alex'],
+    ['third', 'Sam'],
+  ]) {
+    await persist(t, assemblyId, { guestName }, photos(assemblyId))
+  }
+  const guest = await admitted(t)
+  calls.length = 0
+  const results = await guest.query(api.wedding.listGallery, {})
+  expect(results.map((result: { uploadedBy?: string }) => result.uploadedBy).sort()).toEqual([
+    'Alex',
+    'Sam',
+    'Олена',
+  ])
+  expect(calls).toEqual(['listAlbumResults'])
+})
+
+test('joins contributor names only for gallery results, so large Storage Assemblies hide none', async () => {
+  // Convex's 16 MiB read limit is per query: the component's Assembly join shares listGallery's.
+  const t = setup(componentModules, true)
+  await persist(
+    t,
+    'video',
+    { guestName: 'Sam' },
+    {
+      videos_output: [{ id: 'video-0', ssl_url: 'https://example.com/video-0.mp4' }],
+    },
+  )
+  const upload = {
+    name: 'IMG_0001.jpg',
+    basename: 'IMG_0001',
+    ext: 'jpg',
+    size: 1,
+    mime: 'image/jpeg',
+    type: 'image',
+    field: 'files[]',
+    original_id: 'upload',
+    url: 'https://example.com/upload.jpg',
+  }
+  for (let index = 0; index < 20; index += 1) {
+    // Newer Storage-only Assemblies near Convex's 1 MiB document limit, as with hundreds of
+    // uploads (the webhook stores `uploads` twice: as is and inside `raw`).
+    await t.action(components.transloadit.lib.handleWebhook, {
+      verifySignature: false,
+      payload: {
+        assembly_id: `stored-${index}`,
+        ok: 'ASSEMBLY_COMPLETED',
+        fields: { album: 'wedding-gallery', guestName: 'Alex' },
+        uploads: [{ ...upload, meta: { padding: 'x'.repeat(450_000) } }],
+        results: {
+          images_stored: [{ id: `stored-${index}`, ssl_url: `https://example.com/${index}.jpg` }],
+        },
+      },
+    })
+  }
+  const results = await (await admitted(t)).query(api.wedding.listGallery, {})
+  expect(
+    results.map((result: { assemblyId: string; uploadedBy?: string }) => [
+      result.assemblyId,
+      result.uploadedBy,
+    ]),
+  ).toEqual([['video', 'Sam']])
+})
+
+test('returns only the fields the gallery renders', async () => {
+  const t = setup()
+  await persist(
+    t,
+    'projected',
+    { guestName: 'Alex', userId: 'guest-user' },
+    {
+      images_output: [
+        {
+          id: 'projected-result',
+          name: 'IMG_0001.jpg',
+          ssl_url: 'https://example.com/projected.jpg',
+          size: 123,
+          mime: 'image/jpeg',
+          original_id: 'source',
+          original_basename: 'IMG_0001',
+          meta: { width: 4000, height: 3000, latitude: 52.37, camera_model: 'private' },
+        },
+      ],
+    },
+  )
+  const results = await (await admitted(t)).query(api.wedding.listGallery, {})
+  expect(results).toEqual([
+    {
+      _id: expect.any(String),
+      assemblyId: 'projected',
+      stepName: 'images_output',
+      resultId: 'projected-result',
+      sslUrl: 'https://example.com/projected.jpg',
+      name: 'IMG_0001.jpg',
+      createdAt: expect.any(Number),
+      uploadedBy: 'Alex',
+      raw: { original_id: 'source', meta: { width: 4000, height: 3000 } },
+    },
+  ])
+})
+
+test('bounds the gallery and applies the retention cutoff on the server', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    const t = setup()
+    const expiredAt = Date.UTC(2026, 8, 1)
+    vi.setSystemTime(expiredAt)
+    await persist(t, 'expired', { guestName: 'Alex' }, photos('expired'))
+    vi.setSystemTime(expiredAt + 24 * 60 * 60 * 1000)
+    await persist(t, 'recent', { guestName: 'Alex' }, photos('recent', 2))
+    const guest = await admitted(t)
+
+    const recent = await guest.query(api.wedding.listGallery, { createdAfter: expiredAt })
+    expect(recent.map((result: { assemblyId: string }) => result.assemblyId)).toEqual([
+      'recent',
+      'recent',
+    ])
+    expect(await guest.query(api.wedding.listGallery, {})).toHaveLength(3)
+    expect(await guest.query(api.wedding.listGallery, { limit: 2 })).toHaveLength(2)
+
+    await persist(t, 'bulk', { guestName: 'Alex' }, photos('bulk', 81))
+    expect(await guest.query(api.wedding.listGallery, {})).toHaveLength(80)
+    expect(await guest.query(api.wedding.listGallery, { limit: 1000 })).toHaveLength(80)
+    for (const args of [
+      { limit: Number.NaN },
+      { createdAfter: Number.NaN },
+      { createdAfter: Number.POSITIVE_INFINITY },
+    ]) {
+      await expect(guest.query(api.wedding.listGallery, args)).rejects.toThrow(
+        'Invalid album result',
+      )
+    }
+  } finally {
+    vi.useRealTimers()
+  }
 })
 
 test('rejects unauthenticated and legacy anonymous sessions on every album read and write', async () => {

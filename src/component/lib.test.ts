@@ -1,8 +1,10 @@
 /// <reference types="vite/client" />
 
 import { createHmac } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { getConvexSize } from 'convex/values'
 import { convexTest } from 'convex-test'
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, type Mock, test, vi } from 'vitest'
 import { api } from './_generated/api.ts'
 import schema from './schema.ts'
 import { modules } from './setup.test.ts'
@@ -10,7 +12,87 @@ import { modules } from './setup.test.ts'
 process.env.TRANSLOADIT_KEY = 'test-key'
 process.env.TRANSLOADIT_SECRET = 'test-secret'
 
+const { version } = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'))
+const expectedClient = `convex-sdk:${version}`
+
+const getRequest = (fetchMock: Mock<typeof fetch>): Request => {
+  expect(fetchMock).toHaveBeenCalledOnce()
+  const call = fetchMock.mock.calls[0]
+  if (!call) throw new Error('Expected a Transloadit API request')
+  return new Request(...call)
+}
+
 describe('Transloadit component lib', () => {
+  test('createAssembly identifies the SDK and preserves the signed multipart request', async () => {
+    const t = convexTest(schema, modules)
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      Response.json({ assembly_id: 'asm_created', ok: 'ASSEMBLY_UPLOADING' }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    try {
+      const result = await t.action(api.lib.createAssembly, {
+        config: { authKey: 'test-key', authSecret: 'test-secret' },
+        templateId: 'test-template',
+        fields: { caller: 'wedding-gallery' },
+        numExpectedUploadFiles: 2,
+      })
+
+      expect(result.assemblyId).toBe('asm_created')
+      const request = getRequest(fetchMock)
+      expect(request.url).toBe('https://api2.transloadit.com/assemblies')
+      expect(request.method).toBe('POST')
+      expect(request.headers.get('content-type')).toMatch(/^multipart\/form-data; boundary=/)
+      const formData = await request.formData()
+      const paramsString = String(formData.get('params'))
+      expect(JSON.parse(paramsString)).toMatchObject({
+        auth: { key: 'test-key' },
+        template_id: 'test-template',
+        fields: { caller: 'wedding-gallery' },
+        num_expected_upload_files: 2,
+      })
+      expect(formData.get('signature')).toBe(
+        `sha384:${createHmac('sha384', 'test-secret').update(paramsString).digest('hex')}`,
+      )
+      expect(formData.get('tus_num_expected_upload_files')).toBe('2')
+      expect(request.headers.get('Transloadit-Client')).toBe(expectedClient)
+      expect(await t.query(api.lib.getAssemblyStatus, { assemblyId: 'asm_created' })).not.toBeNull()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  test.each([true, false])(
+    'refreshAssembly identifies the SDK with environment credentials: %s',
+    async (signed) => {
+      const t = convexTest(schema, modules)
+      const fetchMock = vi.fn<typeof fetch>(async () =>
+        Response.json({ assembly_id: 'asm_refreshed', ok: 'ASSEMBLY_COMPLETED' }),
+      )
+      vi.stubGlobal('fetch', fetchMock)
+      vi.stubEnv('TRANSLOADIT_KEY', signed ? 'test-key' : undefined)
+      vi.stubEnv('TRANSLOADIT_SECRET', signed ? 'test-secret' : undefined)
+
+      try {
+        await t.action(api.lib.refreshAssembly, { assemblyId: 'asm_refreshed' })
+        const request = getRequest(fetchMock)
+        const url = new URL(request.url)
+        expect(url.origin).toBe('https://api2.transloadit.com')
+        expect(url.pathname).toBe('/assemblies/asm_refreshed')
+        expect(request.method).toBe('GET')
+        expect(url.searchParams.has('signature')).toBe(signed)
+        expect(url.searchParams.has('params')).toBe(signed)
+        expect(request.headers.get('Transloadit-Client')).toBe(expectedClient)
+        expect(
+          await t.query(api.lib.getAssemblyStatus, { assemblyId: 'asm_refreshed' }),
+        ).not.toBeNull()
+      } finally {
+        vi.unstubAllGlobals()
+        vi.unstubAllEnvs()
+      }
+    },
+  )
+
   test('checks expected upload fields before persisting a refreshed assembly', async () => {
     const t = convexTest(schema, modules)
     vi.stubGlobal(
@@ -167,6 +249,201 @@ describe('Transloadit component lib', () => {
     expect(results).toHaveLength(1)
     expect(results[0]?.album).toBe('wedding-gallery')
     expect(results[0]?.userId).toBe('user_123')
+  })
+
+  test('listAlbumResults bounds and ages rows in the index and joins only requested fields', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const t = convexTest(schema, modules)
+      const persist = async (assemblyId: string, fields: Record<string, unknown>, count = 1) => {
+        await t.action(api.lib.handleWebhook, {
+          verifySignature: false,
+          payload: {
+            assembly_id: assemblyId,
+            ok: 'ASSEMBLY_COMPLETED',
+            fields: { album: 'wedding-gallery', ...fields },
+            results: {
+              images_output: Array.from({ length: count }, (_, index) => ({
+                id: `${assemblyId}-${index}`,
+                ssl_url: `https://example.com/${assemblyId}-${index}.jpg`,
+              })),
+            },
+          },
+        })
+      }
+      vi.setSystemTime(1000)
+      await persist('old', { guestName: 'Old' })
+      vi.setSystemTime(2000)
+      await persist('named', { guestName: 'Олена', privateMetadata: 'not-joined' }, 2)
+      vi.setSystemTime(3000)
+      await persist('legacy', {})
+      await persist('elsewhere', { album: 'another-album', guestName: 'Other' })
+
+      const recent = await t.query(api.lib.listAlbumResults, {
+        album: 'wedding-gallery',
+        createdAfter: 1000,
+        assemblyFields: ['guestName', 'missing'],
+      })
+      expect(recent.map((result) => [result.assemblyId, result.assemblyFields])).toEqual([
+        ['legacy', {}],
+        ['named', { guestName: 'Олена' }],
+        ['named', { guestName: 'Олена' }],
+      ])
+      const all = await t.query(api.lib.listAlbumResults, { album: 'wedding-gallery' })
+      expect(all.map((result) => result.assemblyId)).toEqual(['legacy', 'named', 'named', 'old'])
+      expect(all.every((result) => !('assemblyFields' in result))).toBe(true)
+      const bounded = (limit: number) =>
+        t.query(api.lib.listAlbumResults, { album: 'wedding-gallery', limit })
+      expect(await bounded(2.5)).toHaveLength(2)
+      expect(await bounded(0)).toHaveLength(1)
+      for (const args of [
+        { limit: Number.NaN },
+        { limit: Number.POSITIVE_INFINITY },
+        { createdAfter: Number.NaN },
+        { createdAfter: Number.NEGATIVE_INFINITY },
+      ]) {
+        await expect(
+          t.query(api.lib.listAlbumResults, { album: 'wedding-gallery', ...args }),
+        ).rejects.toThrow('Invalid album result')
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  test('listAlbumResults filters Steps before joining and keeps the join within the read limit', async () => {
+    // Convex's 16 MiB read limit is per query: nested component calls share the caller's budget.
+    const t = convexTest({ schema, modules, transactionLimits: true })
+    await t.run(async (ctx) => {
+      await ctx.db.insert('assemblies', {
+        assemblyId: 'video',
+        fields: { album: 'wedding-gallery', guestName: 'Sam' },
+        createdAt: -1,
+        updatedAt: -1,
+      })
+      await ctx.db.insert('results', {
+        assemblyId: 'video',
+        album: 'wedding-gallery',
+        stepName: 'videos_output',
+        raw: {},
+        createdAt: -1,
+      })
+    })
+    const assemblyIds = Array.from({ length: 20 }, (_, index) => `large-${index}`)
+    for (const [index, assemblyId] of assemblyIds.entries()) {
+      await t.run(async (ctx) => {
+        // Near Convex's 1 MiB document limit, like an Assembly with hundreds of files.
+        await ctx.db.insert('assemblies', {
+          assemblyId,
+          fields: { album: 'wedding-gallery', guestName: `Guest ${index}` },
+          raw: 'x'.repeat(900_000),
+          createdAt: index,
+          updatedAt: index,
+        })
+        await ctx.db.insert('results', {
+          assemblyId,
+          album: 'wedding-gallery',
+          stepName: 'images_output',
+          raw: {},
+          createdAt: index,
+        })
+      })
+    }
+    const newestFirst = [...assemblyIds].reverse()
+    const rows = await t.query(api.lib.listAlbumResults, { album: 'wedding-gallery' })
+    expect(rows.map((result) => result.assemblyId)).toEqual([...newestFirst, 'video'])
+
+    // Joining all 20 would read ~17 MiB: the page ends at the newest Assemblies that fit.
+    const joined = await t.query(api.lib.listAlbumResults, {
+      album: 'wedding-gallery',
+      assemblyFields: ['guestName'],
+    })
+    expect(joined.length).toBeGreaterThanOrEqual(15)
+    expect(joined.length).toBeLessThan(20)
+    expect(joined.map((result) => [result.assemblyId, result.assemblyFields])).toEqual(
+      newestFirst.slice(0, joined.length).map((id) => [id, { guestName: `Guest ${id.slice(6)}` }]),
+    )
+
+    // Asking for no fields reads no Assemblies, so it cannot end the page early.
+    const unjoined = await t.query(api.lib.listAlbumResults, {
+      album: 'wedding-gallery',
+      assemblyFields: [],
+    })
+    expect(unjoined.map((result) => [result.assemblyId, result.assemblyFields])).toEqual(
+      [...newestFirst, 'video'].map((id) => [id, {}]),
+    )
+
+    // Steps are filtered among the `limit` newest rows before the join, so the large Assemblies
+    // of other Steps are never read.
+    const videos = {
+      album: 'wedding-gallery',
+      stepNames: ['videos_output'],
+      assemblyFields: ['guestName'],
+    }
+    const video = await t.query(api.lib.listAlbumResults, videos)
+    expect(video.map((result) => [result.assemblyId, result.assemblyFields])).toEqual([
+      ['video', { guestName: 'Sam' }],
+    ])
+    expect(await t.query(api.lib.listAlbumResults, { ...videos, limit: 20 })).toEqual([])
+  })
+
+  test('listAlbumResults keeps the fields it repeats on each row within the return limit', async () => {
+    // An Assembly is read once, but its fields are copied onto each of its results.
+    const t = convexTest({ schema, modules, transactionLimits: true })
+    await t.run(async (ctx) => {
+      await ctx.db.insert('assemblies', {
+        assemblyId: 'many',
+        fields: { album: 'wedding-gallery', note: 'x'.repeat(400_000) },
+        createdAt: 0,
+        updatedAt: 0,
+      })
+      for (let index = 0; index < 50; index++) {
+        await ctx.db.insert('results', {
+          assemblyId: 'many',
+          album: 'wedding-gallery',
+          stepName: 'images_output',
+          raw: {},
+          createdAt: index,
+        })
+      }
+    })
+    const rows = await t.query(api.lib.listAlbumResults, {
+      album: 'wedding-gallery',
+      assemblyFields: ['note'],
+    })
+    // 50 copies would return ~20 MB: the page ends at the newest rows that fit in 16 MiB.
+    expect(getConvexSize(rows)).toBeLessThanOrEqual(1 << 24)
+    expect(rows.length).toBeGreaterThanOrEqual(30)
+    expect(rows.map((row) => row.createdAt)).toEqual(rows.map((_, index) => 49 - index))
+  })
+
+  test('listAlbumResults bounds the response apart from the read limit', async () => {
+    // Nearly the whole read limit goes to these Assemblies, but their rows still fit in 16 MiB.
+    const t = convexTest({ schema, modules, transactionLimits: true })
+    const assemblyIds = Array.from({ length: 19 }, (_, index) => `wide-${index}`)
+    for (const [index, assemblyId] of assemblyIds.entries()) {
+      await t.run(async (ctx) => {
+        await ctx.db.insert('assemblies', {
+          assemblyId,
+          fields: { album: 'wedding-gallery', note: 'x'.repeat(850_000) },
+          createdAt: index,
+          updatedAt: index,
+        })
+        await ctx.db.insert('results', {
+          assemblyId,
+          album: 'wedding-gallery',
+          stepName: 'images_output',
+          raw: {},
+          createdAt: index,
+        })
+      })
+    }
+    const rows = await t.query(api.lib.listAlbumResults, {
+      album: 'wedding-gallery',
+      assemblyFields: ['note'],
+    })
+    expect(rows.map((row) => row.assemblyId)).toEqual([...assemblyIds].reverse())
+    expect(getConvexSize(rows)).toBeLessThanOrEqual(1 << 24)
   })
 
   test('handleWebhook stores url when ssl_url missing', async () => {
@@ -389,22 +666,12 @@ describe('Transloadit component lib', () => {
       expect(result.assemblyId).toBe('asm_456')
       expect(result.ok).toBe('ASSEMBLY_COMPLETED')
 
-      const requestInfo = fetchMock.mock.calls[0]?.[0]
-      const requestUrl =
-        typeof requestInfo === 'string'
-          ? requestInfo
-          : requestInfo instanceof URL
-            ? requestInfo.toString()
-            : requestInfo instanceof Request
-              ? requestInfo.url
-              : ''
-      if (!requestUrl) {
-        throw new Error('Expected fetch to be called with a URL string')
-      }
-      const url = new URL(requestUrl)
+      const request = getRequest(fetchMock)
+      const url = new URL(request.url)
       expect(url.origin).toBe('https://api2.transloadit.com')
       expect(url.searchParams.get('signature')).toBeTruthy()
       expect(url.searchParams.get('params')).toBeTruthy()
+      expect(request.headers.get('Transloadit-Client')).toBe(expectedClient)
 
       const assembly = await t.query(api.lib.getAssemblyStatus, {
         assemblyId: 'asm_456',

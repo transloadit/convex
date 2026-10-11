@@ -1,9 +1,10 @@
 import type { StoredAsset } from '@transloadit/convex'
 import type { StorageImageReceipt } from '@transloadit/viewer/react'
+import type { GalleryResult } from './gallery-results'
 import { galleryResultSteps } from './gallery-steps'
-import { type AssemblyResultResponse, getResultOriginalKey } from './transloadit'
+import { getResultOriginalKey } from './transloadit'
 
-export type GalleryResult = AssemblyResultResponse & { uploadedBy?: string }
+export type { GalleryResult }
 
 /** One private Storage photo from `media:list`: a canonical receipt, never a URL. */
 export type StorageGalleryAsset = {
@@ -22,6 +23,15 @@ export const galleryRetentionMs =
 export const galleryRetentionLabel = Number.isFinite(galleryRetentionMs)
   ? `${retentionHours}h`
   : 'all time'
+
+const hourMs = 60 * 60 * 1000
+
+/**
+ * Cutoff for the gallery query to apply in its index. Floored to the hour, so it is never later
+ * than the exact boundary `buildGalleryItems` applies, and repeated loads reuse the same arguments.
+ */
+export const galleryCreatedAfter = (now = Date.now(), retentionMs = galleryRetentionMs) =>
+  Number.isFinite(retentionMs) ? Math.floor((now - retentionMs) / hourMs) * hourMs : undefined
 
 export type GalleryItem = {
   id: string

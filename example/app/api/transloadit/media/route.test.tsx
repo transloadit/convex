@@ -85,6 +85,43 @@ describe('private media route', () => {
     expect(fetchQuery.mock.calls[0]?.[1]).toMatchObject({ action: 'download' })
   })
 
+  test('reuses a 150 s signing window without caching authorization or extending the grant', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const candidate = previewCandidates()[0] ?? ''
+      // Signing windows align to the epoch; this instant starts one.
+      const windowStart = Date.UTC(2026, 8, 29, 18, 0, 0)
+      const redirect = async (now: number) => {
+        vi.setSystemTime(now)
+        const response = await get(candidate)
+        expect(response.status).toBe(307)
+        expect(response.headers.get('cache-control')).toBe('private, no-store')
+        return new URL(response.headers.get('location') ?? '')
+      }
+      const first = await redirect(windowStart)
+      const sameWindow = await redirect(windowStart + 149_999)
+      const nextWindow = await redirect(windowStart + 150_000)
+      // One cacheable URL per window; a new URL keeps 150-300 s and never more than five minutes.
+      expect(sameWindow.href).toBe(first.href)
+      expect(Number(first.searchParams.get('exp'))).toBe(windowStart + 300_000)
+      expect(nextWindow.href).not.toBe(first.href)
+      expect(Number(nextWindow.searchParams.get('exp'))).toBe(windowStart + 450_000)
+      expect(fetchQuery).toHaveBeenCalledTimes(3)
+
+      // Revocation applies to the next request inside the same window: nothing is cached.
+      fetchQuery.mockResolvedValueOnce(null)
+      vi.setSystemTime(windowStart + 150_001)
+      const denied = await get(candidate)
+      expect(denied.status).toBe(404)
+      expect(denied.headers.get('location')).toBeNull()
+      expect(denied.headers.get('cache-control')).toBe('private, no-store')
+      expect(fetchQuery).toHaveBeenCalledTimes(4)
+      expect((await redirect(windowStart + 150_002)).href).toBe(nextWindow.href)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test.each([
     ['without a session cookie', () => token.mockResolvedValue(undefined)],
     ['when Convex denies the guest', () => fetchQuery.mockResolvedValue(null)],

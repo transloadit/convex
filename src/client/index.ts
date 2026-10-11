@@ -11,6 +11,7 @@ import {
   type StorageConfig,
   type StoredAssetReference,
   type StoredAssetResponse,
+  vAlbumResultResponse,
   vAssemblyIdArgs,
   vAssemblyOptions,
   vAssemblyResponse,
@@ -82,6 +83,7 @@ export {
   getResultUrl,
 } from '../shared/resultUtils.ts'
 export type {
+  AlbumResultResponse,
   ParsedWebhookRequest,
   StorageConfig,
   StoredAssetDeletion,
@@ -98,7 +100,7 @@ export {
 export type { StoredAssemblyAsset, StoredAsset } from '../shared/storedAssets.ts'
 export { selectStoredAssets } from '../shared/storedAssets.ts'
 export type { AssemblyInstructionsInput, AssemblyStatus }
-export { vAssemblyResponse, vAssemblyResultResponse, vCreateAssemblyArgs }
+export { vAlbumResultResponse, vAssemblyResponse, vAssemblyResultResponse, vCreateAssemblyArgs }
 
 export interface TransloaditConfig {
   authKey: string
@@ -225,7 +227,21 @@ export class TransloaditClient {
     return ctx.runQuery(this.component.lib.listResults, args)
   }
 
-  async listAlbumResults(ctx: RunQueryCtx, args: { album: string; limit?: number }) {
+  /**
+   * Newest album results, at most 500. `createdAfter` skips older rows in the index, `stepNames`
+   * keeps only those Steps' results among them, and `assemblyFields` joins those keys of each
+   * remaining result's Assembly `fields` in the same call.
+   */
+  async listAlbumResults(
+    ctx: RunQueryCtx,
+    args: {
+      album: string
+      limit?: number
+      createdAfter?: number
+      stepNames?: string[]
+      assemblyFields?: string[]
+    },
+  ) {
     return ctx.runQuery(this.component.lib.listAlbumResults, args)
   }
 
@@ -339,6 +355,9 @@ export function makeTransloaditAPI(
   const resolveStorage = (resolved: TransloaditConfig): StorageConfig | undefined =>
     resolved.storageWorkspace ? { workspace: resolved.storageWorkspace } : undefined
   // Stored asset reads are intentionally absent: expose receipts only through app-authorized queries.
+  // Likewise, callers cannot pick Assembly `fields` to join onto album results: an app query that
+  // authorizes the caller can, as the example gallery does.
+  const { assemblyFields: _assemblyFields, ...albumResultsArgs } = vListAlbumResultsArgs
 
   return {
     createAssembly: actionGeneric({
@@ -421,7 +440,7 @@ export function makeTransloaditAPI(
       },
     }),
     listAlbumResults: queryGeneric({
-      args: vListAlbumResultsArgs,
+      args: albumResultsArgs,
       returns: v.array(vAssemblyResultResponse),
       handler: async (ctx, args) => {
         return ctx.runQuery(component.lib.listAlbumResults, args)

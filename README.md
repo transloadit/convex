@@ -97,6 +97,21 @@ Lifecycle:
 1. `createAssembly` inserts the initial `assemblies` row.
 2. `handleWebhook`, `queueWebhook`, or `refreshAssembly` upserts the assembly + replaces results.
 3. `listResults` returns flattened step outputs for use in UIs.
+4. `listAlbumResults` returns an album's newest results, at most 500, from the
+   `by_album_and_createdAt` index. `createdAfter` skips older rows in that index, `stepNames`
+   keeps only the named Steps' results among those rows, and `assemblyFields` joins the named
+   keys of each remaining result's Assembly `fields` (such as a contributor's display name), so
+   an album page needs one component call instead of one per Assembly. Non-finite limits or
+   cutoffs are refused.
+   The join reads each distinct Assembly document. Component calls share the calling query's
+   16 MiB read limit, so when joining large Assemblies would exceed what remains, the page ends
+   early with the newest rows that fit instead of failing. Pass `stepNames` so the Assemblies of
+   results the page drops are not read. Reads the app query makes after the call share that
+   limit too. Each row repeats its Assembly's fields, so the page also ends before the first row
+   that would take the response past Convex's separate 16 MiB return limit. An empty
+   `assemblyFields` reads nothing.
+   The `makeTransloaditAPI` wrapper does not accept `assemblyFields`: join Assembly fields in an
+   app query that authorizes the caller.
 
 ## Storage receipts
 

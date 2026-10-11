@@ -23,7 +23,7 @@ An animation library handles presentation; it does not provide albums, access co
 
 | Area | Current demo | Wedding instance |
 | --- | --- | --- |
-| Retention | The UI defaults to 24 hours; the demo R2 lifecycle deletes objects after one day. | Separate bucket/workspace with explicit permanent retention. Setting the gallery retention to zero only removes the UI cutoff; it cannot undo bucket deletion. Exclude it from demo cleanup. |
+| Retention | The UI and its album query default to 24 hours; the demo R2 lifecycle deletes objects after one day. | Separate bucket/workspace with explicit permanent retention. Setting the gallery retention to zero only removes the UI and query cutoff; it cannot undo bucket deletion. Exclude it from demo cleanup. |
 | Originals | Processing persists resized photos, encoded videos, and posters. | Preserve untouched originals and checksums as well as viewing derivatives. Keep an independent backup and demonstrate a restore. |
 | Viewing privacy | Album queries require a named guest session and the invitation code when configured. Direct media links remain public. | Configure a strong invitation code, private storage, and authorized delivery/downloads. Protect thumbnails and video URLs too. Without a code, anyone can enter a name. |
 | Backend authorization | Album reads require admission; status/results/refresh require ownership. Signing uses a fixed wedding action; ingestion and cleanup are internal. Logout and code changes revoke album access. | Extend membership checks to future editing and delivery paths. Names are self-reported. Use named Template credentials: raw R2 keys in inline instructions are visible to the uploader even when the diagnostic display is redacted. |
@@ -65,7 +65,7 @@ Status, 25 September 2026:
   `TRANSLOADIT_SMART_CDN_WORKSPACE` (a least-privilege `smart_cdn:sign` key). The gallery renders
   private photos with `@transloadit/viewer/react` `Image` and pages through `media:list` with
   cursors, freezing loaded pages so live uploads never shift photos between pages. The example
-  pins the published Viewer alpha (`@transloadit/viewer` 0.0.3, npm tag `alpha`).
+  pins the published Viewer alpha (`@transloadit/viewer` 0.0.5, npm tag `alpha`).
 - **Placeholders.** Thumbnails use `placeholder="blur"` with an explicit `objectFit="cover"`: the
   receipt's ThumbHash is painted as an inline background that the loaded opaque pixels cover, with
   no load handler. Transparent photos and the letterboxed (`contain`) viewer get none. A ThumbHash
@@ -81,9 +81,10 @@ Delivery semantics, as verified against production with synthetic assets:
 - Every route request reauthorizes and redirects to a freshly signed, exact-version CDN URL.
   Receipts pin `asset_id` and `version_id`, so renames keep working and overwrites never change
   the bytes a receipt selects. Tampered parameters fail the signature; unknown versions return 404.
-- An issued CDN URL is a bearer grant until its expiry. The CDN keys its cache on the full query and
-  enforces expiry on cache hits too. Signing rotates at most once a minute, so a newly signed URL can
-  equal one already cached; it is still bounded by that expiry.
+- An issued CDN URL is a bearer grant until its expiry, at most five minutes after signing. The CDN
+  keys its cache on the full query and enforces expiry on cache hits too. Signing windows last 150
+  seconds, so repeat requests within a window receive the same URL and can hit the CDN cache; each
+  newly signed URL keeps 150-300 seconds of validity.
 - Storage deletion is a soft delete: new origin reads fail at once, while cached responses remain
   usable until their URLs expire and downloaded bytes cannot be recalled. That is why cleanup hides
   assets in Convex first, so the app stops issuing new redirects before any bytes are deleted.
