@@ -136,11 +136,13 @@ vercel env add NEXT_PUBLIC_CONVEX_URL preview --git-branch <branch> --value <dep
 ```
 
 Run it with Vercel access, then push a new commit: the preview for the existing commit was built
-without the variable. Subsequent CI runs reuse the named Convex preview and preserve its URL. The
-check also fails when a preview talks to another backend, so browser QA never runs against the
-wrong deployment. A hosted app with no configured backend shows an unavailable state instead of
-leaving guest sign-in pending forever. Cloud browser QA opens the ordinary preview URL without a
-`convexUrl` override.
+without the variable. Later CI runs reuse the named Convex preview while it exists. Convex can
+delete an older preview, though, and the next deploy then creates a new one with a different URL.
+The same check then fails because the preview still talks to the old backend, and it prints the
+command with the new URL. Run it again, since `--force` replaces the stale value, and push a new
+commit. Browser QA never runs against the wrong deployment. A hosted app with no configured
+backend shows an unavailable state instead of leaving guest sign-in pending forever. Cloud browser
+QA opens the ordinary preview URL without a `convexUrl` override.
 
 ## Demo Storage activation and rollback
 
