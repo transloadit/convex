@@ -264,6 +264,12 @@ jobs:
           E2E_REMOTE_CONVEX_URL: ${{ env.E2E_REMOTE_CONVEX_URL }}
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
           CONVEX_PREVIEW_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
+      - name: Check preview backend
+        run: timeout --foreground 3m node scripts/check-preview-backend.ts
+        env:
+          E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
+          E2E_REMOTE_CONVEX_URL: ${{ env.E2E_REMOTE_CONVEX_URL }}
+          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
       - name: Run cloud verification
         run: timeout --foreground 12m yarn verify:cloud
         env:
