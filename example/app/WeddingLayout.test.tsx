@@ -268,3 +268,30 @@ test('drops a pending automatic reveal when the guest reopens the uploader', asy
   await new Promise((resolve) => setTimeout(resolve, 50))
   expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
 })
+
+test('lets later notifications expire after a focused one was dismissed', () => {
+  vi.useFakeTimers()
+  try {
+    const { rerender } = render(<Album assemblyId="batch-asm" />)
+    rerender(<Album assemblyId="batch-asm" {...finished} />)
+    const dismiss = screen.getByRole('button', { name: 'Dismiss notification' })
+    fireEvent.focus(dismiss)
+    // Removing a focused element does not reliably fire blur.
+    fireEvent.click(dismiss)
+    rerender(
+      <Album assemblyId="batch-asm" {...finished} uploadSuccess={{ id: 'batch-2', count: 1 }} />,
+    )
+    act(() => vi.advanceTimersByTime(8000))
+    expect(screen.queryByTestId('upload-success')).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('shows the album at once when the requested items have not rendered yet', () => {
+  Element.prototype.scrollIntoView = vi.fn()
+  const { rerender } = render(<Album assemblyId="batch-asm" />)
+  rerender(<Album assemblyId="batch-asm" {...finished} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Show in album' }))
+  expect(scrolledCards()[0]?.id).toBe('memories')
+})

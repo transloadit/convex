@@ -178,6 +178,7 @@ export const WeddingLayout = ({
     if (uploadOpenRef.current && batch) setPendingReveal({ assemblyId: batch, focus: false })
     setUploadOpen(false)
     setVisibleSuccess({ ...uploadSuccess, assemblyId: batch })
+    setSuccessFocused(false)
   }, [uploadSuccess])
   useEffect(() => {
     if (!visibleSuccess || successFocused) return
@@ -197,6 +198,8 @@ export const WeddingLayout = ({
       setPendingReveal(null)
       return
     }
+    // An explicit request shows the album at once, then moves to the items when they render.
+    if (focus) collection.scrollIntoView({ block: 'start' })
     const observer = new MutationObserver(() => {
       if (revealUpload(collection, batch, focus)) setPendingReveal(null)
     })
@@ -233,6 +236,8 @@ export const WeddingLayout = ({
               onClick={() => {
                 if (!visibleSuccess.assemblyId) return
                 // From inside a reopened uploader, close it first; the reveal waits for the card.
+                // Moving the notification out of the dialog unmounts these buttons without a blur.
+                setSuccessFocused(false)
                 setUploadOpen(false)
                 setPendingReveal({ assemblyId: visibleSuccess.assemblyId, focus: true })
               }}
@@ -244,7 +249,11 @@ export const WeddingLayout = ({
             type="button"
             className="toast-dismiss"
             {...holdSuccess}
-            onClick={() => setVisibleSuccess(null)}
+            onClick={() => {
+              // Removing a focused button does not reliably fire blur.
+              setSuccessFocused(false)
+              setVisibleSuccess(null)
+            }}
             aria-label={t('upload.dismiss')}
           >
             ×
