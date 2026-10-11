@@ -2,7 +2,15 @@
 
 import dynamic from 'next/dynamic'
 import { useLocale, useTranslations } from 'next-intl'
-import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import {
+  type FocusEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { uppyLocales } from '../i18n/uppy'
 import { galleryRetentionMs } from '../lib/gallery'
 import { maxGuestNameLength } from '../lib/guest-name'
@@ -151,7 +159,10 @@ export const WeddingLayout = ({
   const [visibleSuccess, setVisibleSuccess] = useState<
     (UploadSuccess & { assemblyId: string | null }) | null
   >(null)
-  const [pendingReveal, setPendingReveal] = useState<string | null>(null)
+  const [pendingReveal, setPendingReveal] = useState<{ assemblyId: string; focus: boolean } | null>(
+    null,
+  )
+  const [successFocused, setSuccessFocused] = useState(false)
   const collectionRef = useRef<HTMLElement>(null)
   // Read at completion time; declared first so they are current when the success effect runs.
   const uploadOpenRef = useRef(uploadOpen)
@@ -164,21 +175,30 @@ export const WeddingLayout = ({
     if (!uploadSuccess) return
     const batch = assemblyIdRef.current
     // Guests who watched the upload see the result; guests who kept browsing keep their place.
-    if (uploadOpenRef.current && batch) setPendingReveal(batch)
+    if (uploadOpenRef.current && batch) setPendingReveal({ assemblyId: batch, focus: false })
     setUploadOpen(false)
     setVisibleSuccess({ ...uploadSuccess, assemblyId: batch })
-    const timer = setTimeout(() => setVisibleSuccess(null), 8000)
-    return () => clearTimeout(timer)
   }, [uploadSuccess])
   useEffect(() => {
+    if (!visibleSuccess || successFocused) return
+    const timer = setTimeout(() => setVisibleSuccess(null), 8000)
+    return () => clearTimeout(timer)
+  }, [visibleSuccess, successFocused])
+  // A new batch in the uploader supersedes any reveal still waiting for the previous one.
+  useEffect(() => {
+    if (uploadOpen) setPendingReveal(null)
+  }, [uploadOpen])
+  useEffect(() => {
     const collection = collectionRef.current
-    if (!pendingReveal || !collection) return
-    if (revealUpload(collection, pendingReveal, false)) {
+    // Runs after the dialog closed and restored focus, so a requested focus is not undone.
+    if (!pendingReveal || !collection || uploadOpen) return
+    const { assemblyId: batch, focus } = pendingReveal
+    if (revealUpload(collection, batch, focus)) {
       setPendingReveal(null)
       return
     }
     const observer = new MutationObserver(() => {
-      if (revealUpload(collection, pendingReveal, false)) setPendingReveal(null)
+      if (revealUpload(collection, batch, focus)) setPendingReveal(null)
     })
     observer.observe(collection, { childList: true, subtree: true })
     const timer = setTimeout(() => setPendingReveal(null), revealWaitMs)
@@ -186,7 +206,16 @@ export const WeddingLayout = ({
       observer.disconnect()
       clearTimeout(timer)
     }
-  }, [pendingReveal])
+  }, [pendingReveal, uploadOpen])
+  // Keyboard and screen reader users keep the notification and its action while focused on it.
+  const holdSuccess = {
+    onFocus: () => setSuccessFocused(true),
+    onBlur: (event: FocusEvent<HTMLButtonElement>) => {
+      if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) {
+        setSuccessFocused(false)
+      }
+    },
+  }
   const payloadText = assemblyParams ? JSON.stringify(assemblyParams, null, 2) : null
   const notifications = Boolean(visibleSuccess || toasts?.length) && (
     <div className={`toast-stack${uploadOpen ? ' toast-inline' : ''}`} role="status">
@@ -200,12 +229,12 @@ export const WeddingLayout = ({
             <button
               type="button"
               className="toast-action"
+              {...holdSuccess}
               onClick={() => {
-                const collection = collectionRef.current
-                if (!collection || !visibleSuccess.assemblyId) return
-                if (!revealUpload(collection, visibleSuccess.assemblyId, true)) {
-                  collection.scrollIntoView({ block: 'start' })
-                }
+                if (!visibleSuccess.assemblyId) return
+                // From inside a reopened uploader, close it first; the reveal waits for the card.
+                setUploadOpen(false)
+                setPendingReveal({ assemblyId: visibleSuccess.assemblyId, focus: true })
               }}
             >
               {t('upload.showNew')}
@@ -214,6 +243,7 @@ export const WeddingLayout = ({
           <button
             type="button"
             className="toast-dismiss"
+            {...holdSuccess}
             onClick={() => setVisibleSuccess(null)}
             aria-label={t('upload.dismiss')}
           >
