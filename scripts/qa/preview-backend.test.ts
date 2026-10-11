@@ -49,7 +49,7 @@ describe('checkPreviewBackend', () => {
     const error = await rejection(promise)
     expect(error.message).toContain('shows the unavailable state')
     expect(error.message).toContain(
-      `vercel env add NEXT_PUBLIC_CONVEX_URL preview --git-branch new-branch --value ${convexUrl} --no-sensitive --project convex --scope transloadit-com`,
+      `vercel env add NEXT_PUBLIC_CONVEX_URL preview --git-branch new-branch --value ${convexUrl} --no-sensitive --force --project convex --scope transloadit-com`,
     )
     expect(error.message).toContain('push a new commit')
     expect(error.message).not.toContain(bypassToken)
@@ -74,6 +74,28 @@ describe('checkPreviewBackend', () => {
     const { promise } = check([page('', 503), page('', 502), page('', 401)])
     const error = await rejection(promise)
     expect(error.message).toBe('Vercel preview did not load: HTTP 401')
+  })
+
+  test('retries when the body fails after the headers arrive', async () => {
+    const broken = new Response(
+      new ReadableStream({
+        start(controller) {
+          controller.error(new TypeError('Connection reset while reading response'))
+        },
+      }),
+    )
+    const { fetcher, promise } = check([broken, page(connected)])
+    await expect(promise).resolves.toBeUndefined()
+    expect(fetcher).toHaveBeenCalledTimes(2)
+  })
+
+  test('does not prescribe Vercel setup for an unrelated page', async () => {
+    const { promise } = check([page('<html><title>Log in to Vercel</title></html>')])
+    const error = await rejection(promise)
+    expect(error.message).toContain(
+      'neither embeds a Convex deployment nor shows the unavailable state',
+    )
+    expect(error.message).not.toContain('vercel env add')
   })
 
   test('refuses a backend URL that is not a Convex deployment', async () => {

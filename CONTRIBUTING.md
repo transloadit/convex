@@ -132,7 +132,7 @@ backend, then its `Check preview backend` step fails and prints the exact comman
 Convex assigned, in the log and job summary:
 
 ```bash
-vercel env add NEXT_PUBLIC_CONVEX_URL preview --git-branch <branch> --value <deployment-url> --no-sensitive --project convex --scope transloadit-com
+vercel env add NEXT_PUBLIC_CONVEX_URL preview --git-branch <branch> --value <deployment-url> --no-sensitive --force --project convex --scope transloadit-com
 ```
 
 Run it with Vercel access, then push a new commit: the preview for the existing commit was built
