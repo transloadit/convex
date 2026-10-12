@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { ConvexProvider, type ConvexReactClient } from 'convex/react'
 import type { PaginationOptions } from 'convex/server'
 import { ConvexError } from 'convex/values'
@@ -95,4 +95,21 @@ test('refused cursors restart the album, other failures replace its photos with 
   expect(screen.getByRole('alert').textContent).toMatch(/could not be loaded/)
   expect(shown()).toBe(0)
   expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
+})
+
+test('automatically advances initial rendition-only pages until a gallery card is visible', async () => {
+  respond = ({ cursor }) =>
+    cursor === null
+      ? { page: [], isDone: false, continueCursor: 'next' }
+      : { page: [photo(1)], isDone: true, continueCursor: 'end' }
+  render(album)
+  await waitFor(() => expect(shown()).toBe(1))
+  expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
+})
+
+test('an exhausted empty album does not request more pages', () => {
+  respond = () => ({ page: [], isDone: true, continueCursor: 'end' })
+  render(album)
+  expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
+  expect(listeners.size).toBe(1)
 })

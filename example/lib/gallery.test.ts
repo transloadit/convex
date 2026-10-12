@@ -181,6 +181,18 @@ const stored = (
 })
 
 describe('private Storage photos', () => {
+  test('video playback and poster use private delivery while download selects the original', () => {
+    const original = stored('clip', 1000, { mime: 'video/quicktime', path: 'album/clip.mov' })
+    const video = stored('mp4', 1000, { mime: 'video/mp4' }).asset
+    const poster = stored('poster', 1000).asset
+    const [item] = buildStorageGalleryItems([{ ...original, video, poster }], { now: 1000 })
+    expect(item).toMatchObject({ kind: 'video', name: 'clip.mov', original: original.asset })
+    expect(item?.url).toContain(`asset_id=${video.asset_id}`)
+    expect(item?.posterUrl).toContain(`asset_id=${poster.asset_id}`)
+    expect(item?.url).toMatch(/^\/api\/transloadit\/media\?/)
+    expect(item?.receipt).toBeUndefined()
+  })
+
   test('render from receipts with their credited guest, never from a URL', () => {
     const [item] = buildStorageGalleryItems([stored('a', 1000)], { now: 1000 })
     expect(item).toMatchObject({
@@ -195,7 +207,7 @@ describe('private Storage photos', () => {
   })
 
   test('apply the retention boundary and skip receipts without image geometry', () => {
-    const assets = [stored('old', 0), stored('clip', 1500, { width: undefined, mime: 'video/mp4' })]
+    const assets = [stored('old', 0), stored('raw', 1500, { width: undefined })]
     expect(buildStorageGalleryItems(assets, { now: 2000, retentionMs: 1000 })).toEqual([])
   })
 

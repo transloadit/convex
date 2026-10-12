@@ -23,9 +23,11 @@ This runs format, lint, module and example typechecks, and unit tests. For the f
 yarn verify
 ```
 
-## Example app (local)
+## Legacy local component harness
 
-The `example/` app is a Next.js wedding gallery powered by Uppy + Convex.
+The `example/` app is a Next.js wedding gallery powered by Uppy + Convex. Without a hosted Convex
+URL, the local harness exercises the pre-existing public R2 pipeline. It is not a private Storage
+acceptance test. To test the hosted Storage flow, use an isolated branch preview below.
 
 ```bash
 export TRANSLOADIT_KEY=...
@@ -55,10 +57,9 @@ The example exposes `POST /transloadit/webhook` and forwards webhooks into Conve
 demo also applies a simple per-user upload limit in the Convex backend (see
 `example/convex/wedding.ts`).
 
-## Storage (required R2 persistence)
+## R2 (legacy local harness and old uploads only)
 
-The example uses the `/cloudflare/store` robot to write processed files into Cloudflare R2.
-Configure one of these:
+The local harness uses `/cloudflare/store`. Configure one of these only for that harness:
 
 ```bash
 # Option A: Transloadit template credentials (recommended)
@@ -99,10 +100,13 @@ For a public demo, deploy the `example/` app and point it at a stable Convex dep
 2. Set Vercel environment variables for the project:
    - `NEXT_PUBLIC_CONVEX_URL` (point to the stable Convex deployment)
    - `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (optional)
+   - `TRANSLOADIT_SMART_CDN_KEY`, `TRANSLOADIT_SMART_CDN_SECRET`, `TRANSLOADIT_SMART_CDN_WORKSPACE`
+     (server-only delivery credentials, with `smart_cdn:sign`)
 3. Set Convex environment variables on the deployment:
    - `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`
    - `TRANSLOADIT_NOTIFY_URL` (set to `https://<deployment>.convex.site/transloadit/webhook`)
-   - R2 credentials (see above)
+   - `TRANSLOADIT_WORKSPACE` (the same Workspace as the Assembly and delivery keys)
+   - `TRANSLOADIT_WEDDING_TEMPLATE_ID` (optional; see below)
    - `WEDDING_UPLOAD_CODE` (optional invitation code for viewing and uploading)
 4. Trigger the Vercel deploy hook (or deploy manually).
 
@@ -146,8 +150,9 @@ QA opens the ordinary preview URL without a `convexUrl` override.
 
 ## Demo Storage activation and rollback
 
-Photos can use private Transloadit Storage; videos still use public R2. This demo is not a private
-video album. Use the published Viewer alpha and SDK versions pinned in `package.json`.
+All new hosted media uses private Transloadit Storage: unchanged originals, MP4 playback and video
+posters. Use the published Viewer alpha and SDK versions pinned in `package.json`. Existing public
+R2 uploads remain readable and retain their old lifecycle; they are not migrated or made private.
 
 Before enabling uploads, configure `TRANSLOADIT_SMART_CDN_KEY`, `TRANSLOADIT_SMART_CDN_SECRET` and
 `TRANSLOADIT_SMART_CDN_WORKSPACE` on the matching Vercel environment. They must belong to the same
@@ -157,25 +162,45 @@ with a `NEXT_PUBLIC_` name. The branch's `NEXT_PUBLIC_CONVEX_URL` must point to 
 GitHub repository variables control activation independently:
 
 - `TRANSLOADIT_STORAGE_PREVIEW_BRANCH` and `TRANSLOADIT_STORAGE_PREVIEW_WORKSPACE` opt in exactly
-  one preview branch. Other previews keep the R2 path, even when production uses Storage.
+  one preview branch. Other previews still run cloud QA for admission, logout and an explicit
+  upload-unavailable response. Production never implicitly enables a preview.
 - `TRANSLOADIT_WORKSPACE` opts production into Storage. Set it only after the isolated preview
-  passes, then deploy the current main workflow. It never enables a preview implicitly.
-- `TRANSLOADIT_STORAGE_UPLOADS_DISABLED=1` rolls production **new uploads** back to R2 on the next
-  deployment. Keep the Workspace and delivery keys configured so existing private photos and
-  in-flight upload receipts remain usable. Clear this switch to re-enable Storage uploads.
+  passes, then deploy the current main workflow. The production deploy refuses a missing Workspace
+  before changing the backend, including during an upload pause. It never enables a preview implicitly.
+- `TRANSLOADIT_STORAGE_UPLOADS_DISABLED=1` pauses **new uploads** on the next deployment, without a
+  public R2 fallback. Keep the Workspace and delivery keys so existing private media and in-flight
+  receipts remain usable. Clear this switch to re-enable uploads.
 
 An explicitly empty Workspace value is applied to the backend, not silently skipped; clearing it
 also disables existing private delivery. It is not the normal upload rollback. Local deploys which
 omit the variable altogether leave its current value untouched.
 
 Cloud QA sets `E2E_EXPECT_STORAGE=1` for an enabled environment. It requires same-origin authorized
-photo URLs, byte-identical original downloads, anonymous denial and denial after logout. An R2-only
-success must not be treated as Storage evidence. Video playback stays covered separately.
+photo/video/poster URLs, byte-identical original downloads, byte-range video responses/seek,
+anonymous denial and denial after logout. An R2-only success is not Storage evidence.
+With `E2E_EXPECT_UPLOADS_DISABLED=1`, QA instead verifies admission and the intentional upload
+refusal before logout; a deliberate production pause is not treated as a failed upload test.
+
+### Optional reusable processing Template
+
+The inline recipe works without creating a Template. To reuse it across consumers, with the
+existing Assembly key/secret in your environment, run:
+
+```bash
+yarn template:ensure --wedding
+```
+
+This creates or updates `convex-wedding-media-v1` with `/upload/handle`, video filtering, encoding
+and a poster. Set the returned ID as `TRANSLOADIT_WEDDING_TEMPLATE_ID` on Convex (or the GitHub
+repository variable for CI deployment). Clearing it returns to the identical inline recipe.
+The app still signs three literal, server-chosen Storage output paths per upload. Do not move those
+paths into `${fields.*}` Template variables: multipart fields can override signed fields and are
+not authorization. Receipts must also match the server-created upload record.
 
 ## Demo cleanup (Convex + Storage + R2)
 
-The demo hides photos after 24 hours. `Expire demo Storage photos` runs daily on main, first reports
-the selection, then expires Storage photos older than 24 hours. Physical removal can therefore take
+The demo hides media after 24 hours. `Expire demo Storage media` runs daily on main, first reports
+the selection, then expires originals and derivatives older than 24 hours. Physical removal can therefore take
 up to another daily interval, plus retry delays. Failed deletions remain in the retry ledger.
 The job shares the production-deploy concurrency group, has a 15-minute timeout and refuses any
 backend whose prefix is not exactly `convex-demo/little-aardvark-87/wedding-gallery/`.
@@ -190,11 +215,13 @@ Remove `--dry-run` only after checking the target. This requires `CONVEX_URL`, `
 `TRANSLOADIT_WORKSPACE`, `TRANSLOADIT_KEY` and `TRANSLOADIT_SECRET`. The scheduled job reuses the
 existing production deployment key as the admin key. Manual workflow dispatch defaults to dry-run.
 Each deletion checks both the historical receipt path and current asset path. R2 is untouched by
-expiry; its existing one-day lifecycle handles video objects separately.
+expiry; its existing one-day lifecycle handles legacy public objects separately.
 
 **Without `--older-than`, `demo:cleanup` resets the whole album**, including R2. Use that only for
-an intentional reset with the R2 credentials too, or an explicit `--skip-r2` / `--skip-storage`
-choice. Missing backend credentials never authorize forgetting its still-live media references.
+an intentional reset. A Storage-only album needs no R2 configuration. If legacy R2 references
+remain (or their scan is truncated), supply its credentials or explicitly use `--skip-r2`, which
+keeps those references and reports an incomplete reset. `--skip-storage` likewise preserves Storage
+references. Missing credentials never authorize forgetting still-live media.
 `DEMO_ALBUM` defaults to `wedding-gallery`.
 
 ## Verification and QA

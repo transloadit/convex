@@ -1,4 +1,4 @@
-name: Expire demo Storage photos
+name: Expire demo Storage media
 
 on:
   schedule:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       dry-run:
-        description: Report only; do not hide or delete photos
+        description: Report only; do not hide or delete media
         type: boolean
         default: true
 
@@ -38,7 +38,7 @@ jobs:
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
           TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
         run: yarn demo:cleanup --older-than=24 --expected-prefix=convex-demo/little-aardvark-87/wedding-gallery/ --dry-run
-      - name: Expire photos and drain the retry ledger
+      - name: Expire media and drain the retry ledger
         if: github.event_name == 'schedule' || !inputs.dry-run
         env:
           CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}

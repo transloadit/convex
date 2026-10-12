@@ -47,6 +47,7 @@ const Media = ({
   onDimensions?: (width: number, height: number) => void
 }) => {
   const t = useTranslations('viewer')
+  if (item.kind === 'video' && !item.url) return <p>{t('videoUnavailable')}</p>
   // Private photos: each candidate is a stable same-origin route URL that reauthorizes the guest
   // and redirects to a short-lived CDN grant, so long-open albums keep loading.
   // Thumbnails fill a box of the photo's own ratio, so its opaque pixels cover the ThumbHash
@@ -183,7 +184,7 @@ const GalleryViewer = ({
     const opener = document.activeElement
     const overflow = document.body.style.overflow
     dialog?.showModal()
-    // Private photos add a download link before Close; keep the same safe initial action.
+    // Private media adds a download link before Close; keep the same safe initial action.
     closeRef.current?.focus({ preventScroll: true })
     document.body.style.overflow = 'hidden'
     return () => {
@@ -194,6 +195,7 @@ const GalleryViewer = ({
   }, [])
 
   const media = <Media key={item.id} item={item} viewing />
+  const original = item.original ?? item.receipt
 
   return (
     <dialog
@@ -225,10 +227,10 @@ const GalleryViewer = ({
           </span>
         </div>
         <div className="viewer-actions">
-          {item.receipt && (
+          {original && (
             <a
               className="viewer-download"
-              href={getStorageAssetHref(item.receipt, { action: 'download' })}
+              href={getStorageAssetHref(original, { action: 'download' })}
             >
               {t('download')}
             </a>

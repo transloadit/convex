@@ -320,6 +320,12 @@ describe('demo cleanup', () => {
 
   test('a reset refuses to forget results while their R2 objects are unreachable', async () => {
     const { convex, calls } = fakeConvex([row('old', 30)])
+    convex.summary = async () => ({
+      results: 3,
+      resultsTruncated: false,
+      r2Results: 1,
+      storagePrefix: prefix,
+    })
     const { storage, deleted } = fakeStorage(['old'])
     await expect(runDemoCleanup({ convex, storage }, { dryRun: false, now })).rejects.toThrow(
       '--skip-r2',
@@ -327,7 +333,19 @@ describe('demo cleanup', () => {
     expect(calls).toEqual([])
     expect(deleted).toEqual([])
     const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now, skipR2: true })
-    expect(report).toMatchObject({ r2: 'skipped', convex: { deletedResults: 3 } })
+    expect(report).toMatchObject({
+      r2: 'skipped',
+      retryNeeded: true,
+      convex: 'kept: results reference skipped R2 media',
+    })
+  })
+
+  test('a Storage-only album resets without R2 credentials or a skip flag', async () => {
+    const { convex } = fakeConvex([row('old', 30)])
+    const { storage, deleted } = fakeStorage(['old'])
+    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now })
+    expect(deleted).toEqual(['old'])
+    expect(report).toMatchObject({ retryNeeded: false, convex: { deletedResults: 3 } })
   })
 
   test('skip flags leave configured backends untouched', async () => {

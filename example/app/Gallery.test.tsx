@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { StoredAsset } from '@transloadit/convex'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AlbumIntlProvider } from '../i18n/AlbumIntlProvider'
@@ -55,6 +55,36 @@ const photo = (
 // ThumbHashes of a small opaque image and of one with transparent pixels (encoded alpha bit set).
 const opaqueHash = 'IvkFHYx/iHiHh3h3d3h4d494+IiI'
 const alphaHash = '4eiFE4gbb2iHh3dvePiGiHGAiIiHiIg='
+
+test.each([true, false])(
+  'downloads the private video original, with playback available=%s',
+  (playable) => {
+    const original = photo(1, 1920, 1080, { mime: 'video/quicktime', path: 'upload/clip.mov' })
+    const video = { ...photo(2).asset, mime: 'video/mp4', path: 'upload/play.mp4' }
+    render(
+      <AlbumIntlProvider initialLocale="en">
+        <Gallery
+          results={[]}
+          storageAssets={[{ ...original, video: playable ? video : undefined }]}
+        />
+      </AlbumIntlProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'View clip.mov' }))
+    const href = screen.getByRole('link', { name: 'Download original' }).getAttribute('href')
+    const params = new URL(href ?? '', 'https://example.test').searchParams
+    expect(params.get('asset_id')).toBe(original.asset.asset_id)
+    expect(params.get('action')).toBe('download')
+    if (playable) {
+      const player = within(screen.getByRole('dialog')).getByLabelText('clip.mov')
+      expect(player.getAttribute('src')).toContain(video.asset_id)
+      expect(player.hasAttribute('controls')).toBe(true)
+    } else {
+      expect(screen.getByRole('dialog').textContent).toContain(
+        'Video preview unavailable. You can still download the original.',
+      )
+    }
+  },
+)
 
 const pictureImage = (root: ParentNode) => {
   const image = root.querySelector('picture img')

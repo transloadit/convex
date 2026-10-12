@@ -37,7 +37,6 @@ export const writeAppFiles = async ({ projectDir, tgzPath }: WriteAppFilesOption
     .map((entry) => `convex/${entry.name}`)
   for (const file of [
     ...convexFiles,
-    'lib/r2.ts',
     'lib/transloadit-steps.ts',
     'lib/assembly-params.ts',
     'lib/guest-name.ts',

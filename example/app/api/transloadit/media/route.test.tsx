@@ -57,6 +57,28 @@ afterEach(() => {
 })
 
 describe('private media route', () => {
+  test('video range and poster requests redirect through exact-version authorization', async () => {
+    const video = { ...receipt, mime: 'video/mp4', path: 'album/clip.mp4' }
+    fetchQuery.mockResolvedValue(video)
+    const { GET } = await load()
+    const response = await GET(
+      new Request(`${origin}${getStorageAssetHref(video, { action: 'original' })}`, {
+        headers: { Range: 'bytes=0-1023' },
+      }),
+    )
+    // The route redirects; the CDN, not Next.js, owns byte-range delivery.
+    expect(response.status).toBe(307)
+    expect(response.headers.get('cache-control')).toBe('private, no-store')
+    const location = new URL(response.headers.get('location') ?? '')
+    expect(decodeURIComponent(location.pathname)).toContain('builtin/storage-serve@')
+    expect(location.searchParams.get('v')).toBe(video.version_id)
+    expect(location.searchParams.has('download')).toBe(false)
+    expect(fetchQuery.mock.calls[0]?.[1]).toMatchObject({
+      action: 'original',
+      asset_id: video.asset_id,
+    })
+  })
+
   test('redirects an authorized preview to a signed, exact-version CDN URL', async () => {
     const [candidate] = previewCandidates()
     expect(candidate).toBeDefined()

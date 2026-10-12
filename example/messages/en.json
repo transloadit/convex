@@ -47,7 +47,8 @@
       "archive": "This is a demo, not a private archive.",
       "media": "Share only test photos and videos you can replace.",
       "visibility": "{hours, plural, one {The album shows uploads for one hour.} other {The album shows uploads for # hours.}} Hidden files are not erased right away.",
-      "delivery": "Videos are public to anyone with their link. Photos are only private when this demo uses Transloadit Storage."
+      "delivery": "This legacy local test uses public media links.",
+      "privateDelivery": "New photos, videos and originals use private Transloadit Storage. Older public links are not made private retroactively."
     },
     "gettingReady": "Getting your upload ready…",
     "name": "Your name",
@@ -72,6 +73,7 @@
     "moment": "Wedding moment",
     "view": "View {name}",
     "video": "Video",
+    "videoUnavailable": "Video preview unavailable. You can still download the original.",
     "close": "Close viewer",
     "closeButton": "Close",
     "previous": "Previous",
@@ -87,6 +89,8 @@
     "uploadedUnknown": "{name} added new files"
   },
   "errors": {
+    "UPLOADS_UNAVAILABLE": "Uploads are temporarily unavailable. Please try again later.",
+    "INVALID_FILE_COUNT": "Choose between 1 and 12 files per upload.",
     "ACCESS_REQUIRED": "Please enter your name and invitation code again to open the album.",
     "LOGIN_FAILED": "We couldn’t open the album. Please try again.",
     "NAME_REQUIRED": "Please enter your name (up to 100 characters).",

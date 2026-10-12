@@ -6,7 +6,7 @@ import { modules } from '../../src/test/nodeModules.ts'
 import { album } from './album-access'
 import { parseDisplayParams } from './assembly-params'
 import { getGuestName, isValidGuestName } from './guest-name'
-import { buildWeddingSteps } from './transloadit-steps'
+import { buildLegacyWeddingSteps } from './legacy-r2-steps'
 
 type Mode = 'local' | 'cloud'
 
@@ -77,7 +77,8 @@ export const runAction = async (name: string, args: Record<string, unknown>) => 
     if (typeof args.userId !== 'string') throw new Error('ACCESS_REQUIRED')
 
     const assemblyOptions = await testClient.action(api.lib.createAssemblyOptions, {
-      steps: buildWeddingSteps(),
+      // Legacy local component harness only; the hosted demo requires private Storage.
+      steps: buildLegacyWeddingSteps(),
       notifyUrl,
       numExpectedUploadFiles: fileCount,
       fields: {

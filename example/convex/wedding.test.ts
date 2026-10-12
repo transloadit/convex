@@ -131,7 +131,8 @@ test('signs the trimmed contributor name into the upload fields', async () => {
   vi.stubEnv('TRANSLOADIT_SECRET', 'test-secret')
   vi.stubEnv('TRANSLOADIT_NOTIFY_URL', 'https://example.com/notify')
   vi.stubEnv('WEDDING_UPLOAD_CODE', '')
-  vi.stubEnv('TRANSLOADIT_R2_CREDENTIALS', 'test-r2')
+  vi.stubEnv('TRANSLOADIT_WORKSPACE', 'open-test-prod')
+  vi.stubEnv('CONVEX_CLOUD_URL', 'https://happy-otter-123.convex.cloud')
   const t = await admitted()
   const result = await t.action(api.wedding.createWeddingAssemblyOptions, {
     guestName: '  Олена  ',

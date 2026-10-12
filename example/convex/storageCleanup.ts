@@ -1,8 +1,8 @@
 import { vStoredAsset } from '@transloadit/convex'
 import { paginationOptsValidator } from 'convex/server'
 import { v } from 'convex/values'
+import { r2OutputSteps } from '../lib/gallery-steps'
 import { getAlbumStoragePrefix } from '../lib/storage'
-import { r2OutputSteps } from '../lib/transloadit-steps'
 import { components } from './_generated/api'
 import { internalMutation, internalQuery } from './_generated/server'
 

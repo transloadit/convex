@@ -198,10 +198,10 @@ export const runDemoCleanup = async (
   if (!storage && !options.skipStorage) {
     throw new Error('Storage is not configured: set TRANSLOADIT_WORKSPACE or pass --skip-storage')
   }
-  if (reset && !r2 && !options.skipR2) {
+  const summary = await convex.summary()
+  if (reset && !r2 && !options.skipR2 && (summary.r2Results > 0 || summary.resultsTruncated)) {
     throw new Error('R2 is not configured: set the R2 variables or pass --skip-r2')
   }
-  const summary = await convex.summary()
   const prefix = summary.storagePrefix ?? ''
   if (storage && !summary.storagePrefix) {
     throw new Error('This deployment has no unambiguous Storage namespace to clean up')
