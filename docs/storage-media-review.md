@@ -40,6 +40,25 @@ other failures; they still fail the test. No consumer byte proxy, alternate publ
 configuration change or weakened acceptance criterion was introduced. Fix and verify the native
 Storage/Smart CDN delivery path before merging this slice. Replay the existing cloud test afterward.
 
+### Native route follow-up, 12 October
+
+[API2 #9766](https://github.com/transloadit/api2/pull/9766) repairs the identified origin framing
+defect: URL Transform copied Content-Length for 206 responses, but dropped it on complete 200s.
+Direct signed origin requests already returned correct ranges; the CDN's complete cached response
+had no length. The fix preserves full/partial unencoded lengths, requests identity encoding and
+avoids forwarding a compressed length alongside an automatically decoded body.
+
+Controlled live comparison with the same 236,325-byte synthetic Storage video and only that header
+changed: the warm control returned 200/all bytes; the corrected variant returned 206/1,024 bytes
+with correct Content-Range. Real Chromium seeking stayed at 0 seconds for the control and reached
+the requested 1 second for the corrected variant. Four temporary signature-required Templates
+were deleted and the single prefix-bound test asset soft-deleted afterward. Existing Templates,
+customer media and CDN configuration were unchanged.
+
+This is an isolated cause-verification experiment, **not a production API2 deployment or a passing
+Convex cloud test**. Keep this PR draft until #9766 is deployed and the existing real-media test
+passes through the standard Built-in. Do not add a consumer Template/header workaround.
+
 ## Review reconciliation
 
 Real Assemblies publish Storage receipts under the **producing** Step: `:original`, `video_encode`
