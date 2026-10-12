@@ -20,8 +20,8 @@ production deployment, new Storage/customer uploads or CDN changes are authorize
     stays failed; a CDN that keeps refusing after renewal is not retried.
 - [ ] Council P1 / PR #44 cloud QA: native CDN Range/seek. Blocked on API2 #9766 being deployed and
       the unchanged `E2E_EXPECT_STORAGE=1` cloud test passing. Not waived.
-- [x] PR #45 needs the parent fix merged in, keeping the grouped-query work intact.
-- [x] Claim lines moved to this session; PR descriptions keep the native CDN boundary explicit.
+- [ ] PR #45 needs the parent fix merged in, keeping the grouped-query work intact.
+- [ ] Claim lines moved to this session; PR descriptions keep the native CDN boundary explicit.
 - [x] Council round 1 (parent): P1 native Range blocker kept. P2 valid: originals are stored
       straight from `:original`, so non-media uploads were listed and signed for inline delivery;
       red/green test, now refused by the shared binding check. P3 (auto-advance counts raw rows)
@@ -29,5 +29,10 @@ production deployment, new Storage/customer uploads or CDN changes are authorize
 - [x] Local Opus UX and security reviews of the playback path: both PASS. Fixed red/green: a
       refused renewal no longer leaves a pending position restore. Comment/doc nits fixed;
       remaining UX limitations recorded in `docs/storage-media-review.md`.
+- [x] Council round 2: P1 unchanged blocker. P2 re-raised storing non-media before filtering:
+      rejected with a code comment (a filter would re-watermark Community-plan originals; guests
+      can already store large videos within the signed file count; such files are never listed
+      or delivered and expire with the album). P3 valid, introduced here: Template lookup
+      included built-ins by name; red/green test, now owned Templates only.
 - [ ] Further council rounds until only rejected/unrelated findings remain.
 - [ ] CI on both branches; reviewer request only when a PR is truthfully ready.
