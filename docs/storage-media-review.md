@@ -136,3 +136,10 @@ remain compatible with the existing asset query; callers keep producer configura
 API2 CI run `38284436613` passed both changed Range/HTTP boundary suites, but failed five other
 suites: two File Library Credentials contract/fixture failures and three YouTube daily-upload-limit
 failures. The API2 fix is still undeployed; no retry or production release was performed here.
+
+The follow-up's first CI run (`38292107604`) passed package/example builds, Node 24/26 tests,
+TypeScript, lint, codegen drift and local browser tests. Cloud QA stopped before its tests because
+the new Vercel branch had no `NEXT_PUBLIC_CONVEX_URL`. Only the `media-items` Preview variable was
+added for CI's assigned backend `steady-cardinal-482`; production and `storage-media` were unchanged.
+The branch remains upload-disabled under the existing CI policy, so even passing its cloud QA
+would not substitute for the parent's real Storage/CDN acceptance.
