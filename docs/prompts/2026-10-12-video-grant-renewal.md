@@ -20,8 +20,9 @@ production deployment, new Storage/customer uploads or CDN changes are authorize
     stays failed; a CDN that keeps refusing after renewal is not retried.
 - [ ] Council P1 / PR #44 cloud QA: native CDN Range/seek. Blocked on API2 #9766 being deployed and
       the unchanged `E2E_EXPECT_STORAGE=1` cloud test passing. Not waived.
-- [ ] PR #45 needs the parent fix merged in, keeping the grouped-query work intact.
-- [ ] Claim lines moved to this session; PR descriptions keep the native CDN boundary explicit.
+- [x] PR #45 needs the parent fix merged in, keeping the grouped-query work intact. One conflict:
+      `StorageGallery.tsx` keeps #45's removal of empty-page skipping. 269 tests pass.
+- [x] Claim lines moved to this session; PR descriptions keep the native CDN boundary explicit.
 - [x] Council round 1 (parent): P1 native Range blocker kept. P2 valid: originals are stored
       straight from `:original`, so non-media uploads were listed and signed for inline delivery;
       red/green test, now refused by the shared binding check. P3 (auto-advance counts raw rows)
@@ -39,4 +40,9 @@ production deployment, new Storage/customer uploads or CDN changes are authorize
       Storage Workspace is a repository-configuration decision for Kevin. P3 (later
       rendition-only pages need another click) is fixed by #45; comment extended. Rounds now
       re-raise known or out-of-scope items, so the parent's review loop stops here.
-- [ ] CI on both branches; reviewer request only when a PR is truthfully ready.
+- [x] Council on the integrated #45: no issues found.
+- [x] CI: #44 run 38298796379 passes everything except cloud QA, which fails only on the known
+      native Range assertions (200/472,388 bytes, no `Content-Range`, seek at 0). #45 run
+      38298885446 passes all checks; its preview is upload-disabled by design.
+- [ ] #44 stays draft until API2 #9766 is deployed and its cloud QA passes. #45 is review-ready
+      as a change into #44's branch; it does not activate anything by itself.
