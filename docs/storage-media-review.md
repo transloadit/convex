@@ -24,7 +24,7 @@ delivery route. Native browser video playback needs no new player abstraction.
   hid the receipts, soft-deleted all 15 synthetic objects (including two initially unregistered
   renditions), and purged their three Assemblies. Zero failures/outside-prefix objects, no R2 calls.
 - [ ] Live CDN Range/seek acceptance — **release blocker**, not a skipped test.
-- [ ] Long-video grant renewal — reauthorize expired delivery grants without losing playback position.
+- [x] Long-video grant renewal through the same authorized route; see below.
 - [ ] CI and production activation.
 
 ## Blocking live finding
@@ -60,6 +60,27 @@ This is an isolated cause-verification experiment, **not a production API2 deplo
 Convex cloud test**. Keep this PR draft until #9766 is deployed and the existing real-media test
 passes through the standard Built-in. Do not add a consumer Template/header workaround.
 
+## Long-video grant renewal
+
+Chromium requests later byte ranges from the redirected CDN URL. Once that grant expires, a seek or
+resume fails with `MediaError` 2 and the route is never asked again. The video now reloads its same
+stable route URL once per such failure (Viewer's route answers each request with a fresh,
+uncached 307), then restores position and resumes only if it was playing. Only a grant that
+delivered media can be renewed. A refused reauthorization fails before metadata loads and is not
+retried; there is no public fallback, longer grant, byte proxy or player wrapper.
+
+A synthetic Chromium probe (actual Gallery, published `createStorageRoute` with 4 s grants, and a
+local CDN stub that rejects expired `exp`) reproduced the stall before the fix. Afterwards, paused
+and playing seeks at 1440 px and a playing seek at 390 px each renewed through one route request
+and kept their state. A revoked guest got one 404 and stayed failed. A CDN that kept refusing after
+renewal was not retried. This proves client behaviour only, not native Smart CDN expiry semantics.
+
+Opus UX/security review passed. Accepted limitations: a refused renewal leaves the native
+player's error state (the live album query then denies a revoked guest); the reload can briefly
+show the poster before returning to the position; an unmuted resume refused by autoplay policy
+stays paused with controls; Safari, iOS and Firefox are unverified. A failed renewal cancels its
+pending position restore.
+
 ## Review reconciliation
 
 Real Assemblies publish Storage receipts under the **producing** Step: `:original`, `video_encode`
@@ -70,7 +91,7 @@ from forgetting those references without R2 cleanup. No filename-based rendition
 
 The toy browser fixture now asserts the rendition's actual URL and focus restoration after both
 Escape and Close. Its passing seek check is **not** substituted for the failing real-CDN check.
-Desktop Chrome at mobile width is not iOS Safari coverage; expired long-running video grants and
+Desktop Chrome at mobile width is not iOS Safari coverage; native CDN grant expiry and
 portrait/HDR footage remain unverified.
 
 The final Opus follow-up found no additional release blocker in the application changes. Its
@@ -126,9 +147,8 @@ failures. Local fixture/browser processes were stopped after collecting the evid
 
 The local Opus security review found no authorization regression. Council found no new grouped-query
 blocker; its two delivery findings belong to the still-draft parent: the confirmed Range/seek defect
-above, and long videos potentially reusing redirected CDN grants after expiry. The latter needs
-position-preserving renewal through the authorized route and dedicated browser coverage before
-parent activation; neither increasing the grant lifetime blindly nor toy playback proves a fix.
+above, and long videos reusing redirected CDN grants after expiry. The parent now renews those
+through the authorized route (see "Long-video grant renewal"); the Range/seek defect remains.
 The grouped query has bounded producer/role fanout and a 100-item page / 200-original reactive read
 cap, not a guarantee about arbitrary caller-side work. Album/time cursor boundaries intentionally
 remain compatible with the existing asset query; callers keep producer configuration server-owned.

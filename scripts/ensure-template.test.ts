@@ -57,3 +57,15 @@ test('legacy mode preserves its Template settings', async () => {
     template: { steps: expect.any(Object) },
   })
 })
+
+test('a built-in Template sharing the name is never selected for editing', async () => {
+  state.wedding = true
+  listTemplates.mockImplementation(async (params?: { include_builtin?: string }) => ({
+    items: params?.include_builtin
+      ? [{ name: 'convex-wedding-media-v1', id: 'builtin-template' }]
+      : [],
+  }))
+  await import('./ensure-template.ts')
+  await vi.waitFor(() => expect(createTemplate).toHaveBeenCalled())
+  expect(editTemplate).not.toHaveBeenCalled()
+})

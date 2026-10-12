@@ -461,6 +461,24 @@ describe('gallery and delivery authorization', () => {
     })
   })
 
+  test('other files stored from :original are neither listed nor delivered', async () => {
+    const t = setup()
+    const alex = await admit(t, 'Alex')
+    // Uppy's type restriction is client-side only; the Assembly stores every uploaded original.
+    const { asset } = await upload(alex, t, 'page', (prefix) => ({
+      path: `${prefix}page.html`,
+      mime: 'text/html',
+      width: undefined,
+      height: undefined,
+    }))
+    const page = await alex.query(api.media.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    expect(page.page).toEqual([])
+    for (const action of ['preview', 'original', 'download'])
+      expect(await alex.query(api.media.forDelivery, request(asset, action))).toBeNull()
+  })
+
   test('ThumbHash pixels reach only guests who may preview that exact version', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')

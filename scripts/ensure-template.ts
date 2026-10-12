@@ -24,7 +24,8 @@ async function main() {
   })
   let existing: string | undefined
   for (let page = 1; ; page += 1) {
-    const list = await client.listTemplates({ page, pagesize: 100, include_builtin: 'all' })
+    // Owned Templates only: an immutable built-in sharing the name must never be edited.
+    const list = await client.listTemplates({ page, pagesize: 100 })
     existing = list.items.find((item) => item.name === name)?.id
     if (existing || list.items.length < 100) break
   }

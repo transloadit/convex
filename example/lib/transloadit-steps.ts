@@ -50,7 +50,10 @@ export const buildWeddingSteps = ({
     })
   return {
     ...(templateId ? {} : weddingProcessingSteps),
-    // Direct :original storage also avoids transforming Community-plan originals.
+    // Direct :original storage also avoids transforming Community-plan originals; a type filter
+    // in front would watermark them again. Uppy's type limit is browser-only, but admitted guests
+    // can already store large videos within the same signed file count. Other files are never
+    // listed or delivered (media.ts) and expire with the album like everything else.
     originals_stored: store(':original', '${file.url_name}'),
     videos_stored: store('video_encode', 'play-${file.id}.mp4'),
     posters_stored: store('video_poster', 'poster-${file.id}.jpg'),
