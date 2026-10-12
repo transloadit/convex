@@ -34,5 +34,9 @@ production deployment, new Storage/customer uploads or CDN changes are authorize
       can already store large videos within the signed file count; such files are never listed
       or delivered and expire with the album). P3 valid, introduced here: Template lookup
       included built-ins by name; red/green test, now owned Templates only.
-- [ ] Further council rounds until only rejected/unrelated findings remain.
+- [x] Council round 3: P1 unchanged blocker. P2 (ordinary previews only test the upload refusal
+      path) is this PR's deliberate R2 removal; documented in `ci.yml`. Giving every preview a
+      Storage Workspace is a repository-configuration decision for Kevin. P3 (later
+      rendition-only pages need another click) is fixed by #45; comment extended. Rounds now
+      re-raise known or out-of-scope items, so the parent's review loop stops here.
 - [ ] CI on both branches; reviewer request only when a PR is truthfully ready.

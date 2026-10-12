@@ -18,8 +18,9 @@ const StoragePages = ({ results }: { results: GalleryResult[] }) => {
   const media = usePaginatedQuery(listMediaRef, {}, { initialNumItems: pageSize })
   // A receipt page can contain only renditions. Advance that live query instead of showing an
   // empty album with a misleading manual "Show more" button. Never overlap page requests.
-  // Rows the Gallery itself drops (photos without geometry) keep that explicit button; the
-  // grouped-media query in #45 removes rendition-only pages and this skipping altogether.
+  // Rows the Gallery itself drops (photos without geometry), and rendition-only pages after the
+  // first cards, keep that explicit button; the grouped-media query in #45 pages originals only
+  // and removes this skipping altogether.
   useEffect(() => {
     if (media.results.length === 0 && media.status === 'CanLoadMore') media.loadMore(pageSize)
   }, [media.results.length, media.status, media.loadMore])

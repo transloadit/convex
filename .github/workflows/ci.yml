@@ -270,6 +270,8 @@ jobs:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
           E2E_REMOTE_CONVEX_URL: ${{ env.E2E_REMOTE_CONVEX_URL }}
           E2E_EXPECT_STORAGE: ${{ (github.head_ref || github.ref_name) == vars.TRANSLOADIT_STORAGE_PREVIEW_BRANCH && vars.TRANSLOADIT_STORAGE_PREVIEW_WORKSPACE != '' && '1' || '' }}
+          # Without R2, only the opted-in preview has a Storage Workspace to upload into. Other
+          # previews verify the refusal path; real upload/playback acceptance runs on that branch.
           E2E_EXPECT_UPLOADS_DISABLED: ${{ ((github.head_ref || github.ref_name) != vars.TRANSLOADIT_STORAGE_PREVIEW_BRANCH || vars.TRANSLOADIT_STORAGE_PREVIEW_WORKSPACE == '') && '1' || '' }}
           PLAYWRIGHT_SKIP_INSTALL: "1"
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
