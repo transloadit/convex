@@ -63,47 +63,27 @@ export const list = query({
   returns: paginationResultValidator(vGalleryAsset),
   handler: async (ctx, args) => {
     await requireGuest(ctx)
-    const result = await ctx.runQuery(components.transloadit.lib.listStoredAssets, {
+    const result = await ctx.runQuery(components.transloadit.lib.listStoredMedia, {
       album,
+      // Keep old private photos readable alongside direct originals, without a data migration.
+      originalSteps: [':original', 'images_filtered'],
+      renditions: { playback: 'video_encode', poster: 'video_poster' },
       paginationOpts: args.paginationOpts,
     })
     const page = []
-    const assemblies = new Map<string, StoredAssetRow[]>()
-    for (const row of result.page) {
-      // Keep old private photos readable. Renditions are attached to their original rather than
-      // becoming separate gallery cards or depending on which pagination page they land on.
-      // /transloadit/store publishes under the producer, not the store Step's name.
-      if (row.stepName !== ':original' && row.stepName !== 'images_filtered') continue
+    for (const { original: row, renditions } of result.page) {
       const upload = await findBoundUpload(ctx, row)
       if (!upload) continue
       let video: StoredAsset | undefined
       let poster: StoredAsset | undefined
       if (row.asset.mime?.startsWith('video/')) {
-        let siblings = assemblies.get(row.assemblyId)
-        if (!siblings) {
-          siblings = await ctx.runQuery(components.transloadit.lib.listStoredAssetsForAssembly, {
-            assemblyId: row.assemblyId,
-            limit: 500,
-          })
-          assemblies.set(row.assemblyId, siblings)
-        }
-        const sourceId = singleOriginalId(row.originalId)
-        for (const sibling of siblings) {
-          if (
-            !sourceId ||
-            singleOriginalId(sibling.originalId) !== sourceId ||
-            sibling.uploadId !== row.uploadId ||
-            sibling.album !== upload.album ||
-            sibling.userId !== upload.userId ||
-            !upload.storagePrefix ||
-            !isInUploadStoragePrefix(sibling.asset.path, upload.storagePrefix)
-          )
-            continue
-          if (sibling.stepName === 'video_encode' && sibling.asset.mime === 'video/mp4')
-            video = authorizedReceipt(sibling.asset)
-          if (sibling.stepName === 'video_poster' && canPreview(sibling.asset))
-            poster = authorizedReceipt(sibling.asset)
-        }
+        // The component groups provenance; current access and safe upload paths remain app policy.
+        const playback = renditions.playback
+        if (playback?.asset.mime === 'video/mp4' && (await findBoundUpload(ctx, playback)))
+          video = authorizedReceipt(playback.asset)
+        const preview = renditions.poster
+        if (preview && canPreview(preview.asset) && (await findBoundUpload(ctx, preview)))
+          poster = authorizedReceipt(preview.asset)
       }
       const { workspace, asset_id, version_id } = row.asset
       page.push({
@@ -119,10 +99,6 @@ export const list = query({
     return { ...result, page }
   },
 })
-
-// Filenames are not identities, and a multi-input rendition cannot name one original safely.
-const singleOriginalId = (id: StoredAssetRow['originalId']) =>
-  typeof id === 'string' ? id : id?.length === 1 ? (id[0] ?? undefined) : undefined
 
 /**
  * The delivery route's single authorization query: a live, current-invitation guest session, this

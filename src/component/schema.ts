@@ -14,5 +14,16 @@ export default defineSchema({
     .index('by_version', ['asset.workspace', 'asset.asset_id', 'asset.version_id'])
     .index('by_assemblyId', ['assemblyId'])
     .index('by_album_visibility', ['album', 'deletionRequestedAt', 'createdAt'])
+    .index('by_step_album_visibility', ['stepName', 'album', 'deletionRequestedAt', 'createdAt'])
+    .index('by_assembly_step_source', [
+      'assemblyId',
+      'stepName',
+      'originalId',
+      'album',
+      'userId',
+      'uploadId',
+      'asset.workspace',
+      'deletionRequestedAt',
+    ])
     .index('by_album_pending_deletion', ['album', 'deletedAt', 'deletionRequestedAt']),
 })

@@ -24,6 +24,7 @@ delivery route. Native browser video playback needs no new player abstraction.
   hid the receipts, soft-deleted all 15 synthetic objects (including two initially unregistered
   renditions), and purged their three Assemblies. Zero failures/outside-prefix objects, no R2 calls.
 - [ ] Live CDN Range/seek acceptance — **release blocker**, not a skipped test.
+- [ ] Long-video grant renewal — reauthorize expired delivery grants without losing playback position.
 - [ ] CI and production activation.
 
 ## Blocking live finding
@@ -79,10 +80,13 @@ rendition receipts before that fix; it was retained during testing and included 
 cleanup above. A missing-preview card in those earlier screenshots is not proof of a failed join
 for a post-fix upload.
 
-Remaining nonblocking UX limitations are explicit: a later rendition-only page can still require
-another “Show more” click, and the empty state can briefly appear during initial loading. Automatic
-page skipping currently handles the initial empty pages only. Poster letterboxing and the simple
-missing-preview text remain unchanged; no new pagination/player abstraction was added for these.
+The grouped-media follow-up replaces receipt filtering with indexed original pagination and named
+rendition lookups in `@transloadit/convex`. Direct originals and legacy `images_filtered` photos
+share one ordered stream; posters and encodes no longer consume gallery pages. The browser's
+automatic empty-page skipping is removed. The app still enforces live guest access and binds every
+returned original/rendition to a server-owned upload path. An app-authorized page can still be empty
+after that filtering. The initial-loading empty state, poster letterboxing and simple missing-preview
+text remain unchanged; no player or upload-state abstraction was added.
 Transloadit's literal `${file.*}` placeholders intentionally remain strings, despite lint warnings.
 
 PR #44's first CI run passed package/example builds, both lint jobs, Node 24/26 unit tests, codegen
@@ -90,7 +94,9 @@ and local browser tests. The cloud job stopped on `fetch failed` / `ECONNRESET` 
 checks; that is separate from, and does not explain, the locally reproduced real-CDN Range failure.
 The branch-scoped Vercel preview is ready; neither result is production acceptance.
 
-No component schema or published package API changes. No R2 migration/deletion, production
+The grouped-media follow-up adds `listStoredMedia`, its typed client method/validators, and two
+indexes over existing receipt fields; no row migration or ingestion change is needed. Existing asset
+queries remain unchanged. No R2 migration/deletion, production
 deployment or Template creation has been performed by this implementation. The owned isolated
 Convex preview is `valiant-gopher-939` (`storage-media`), tested via local Next.js. A saved Template is
 optional; the inline recipe works by default. Old public links remain public. Already-issued CDN
@@ -101,3 +107,32 @@ Local evidence: `/tmp/convex-storage-review-WH7DDZkA/` (toy browser and real del
 `/tmp/convex-storage-check.log` (checks). These are evidence, not instructions required to resume.
 The real-wedding backup/restore and retention requirements remain in
 [wedding-gallery.md](wedding-gallery.md).
+
+## Grouped-media follow-up (`media-items`)
+
+This separate change adds the reusable query and removes the demo's Assembly scan and automatic
+rendition-only page skipping. It does not change delivery, upload admission, retention, or production
+configuration. A minor Changeset includes the new typed API; its two indexes use existing fields.
+
+Local checks cover original-first pagination, interleaved legacy originals, large Assemblies,
+missing/ambiguous/cross-scope renditions, tombstones, live inserts and loaded-range page splits.
+Authorization tests exercise the actual app query/handler with `convex-test`, including anonymous,
+expired and revoked guests and rendition paths outside the authorized upload prefix. Official
+component codegen ran against a throwaway loopback backend without changing any `.env` file.
+The desktop/mobile toy browser fixture checks the actual UI, not a live backend or CDN.
+Final `yarn check` passes all 263 tests, TypeScript and lint; `yarn example:build` also passes.
+The focused API/handler/UI set and 1440/390 px toy fixture pass without browser console or network
+failures. Local fixture/browser processes were stopped after collecting the evidence.
+
+The local Opus security review found no authorization regression. Council found no new grouped-query
+blocker; its two delivery findings belong to the still-draft parent: the confirmed Range/seek defect
+above, and long videos potentially reusing redirected CDN grants after expiry. The latter needs
+position-preserving renewal through the authorized route and dedicated browser coverage before
+parent activation; neither increasing the grant lifetime blindly nor toy playback proves a fix.
+The grouped query has bounded producer/role fanout and a 100-item page / 200-original reactive read
+cap, not a guarantee about arbitrary caller-side work. Album/time cursor boundaries intentionally
+remain compatible with the existing asset query; callers keep producer configuration server-owned.
+
+API2 CI run `38284436613` passed both changed Range/HTTP boundary suites, but failed five other
+suites: two File Library Credentials contract/fixture failures and three YouTube daily-upload-limit
+failures. The API2 fix is still undeployed; no retry or production release was performed here.

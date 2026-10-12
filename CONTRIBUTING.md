@@ -293,6 +293,12 @@ local backend and fails when the committed output drifts.
 
 ## Storage pagination
 
+`listStoredMedia` uses convex-helpers' `mergedStream` over indexed original producers, with the
+same album/visibility/time cursor shape and loaded-range split handling. Renditions are joined by
+exact indexed provenance, never a fixed-size Assembly scan. Its lower 100-item page / 200-original
+read cap reserves room for up to four rendition roles. Test legacy/direct original interleaving,
+deletion of a cursor anchor and live inserts with fixed `endCursor`s when changing these indexes.
+
 `listStoredAssets` and `listStoredAssetDeletions` page with convex-helpers' `paginator`. The tested
 helper release is 0.1.124, whose `convex` peer (`^1.43.0`) sets this package's peer floor; raise
 the floor with the helper, not with whatever Convex happens to be installed.

@@ -119,6 +119,40 @@ export const vListStoredAssetsArgs = {
   paginationOpts: paginationOptsValidator,
 }
 
+/** Server-selected producers: one or more original Steps and named, single-source renditions. */
+export const vListStoredMediaArgs = {
+  album: v.string(),
+  originalSteps: v.array(v.string()),
+  renditions: v.record(v.string(), v.string()),
+  paginationOpts: paginationOptsValidator,
+}
+
+export const vStoredMedia = v.object({
+  original: vStoredAssetRow,
+  renditions: v.record(v.string(), vStoredAssetRow),
+})
+
+export const vStoredMediaResponse = v.object({
+  original: vStoredAssetResponse,
+  renditions: v.record(v.string(), vStoredAssetResponse),
+})
+
+export type StoredMediaResponse = Infer<typeof vStoredMediaResponse>
+
+export const vStoredMediaPage = v.object({
+  page: v.array(vStoredMedia),
+  isDone: v.boolean(),
+  continueCursor: v.string(),
+  ...vPageSplit,
+})
+
+export const vStoredMediaResponsePage = v.object({
+  page: v.array(vStoredMediaResponse),
+  isDone: v.boolean(),
+  continueCursor: v.string(),
+  ...vPageSplit,
+})
+
 export const vGetStoredAssetArgs = {
   workspace: v.string(),
   assetId: v.string(),

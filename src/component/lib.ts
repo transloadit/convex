@@ -6,6 +6,7 @@ import type { IndexRangeBuilder, PaginationOptions } from 'convex/server'
 import { anyApi, type FunctionReference } from 'convex/server'
 import { ConvexError, getConvexSize, type ObjectType, type Value, v } from 'convex/values'
 import { paginator } from 'convex-helpers/server/pagination'
+import { mergedStream, stream } from 'convex-helpers/server/stream'
 import { parseAssemblyStatus } from '../shared/assemblyUrls.ts'
 import { transloaditError } from '../shared/errors.ts'
 import { getResultUrl } from '../shared/resultUtils.ts'
@@ -31,6 +32,7 @@ import {
   vListStoredAssetDeletionsArgs,
   vListStoredAssetsArgs,
   vListStoredAssetsForAssemblyArgs,
+  vListStoredMediaArgs,
   vPurgeAlbumArgs,
   vPurgeAlbumResponse,
   vQueueWebhookResponse,
@@ -45,6 +47,7 @@ import {
   vStoredAssetDeletionPage,
   vStoredAssetPage,
   vStoredAssetRow,
+  vStoredMediaPage,
   vTransloaditConfig,
   vUpsertAssemblyArgs,
   vWebhookArgs,
@@ -902,6 +905,94 @@ export const listStoredAssets = query({
         .paginate(paginationFor(args.album, args.paginationOpts)),
       args.paginationOpts.endCursor,
     ),
+})
+
+// Multi-input results cannot be attached to just one original, even if one input happens to match.
+const singleOriginalId = (id: Doc<'storedAssets'>['originalId']) =>
+  typeof id === 'string' ? id : id?.length === 1 ? (id[0] ?? undefined) : undefined
+
+const findRendition = async (ctx: QueryCtx, original: Doc<'storedAssets'>, stepName: string) => {
+  const sourceId = singleOriginalId(original.originalId)
+  if (!sourceId) return null
+  // The upstream receipt permits a string or a single-element array. Index both exact shapes;
+  // never scan an Assembly's first N results, which silently loses later files in large uploads.
+  const matches = (
+    await Promise.all(
+      [sourceId, [sourceId]].map((originalId) =>
+        ctx.db
+          .query('storedAssets')
+          .withIndex('by_assembly_step_source', (q) =>
+            q
+              .eq('assemblyId', original.assemblyId)
+              .eq('stepName', stepName)
+              .eq('originalId', originalId)
+              .eq('album', original.album)
+              .eq('userId', original.userId)
+              .eq('uploadId', original.uploadId)
+              .eq('asset.workspace', original.asset.workspace)
+              .eq('deletionRequestedAt', undefined),
+          )
+          .take(2),
+      ),
+    )
+  ).flat()
+  // An ambiguous role stays absent instead of picking arbitrary bytes or a filename match.
+  return matches.length === 1 ? (matches[0] ?? null) : null
+}
+
+/**
+ * Pages visible originals, with optional single-source renditions, entirely from local indexes.
+ * Producer names are trusted app configuration, not browser input. Every returned receipt still
+ * requires app authorization; matching provenance does not establish current access or ownership.
+ */
+export const listStoredMedia = query({
+  args: vListStoredMediaArgs,
+  returns: vStoredMediaPage,
+  handler: async (ctx, args) => {
+    const originalSteps = [...new Set(args.originalSteps)]
+    const roles = Object.entries(args.renditions)
+    if (
+      originalSteps.length === 0 ||
+      originalSteps.length > 4 ||
+      originalSteps.some((step) => step.length === 0) ||
+      roles.length > 4 ||
+      roles.some(([role, step]) => !role || !step || originalSteps.includes(step))
+    ) {
+      throw transloaditError('storage', 'Invalid Storage media producers')
+    }
+    // The shared cursor is an album/time boundary, not an authorization token or producer identity.
+    // Keep the server-owned producer configuration stable across pages of one gallery.
+    const pagination = paginationFor(args.album, args.paginationOpts)
+    const originals = originalSteps.map((stepName) =>
+      stream(ctx.db, schema)
+        .query('storedAssets')
+        .withIndex('by_step_album_visibility', (q) =>
+          q.eq('stepName', stepName).eq('album', args.album).eq('deletionRequestedAt', undefined),
+        )
+        .order('desc'),
+    )
+    const result = keepLoadedRange(
+      await mergedStream(originals, ['album', 'deletionRequestedAt', 'createdAt']).paginate({
+        ...pagination,
+        // Four roles need at most sixteen matching-row reads per original (including ambiguity
+        // checks). Bound loaded-page growth too; callers still budget their own authorization reads.
+        numItems: Math.min(pagination.numItems, 100),
+        maximumRowsRead: Math.min(pagination.maximumRowsRead, 200),
+      }),
+      args.paginationOpts.endCursor,
+    )
+    const page = await Promise.all(
+      result.page.map(async (original) => {
+        const renditions = new Map<string, Doc<'storedAssets'>>()
+        for (const [role, stepName] of roles) {
+          const rendition = await findRendition(ctx, original, stepName)
+          if (rendition) renditions.set(role, rendition)
+        }
+        return { original, renditions: Object.fromEntries(renditions) }
+      }),
+    )
+    return { ...result, page }
+  },
 })
 
 /** One exact visible version; rows awaiting deletion are never returned for delivery. */
