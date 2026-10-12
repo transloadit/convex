@@ -11,7 +11,7 @@ delivery route. Native browser video playback needs no new player abstraction.
 - [x] Join derivatives by verified upload/source identity, never filename.
 - [x] Optional processing Template; literal signed Storage paths remain server-owned.
 - [x] Preserve legacy R2 viewing/cleanup and isolate the old local upload harness.
-- [x] `yarn check`: 241 tests, TypeScript and lint pass.
+- [x] `yarn check`: 242 tests, TypeScript and lint pass.
 - [x] `yarn example:build` passes. Hosted preview pause/admission/logout browser test passes;
   the preview's pause switch was restored afterward.
 - [x] Actual isolated uploads produce private originals, MP4s and posters; photos and video originals
@@ -52,6 +52,24 @@ The toy browser fixture now asserts the rendition's actual URL and focus restora
 Escape and Close. Its passing seek check is **not** substituted for the failing real-CDN check.
 Desktop Chrome at mobile width is not iOS Safari coverage; expired long-running video grants and
 portrait/HDR footage remain unverified.
+
+The final Opus follow-up found no additional release blocker in the application changes. Its
+portrait-card finding has a failing-then-passing regression: playback dimensions now take
+precedence over the original's unrotated dimensions. The first test batch lacked published video
+rendition receipts before that fix; it was retained during testing and included in the prefix-bound
+cleanup above. A missing-preview card in those earlier screenshots is not proof of a failed join
+for a post-fix upload.
+
+Remaining nonblocking UX limitations are explicit: a later rendition-only page can still require
+another “Show more” click, and the empty state can briefly appear during initial loading. Automatic
+page skipping currently handles the initial empty pages only. Poster letterboxing and the simple
+missing-preview text remain unchanged; no new pagination/player abstraction was added for these.
+Transloadit's literal `${file.*}` placeholders intentionally remain strings, despite lint warnings.
+
+PR #44's first CI run passed package/example builds, both lint jobs, Node 24/26 unit tests, codegen
+and local browser tests. The cloud job stopped on `fetch failed` / `ECONNRESET` before the media
+checks; that is separate from, and does not explain, the locally reproduced real-CDN Range failure.
+The branch-scoped Vercel preview is ready; neither result is production acceptance.
 
 No component schema or published package API changes. No R2 migration/deletion, production
 deployment or Template creation has been performed by this implementation. The owned isolated

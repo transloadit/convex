@@ -193,6 +193,22 @@ describe('private Storage photos', () => {
     expect(item?.receipt).toBeUndefined()
   })
 
+  test('video cards use the playback dimensions when an encoder rotates a phone original', () => {
+    const original = stored('phone', 1000, {
+      mime: 'video/quicktime',
+      width: 1920,
+      height: 1080,
+    })
+    const video = stored('mp4', 1000, {
+      mime: 'video/mp4',
+      width: 1080,
+      height: 1920,
+    }).asset
+    const [item] = buildStorageGalleryItems([{ ...original, video }], { now: 1000 })
+    expect(item?.aspectRatio).toBe(1080 / 1920)
+    expect(item?.original).toEqual(original.asset)
+  })
+
   test('render from receipts with their credited guest, never from a URL', () => {
     const [item] = buildStorageGalleryItems([stored('a', 1000)], { now: 1000 })
     expect(item).toMatchObject({

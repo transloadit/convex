@@ -134,6 +134,9 @@ export const buildStorageGalleryItems = (
           {
             ...base,
             kind: 'video',
+            // Encoders can apply a phone's rotation metadata; size the card for playback.
+            aspectRatio:
+              video?.width && video.height ? video.width / video.height : base.aspectRatio,
             url: video ? getStorageAssetHref(video, { action: 'original' }) : undefined,
             posterUrl: poster ? getStorageAssetHref(poster, { action: 'original' }) : undefined,
           },
