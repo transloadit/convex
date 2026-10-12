@@ -2,7 +2,15 @@
 
 import dynamic from 'next/dynamic'
 import { useLocale, useTranslations } from 'next-intl'
-import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import {
+  type FocusEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import { uppyLocales } from '../i18n/uppy'
 import { galleryRetentionMs } from '../lib/gallery'
 import { maxGuestNameLength } from '../lib/guest-name'
@@ -15,6 +23,21 @@ const Dashboard = dynamic(() => import('@uppy/react/dashboard'), { ssr: false })
 
 export type Toast = { id: string; guestName?: string; fileCount?: number }
 export type UploadSuccess = { id: string; count: number }
+
+// Live queries and polling can render a batch shortly after its upload resolves.
+const revealWaitMs = 15_000
+
+// Scrolls to a batch's first gallery card. Focus moves only when the guest asked for it.
+const revealUpload = (collection: HTMLElement, assemblyId: string, focus: boolean) => {
+  const card = Array.from(collection.querySelectorAll<HTMLElement>('[data-assembly-id]')).find(
+    (element) => element.dataset.assemblyId === assemblyId,
+  )
+  if (!card) return false
+  const reduceMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  card.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
+  if (focus) card.querySelector<HTMLElement>('.gallery-open')?.focus({ preventScroll: true })
+  return true
+}
 
 const Plus = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -108,6 +131,7 @@ export const WeddingLayout = ({
   uploadSuccess,
   toasts,
   authState,
+  retentionMs = galleryRetentionMs,
   children,
 }: {
   uppy: WeddingUppy
@@ -124,6 +148,7 @@ export const WeddingLayout = ({
   uploadSuccess?: UploadSuccess | null
   toasts?: Toast[]
   authState?: 'loading' | 'authenticated' | 'guest'
+  retentionMs?: number
   children: ReactNode
 }) => {
   const t = useTranslations()
@@ -131,14 +156,69 @@ export const WeddingLayout = ({
   const formId = useId()
   const [uploadOpen, setUploadOpen] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [visibleSuccess, setVisibleSuccess] = useState<UploadSuccess | null>(null)
+  const [visibleSuccess, setVisibleSuccess] = useState<
+    (UploadSuccess & { assemblyId: string | null }) | null
+  >(null)
+  const [pendingReveal, setPendingReveal] = useState<{ assemblyId: string; focus: boolean } | null>(
+    null,
+  )
+  const [successFocused, setSuccessFocused] = useState(false)
+  const collectionRef = useRef<HTMLElement>(null)
+  // Read at completion time; declared first so they are current when the success effect runs.
+  const uploadOpenRef = useRef(uploadOpen)
+  const assemblyIdRef = useRef(assemblyId)
+  useEffect(() => {
+    uploadOpenRef.current = uploadOpen
+    assemblyIdRef.current = assemblyId
+  })
   useEffect(() => {
     if (!uploadSuccess) return
+    const batch = assemblyIdRef.current
+    // Guests who watched the upload see the result; guests who kept browsing keep their place.
+    if (uploadOpenRef.current && batch) setPendingReveal({ assemblyId: batch, focus: false })
     setUploadOpen(false)
-    setVisibleSuccess(uploadSuccess)
+    setVisibleSuccess({ ...uploadSuccess, assemblyId: batch })
+    setSuccessFocused(false)
+  }, [uploadSuccess])
+  useEffect(() => {
+    if (!visibleSuccess || successFocused) return
     const timer = setTimeout(() => setVisibleSuccess(null), 8000)
     return () => clearTimeout(timer)
-  }, [uploadSuccess])
+  }, [visibleSuccess, successFocused])
+  // A new batch in the uploader supersedes any reveal still waiting for the previous one.
+  useEffect(() => {
+    if (uploadOpen) setPendingReveal(null)
+  }, [uploadOpen])
+  useEffect(() => {
+    const collection = collectionRef.current
+    // Runs after the dialog closed and restored focus, so a requested focus is not undone.
+    if (!pendingReveal || !collection || uploadOpen) return
+    const { assemblyId: batch, focus } = pendingReveal
+    if (revealUpload(collection, batch, focus)) {
+      setPendingReveal(null)
+      return
+    }
+    // An explicit request shows the album at once, then moves to the items when they render.
+    if (focus) collection.scrollIntoView({ block: 'start' })
+    const observer = new MutationObserver(() => {
+      if (revealUpload(collection, batch, focus)) setPendingReveal(null)
+    })
+    observer.observe(collection, { childList: true, subtree: true })
+    const timer = setTimeout(() => setPendingReveal(null), revealWaitMs)
+    return () => {
+      observer.disconnect()
+      clearTimeout(timer)
+    }
+  }, [pendingReveal, uploadOpen])
+  // Keyboard and screen reader users keep the notification and its action while focused on it.
+  const holdSuccess = {
+    onFocus: () => setSuccessFocused(true),
+    onBlur: (event: FocusEvent<HTMLButtonElement>) => {
+      if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) {
+        setSuccessFocused(false)
+      }
+    },
+  }
   const payloadText = assemblyParams ? JSON.stringify(assemblyParams, null, 2) : null
   const notifications = Boolean(visibleSuccess || toasts?.length) && (
     <div className={`toast-stack${uploadOpen ? ' toast-inline' : ''}`} role="status">
@@ -147,10 +227,33 @@ export const WeddingLayout = ({
           <span className="toast-check" aria-hidden="true">
             ✓
           </span>
-          <span>{t('upload.success', { count: visibleSuccess.count })}</span>
+          <span className="toast-text">{t('upload.success', { count: visibleSuccess.count })}</span>
+          {visibleSuccess.assemblyId && (
+            <button
+              type="button"
+              className="toast-action"
+              {...holdSuccess}
+              onClick={() => {
+                if (!visibleSuccess.assemblyId) return
+                // From inside a reopened uploader, close it first; the reveal waits for the card.
+                // Moving the notification out of the dialog unmounts these buttons without a blur.
+                setSuccessFocused(false)
+                setUploadOpen(false)
+                setPendingReveal({ assemblyId: visibleSuccess.assemblyId, focus: true })
+              }}
+            >
+              {t('upload.showNew')}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => setVisibleSuccess(null)}
+            className="toast-dismiss"
+            {...holdSuccess}
+            onClick={() => {
+              // Removing a focused button does not reliably fire blur.
+              setSuccessFocused(false)
+              setVisibleSuccess(null)
+            }}
             aria-label={t('upload.dismiss')}
           >
             ×
@@ -257,7 +360,12 @@ export const WeddingLayout = ({
         </span>
       </section>
 
-      <section className="album-collection" id="memories" aria-labelledby="collection-title">
+      <section
+        ref={collectionRef}
+        className="album-collection"
+        id="memories"
+        aria-labelledby="collection-title"
+      >
         <div className="collection-heading">
           <div>
             <p className="eyebrow">{t('album.collection')}</p>
@@ -275,8 +383,8 @@ export const WeddingLayout = ({
       <footer className="album-footer">
         <span className="footer-signature">{t('album.signature', { names: wedding.names })}</span>
         <p>
-          {Number.isFinite(galleryRetentionMs)
-            ? t('album.demoRetention', { hours: galleryRetentionMs / 3600000 })
+          {Number.isFinite(retentionMs)
+            ? t('album.demoRetention', { hours: retentionMs / 3600000 })
             : t('album.demoAll')}
           <br />
           {t.rich('album.credits', {
@@ -287,6 +395,16 @@ export const WeddingLayout = ({
       </footer>
 
       <UploadDialog open={uploadOpen} onClose={() => setUploadOpen(false)}>
+        <div className="demo-notice" data-testid="demo-notice">
+          <p>
+            <strong>{t('upload.demo.archive')}</strong> {t('upload.demo.media')}
+          </p>
+          <p>
+            {Number.isFinite(retentionMs) &&
+              `${t('upload.demo.visibility', { hours: retentionMs / 3600000 })} `}
+            {t('upload.demo.delivery')}
+          </p>
+        </div>
         {authState && authState !== 'authenticated' && (
           <p className="status" data-testid="auth-status">
             {t('upload.gettingReady')}

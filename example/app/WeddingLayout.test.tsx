@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import { afterEach, expect, test, vi } from 'vitest'
 import { AlbumIntlProvider } from '../i18n/AlbumIntlProvider'
@@ -102,4 +102,196 @@ test('changes language in place and saves the preference while preserving an upl
   fireEvent.click(screen.getByTestId('open-upload'))
   expect((screen.getByRole('textbox', { name: 'Je naam' }) as HTMLInputElement).value).toBe('Олена')
   expect(screen.getByRole('dialog', { name: 'Deel je herinneringen' })).toBeTruthy()
+})
+
+const ownCards = (
+  <div>
+    <div className="card" data-assembly-id="older">
+      <button type="button" className="gallery-open">
+        Older photo
+      </button>
+    </div>
+    <div className="card" data-assembly-id="batch-asm">
+      <button type="button" className="gallery-open">
+        New photo
+      </button>
+    </div>
+  </div>
+)
+
+const scrolledCards = () =>
+  (Element.prototype.scrollIntoView as ReturnType<typeof vi.fn>).mock.contexts as Element[]
+
+test('brings a finished upload into view for guests who watched it, without moving focus', async () => {
+  Element.prototype.scrollIntoView = vi.fn()
+  const { rerender } = render(<Album assemblyId="batch-asm" />)
+  // A real click focuses the opener, which the dialog restores on close.
+  screen.getByTestId('open-upload').focus()
+  fireEvent.click(screen.getByTestId('open-upload'))
+  // The gallery renders the batch after the upload resolves, as live queries and polling do.
+  rerender(
+    <Album
+      assemblyId="batch-asm"
+      stage="complete"
+      isUploading={false}
+      uploadSuccess={{ id: 'batch-1', count: 2 }}
+    />,
+  )
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+  rerender(
+    <Album
+      assemblyId="batch-asm"
+      stage="complete"
+      isUploading={false}
+      uploadSuccess={{ id: 'batch-1', count: 2 }}
+    >
+      {ownCards}
+    </Album>,
+  )
+  await waitFor(() => expect(Element.prototype.scrollIntoView).toHaveBeenCalledOnce())
+  expect(scrolledCards()[0]?.getAttribute('data-assembly-id')).toBe('batch-asm')
+  expect(document.activeElement).toBe(screen.getByTestId('open-upload'))
+})
+
+test('lets guests who kept browsing jump to their upload from the notification', () => {
+  Element.prototype.scrollIntoView = vi.fn()
+  const { rerender } = render(<Album assemblyId="batch-asm">{ownCards}</Album>)
+  fireEvent.click(screen.getByTestId('open-upload'))
+  fireEvent.click(screen.getByRole('button', { name: 'Close upload' }))
+  rerender(
+    <Album
+      assemblyId="batch-asm"
+      stage="complete"
+      isUploading={false}
+      uploadSuccess={{ id: 'batch-1', count: 2 }}
+    >
+      {ownCards}
+    </Album>,
+  )
+  // Browsing guests keep their place until they ask for the new items.
+  expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+  fireEvent.click(
+    within(screen.getByTestId('upload-success')).getByRole('button', { name: 'Show in album' }),
+  )
+  expect(scrolledCards()[0]?.getAttribute('data-assembly-id')).toBe('batch-asm')
+  expect(document.activeElement?.textContent).toBe('New photo')
+})
+
+test.each([
+  [24, 'The album shows uploads for 24 hours.'],
+  [Number.POSITIVE_INFINITY, null],
+])('states the demo limits before guests choose files (retention %s)', (hours, visibility) => {
+  render(<Album retentionMs={hours * 3_600_000} />)
+  fireEvent.click(screen.getByTestId('open-upload'))
+  const notice = screen.getByTestId('demo-notice').textContent ?? ''
+  expect(notice).toContain('This is a demo, not a private archive.')
+  expect(notice).toContain('Share only test photos and videos you can replace.')
+  expect(notice).toContain('Videos are public to anyone with their link.')
+  expect(notice).toContain('Photos are only private when this demo uses Transloadit Storage.')
+  // Hiding is a display limit; physical cleanup happens later, so the copy never promises erasure.
+  if (visibility) {
+    expect(notice).toContain(visibility)
+    expect(notice).toContain('Hidden files are not erased right away.')
+  } else {
+    expect(notice).not.toContain('shows uploads for')
+  }
+  expect(notice).not.toMatch(/deleted|permanently/i)
+})
+
+const finished = {
+  stage: 'complete',
+  isUploading: false,
+  uploadSuccess: { id: 'batch-1', count: 2 },
+} as const
+
+test('queues a requested reveal until the new card renders, then focuses it', async () => {
+  Element.prototype.scrollIntoView = vi.fn()
+  const { rerender } = render(<Album assemblyId="batch-asm" />)
+  rerender(<Album assemblyId="batch-asm" {...finished} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Show in album' }))
+  rerender(
+    <Album assemblyId="batch-asm" {...finished}>
+      {ownCards}
+    </Album>,
+  )
+  await waitFor(() => expect(document.activeElement?.textContent).toBe('New photo'))
+  expect(scrolledCards()[scrolledCards().length - 1]?.getAttribute('data-assembly-id')).toBe(
+    'batch-asm',
+  )
+})
+
+test('closes a reopened uploader before revealing from its notification', async () => {
+  Element.prototype.scrollIntoView = vi.fn()
+  const { rerender } = render(<Album assemblyId="batch-asm">{ownCards}</Album>)
+  rerender(
+    <Album assemblyId="batch-asm" {...finished}>
+      {ownCards}
+    </Album>,
+  )
+  fireEvent.click(screen.getByTestId('open-upload'))
+  const dialog = screen.getByRole('dialog', { name: 'Share your memories' })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Show in album' }))
+  expect(screen.queryByRole('dialog')).toBeNull()
+  await waitFor(() => expect(document.activeElement?.textContent).toBe('New photo'))
+})
+
+test('keeps the notification while its action has focus', () => {
+  vi.useFakeTimers()
+  try {
+    const { rerender } = render(<Album assemblyId="batch-asm" />)
+    rerender(<Album assemblyId="batch-asm" {...finished} />)
+    const action = screen.getByRole('button', { name: 'Show in album' })
+    fireEvent.focus(action)
+    act(() => vi.advanceTimersByTime(9000))
+    expect(screen.getByTestId('upload-success')).toBeTruthy()
+    fireEvent.blur(action)
+    act(() => vi.advanceTimersByTime(8000))
+    expect(screen.queryByTestId('upload-success')).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('drops a pending automatic reveal when the guest reopens the uploader', async () => {
+  Element.prototype.scrollIntoView = vi.fn()
+  const { rerender } = render(<Album assemblyId="batch-asm" />)
+  fireEvent.click(screen.getByTestId('open-upload'))
+  rerender(<Album assemblyId="batch-asm" {...finished} />)
+  fireEvent.click(screen.getByTestId('open-upload'))
+  rerender(
+    <Album assemblyId="batch-asm" {...finished}>
+      {ownCards}
+    </Album>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Close upload' }))
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  expect(Element.prototype.scrollIntoView).not.toHaveBeenCalled()
+})
+
+test('lets later notifications expire after a focused one was dismissed', () => {
+  vi.useFakeTimers()
+  try {
+    const { rerender } = render(<Album assemblyId="batch-asm" />)
+    rerender(<Album assemblyId="batch-asm" {...finished} />)
+    const dismiss = screen.getByRole('button', { name: 'Dismiss notification' })
+    fireEvent.focus(dismiss)
+    // Removing a focused element does not reliably fire blur.
+    fireEvent.click(dismiss)
+    rerender(
+      <Album assemblyId="batch-asm" {...finished} uploadSuccess={{ id: 'batch-2', count: 1 }} />,
+    )
+    act(() => vi.advanceTimersByTime(8000))
+    expect(screen.queryByTestId('upload-success')).toBeNull()
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test('shows the album at once when the requested items have not rendered yet', () => {
+  Element.prototype.scrollIntoView = vi.fn()
+  const { rerender } = render(<Album assemblyId="batch-asm" />)
+  rerender(<Album assemblyId="batch-asm" {...finished} />)
+  fireEvent.click(screen.getByRole('button', { name: 'Show in album' }))
+  expect(scrolledCards()[0]?.id).toBe('memories')
 })

@@ -43,6 +43,12 @@
     "title": "Teile deine Erinnerungen",
     "close": "Uploadfenster schließen",
     "intro": "Die großen Momente, die kleinen Details, die verwackelten Fotos von der Tanzfläche. Wir freuen uns auf alle.",
+    "demo": {
+      "archive": "Dies ist eine Demo, kein privates Archiv.",
+      "media": "Teile nur Testfotos und -videos, die du ersetzen kannst.",
+      "visibility": "{hours, plural, one {Das Album zeigt Uploads eine Stunde lang.} other {Das Album zeigt Uploads # Stunden lang.}} Ausgeblendete Dateien werden nicht sofort gelöscht.",
+      "delivery": "Videos sind für alle mit dem Link öffentlich. Fotos sind nur privat, wenn diese Demo Transloadit Storage nutzt."
+    },
     "gettingReady": "Dein Upload wird vorbereitet…",
     "name": "Dein Name",
     "guestPlaceholder": "Gast",
@@ -52,6 +58,7 @@
     "add": "Zum Album hinzufügen",
     "keepBrowsing": "Du kannst währenddessen weiter durch die Galerie stöbern.",
     "success": "{count, plural, one {# Datei erfolgreich hinzugefügt} other {# Dateien erfolgreich hinzugefügt}}",
+    "showNew": "Im Album zeigen",
     "dismiss": "Benachrichtigung schließen",
     "stages": {
       "creating": "Vorbereiten",

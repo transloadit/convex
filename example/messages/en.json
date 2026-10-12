@@ -43,6 +43,12 @@
     "title": "Share your memories",
     "close": "Close upload",
     "intro": "The big moments, the little details, the blurry dance-floor photos. We’d love to see them all.",
+    "demo": {
+      "archive": "This is a demo, not a private archive.",
+      "media": "Share only test photos and videos you can replace.",
+      "visibility": "{hours, plural, one {The album shows uploads for one hour.} other {The album shows uploads for # hours.}} Hidden files are not erased right away.",
+      "delivery": "Videos are public to anyone with their link. Photos are only private when this demo uses Transloadit Storage."
+    },
     "gettingReady": "Getting your upload ready…",
     "name": "Your name",
     "guestPlaceholder": "Guest",
@@ -52,6 +58,7 @@
     "add": "Add to the album",
     "keepBrowsing": "You can keep browsing while we finish.",
     "success": "{count, plural, one {# file successfully added} other {# files successfully added}}",
+    "showNew": "Show in album",
     "dismiss": "Dismiss notification",
     "stages": {
       "creating": "Getting ready",

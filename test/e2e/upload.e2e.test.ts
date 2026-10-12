@@ -426,10 +426,15 @@ describeE2e('e2e upload flow', () => {
       const assemblyId = assemblyText?.replace('ID:', '').trim() ?? ''
       expect(assemblyId).not.toBe('')
       await browserExpect(page.getByTestId('upload-success')).toHaveText(
-        '✓3 files successfully added×',
+        '✓3 files successfully addedShow in album×',
         { timeout: timeouts.outcome },
       )
       await browserExpect(uploadDialog).toBeHidden()
+      await browserExpect(openUpload).toBeFocused()
+      // A guest who watched the upload is taken to the new items once the gallery renders them.
+      await browserExpect(
+        page.locator(`[data-testid="gallery"] [data-assembly-id="${assemblyId}"]`).first(),
+      ).toBeInViewport({ timeout: 20_000 })
       await browserExpect(openUpload).toBeFocused()
       if (process.env.E2E_SCREENSHOT_DIR) {
         mkdirSync(process.env.E2E_SCREENSHOT_DIR, { recursive: true })
@@ -737,7 +742,7 @@ describeE2e('e2e upload flow', () => {
       await fileInput.setInputFiles([imagePath])
       await uploadDialog.getByTestId('start-upload').click()
       await browserExpect(page.getByTestId('upload-success')).toHaveText(
-        '✓1 file successfully added×',
+        '✓1 file successfully addedShow in album×',
         { timeout: timeouts.outcome },
       )
       await browserExpect(uploadDialog).toBeHidden()

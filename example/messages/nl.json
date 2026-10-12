@@ -43,6 +43,12 @@
     "title": "Deel je herinneringen",
     "close": "Uploadvenster sluiten",
     "intro": "De grote momenten, de kleine details, de bewogen foto’s van de dansvloer. We zien ze graag allemaal.",
+    "demo": {
+      "archive": "Dit is een demo, geen privéarchief.",
+      "media": "Deel alleen testfoto’s en -video’s die je kunt vervangen.",
+      "visibility": "{hours, plural, one {Het album toont uploads één uur lang.} other {Het album toont uploads # uur lang.}} Verborgen bestanden worden niet meteen gewist.",
+      "delivery": "Video’s zijn openbaar voor iedereen met de link. Foto’s zijn alleen privé als deze demo Transloadit Storage gebruikt."
+    },
     "gettingReady": "We maken je upload klaar…",
     "name": "Je naam",
     "guestPlaceholder": "Gast",
@@ -52,6 +58,7 @@
     "add": "Toevoegen aan het album",
     "keepBrowsing": "Je kunt ondertussen de galerij bekijken.",
     "success": "{count, plural, one {# bestand succesvol toegevoegd} other {# bestanden succesvol toegevoegd}}",
+    "showNew": "Toon in album",
     "dismiss": "Melding sluiten",
     "stages": {
       "creating": "Klaarmaken",
