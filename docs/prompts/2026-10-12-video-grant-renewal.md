@@ -22,5 +22,12 @@ production deployment, new Storage/customer uploads or CDN changes are authorize
       the unchanged `E2E_EXPECT_STORAGE=1` cloud test passing. Not waived.
 - [x] PR #45 needs the parent fix merged in, keeping the grouped-query work intact.
 - [x] Claim lines moved to this session; PR descriptions keep the native CDN boundary explicit.
-- [ ] Council review rounds on the renewal change; local user/security review of the playback path.
+- [x] Council round 1 (parent): P1 native Range blocker kept. P2 valid: originals are stored
+      straight from `:original`, so non-media uploads were listed and signed for inline delivery;
+      red/green test, now refused by the shared binding check. P3 (auto-advance counts raw rows)
+      left with a comment: only geometry-less photos remain, and #45 removes this skipping.
+- [x] Local Opus UX and security reviews of the playback path: both PASS. Fixed red/green: a
+      refused renewal no longer leaves a pending position restore. Comment/doc nits fixed;
+      remaining UX limitations recorded in `docs/storage-media-review.md`.
+- [ ] Further council rounds until only rejected/unrelated findings remain.
 - [ ] CI on both branches; reviewer request only when a PR is truthfully ready.

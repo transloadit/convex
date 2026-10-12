@@ -69,10 +69,16 @@ delivered media can be renewed. A refused reauthorization fails before metadata 
 retried; there is no public fallback, longer grant, byte proxy or player wrapper.
 
 A synthetic Chromium probe (actual Gallery, published `createStorageRoute` with 4 s grants, and a
-local CDN stub that rejects expired `exp`) reproduced the stall before the fix. Afterwards paused
-and playing seeks at 1440 and 390 px renewed via one route request each and kept state. A revoked
-guest got one 404 and stayed failed. A CDN that kept refusing after renewal was not retried. This
-proves client behaviour only, not native Smart CDN expiry semantics.
+local CDN stub that rejects expired `exp`) reproduced the stall before the fix. Afterwards, paused
+and playing seeks at 1440 px and a playing seek at 390 px each renewed through one route request
+and kept their state. A revoked guest got one 404 and stayed failed. A CDN that kept refusing after
+renewal was not retried. This proves client behaviour only, not native Smart CDN expiry semantics.
+
+Opus UX/security review passed. Accepted limitations: a refused renewal leaves the native
+player's error state (the live album query then denies a revoked guest); the reload can briefly
+show the poster before returning to the position; an unmuted resume refused by autoplay policy
+stays paused with controls; Safari, iOS and Firefox are unverified. A failed renewal cancels its
+pending position restore.
 
 ## Review reconciliation
 

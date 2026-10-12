@@ -69,7 +69,8 @@ const Media = ({
   return item.kind === 'video' ? (
     // biome-ignore lint/a11y/useMediaCaption: Guest clips do not have caption tracks.
     <video
-      // A seek or resume after the route's short CDN grant expires reauthorizes via the same URL.
+      // After a short Storage grant expires, a seek or resume reloads the same route URL, which
+      // reauthorizes the guest; legacy public R2 URLs are simply reloaded once.
       ref={renewExpiredGrants}
       src={item.url}
       poster={item.posterUrl}

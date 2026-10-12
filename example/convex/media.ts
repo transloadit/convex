@@ -27,10 +27,14 @@ const findUpload = (ctx: QueryCtx, uploadId: string) =>
     .withIndex('by_uploadId', (q) => q.eq('uploadId', uploadId))
     .unique()
 
+// Originals are stored straight from :original and Uppy restricts types only in the browser, so
+// other uploaded files are kept until expiry but never listed or delivered.
+const isMedia = (asset: StoredAsset) => /^(image|video)\//.test(asset.mime ?? '')
+
 // A receipt's signed fields name an upload; it counts only when that server-created upload is in
 // this album, belongs to the same guest and reserved the prefix the file was written to.
 const findBoundUpload = async (ctx: QueryCtx, row: StoredAssetRow) => {
-  if (row.album !== album || !row.uploadId || !row.userId) return null
+  if (row.album !== album || !row.uploadId || !row.userId || !isMedia(row.asset)) return null
   const upload = await findUpload(ctx, row.uploadId)
   if (
     !upload ||

@@ -34,28 +34,38 @@ export const renewExpiredGrants = (video: HTMLVideoElement | null) => {
   on('pause', () => {
     playing = false
   })
+  // A pending restore belongs to one renewal; a refused renewal must not move a later source.
+  let restore: AbortController | undefined
   on('error', () => {
+    restore?.abort()
     if (!renewable || video.error?.code !== networkError) return
     renewable = false
     const position = video.currentTime
     const resume = playing
-    on(
+    restore = new AbortController()
+    const options = { signal: restore.signal, once: true }
+    video.addEventListener(
       'loadedmetadata',
       () => {
         video.currentTime = position
-        on(
+        video.addEventListener(
           'seeked',
           () => {
+            // Re-arm only after the new grant delivered media at the restored position, so each
+            // renewal follows real progress. Production grants also leave minutes between them.
             renewable = true
             // Autoplay policies can refuse this; the guest then still has the native controls.
             if (resume) video.play().catch(() => {})
           },
-          true,
+          options,
         )
       },
-      true,
+      options,
     )
     video.load()
   })
-  return () => controller.abort()
+  return () => {
+    controller.abort()
+    restore?.abort()
+  }
 }

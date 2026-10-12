@@ -145,14 +145,22 @@ test.each([true, false])(
 )
 
 test('a denied video reauthorization stays denied, without further retries', () => {
-  const { player, load, play, fail } = openPlayer()
+  const { player, media, load, play, fail } = openPlayer()
   fireEvent(player, new Event('loadedmetadata'))
+  media.paused = false
+  fireEvent(player, new Event('play'))
+  media.currentTime = 42
   fail()
   expect(load).toHaveBeenCalledTimes(1)
   // The route refuses the expired or revoked guest: the reload fails before any metadata loads.
   fail(4)
   fail()
   expect(load).toHaveBeenCalledTimes(1)
+  // Nothing from the refused renewal lingers to move or start a later source.
+  media.currentTime = 0
+  fireEvent(player, new Event('loadedmetadata'))
+  fireEvent(player, new Event('seeked'))
+  expect(media.currentTime).toBe(0)
   expect(play).not.toHaveBeenCalled()
 })
 
