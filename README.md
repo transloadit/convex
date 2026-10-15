@@ -266,6 +266,9 @@ Live demo: `https://convex-demo.transload.it`
 
 For setup, deployment, and verification details, see `CONTRIBUTING.md`.
 
+The [living DAM plan in API2](https://github.com/transloadit/api2/blob/main/docs/prompts/2026-10-15-handover-dam.md)
+tracks the cross-repository dogfooding work, release boundaries and next product slice.
+
 Customize the names, initials, optional date, and cover path in `example/lib/wedding.ts`.
 The included cover is a compressed copy of the existing wedding photo fixture. The album keeps
 photos in their original proportions and opens uploads in a dialog (a bottom sheet on phones),
