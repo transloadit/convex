@@ -2208,6 +2208,22 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@transloadit/convex@npm:0.5.0":
+  version: 0.5.0
+  resolution: "@transloadit/convex@npm:0.5.0"
+  dependencies:
+    "@transloadit/utils": "npm:^4.8.1"
+    "@transloadit/zod": "npm:5.0.1"
+    convex-helpers: "npm:^0.1.124"
+  peerDependencies:
+    convex: ^1.43.0
+  dependenciesMeta:
+    esbuild:
+      built: true
+  checksum: 10c0/cff302af49cd9cf17e7e0c74c40a073d72732e2e33d970159efbbb50885664ec70742c0449b95385dac8b7bff2c71c7ce9b4beca03ec8c16f9f120cb43ae84de
+  languageName: node
+  linkType: hard
+
 "@transloadit/convex@workspace:.":
   version: 0.0.0-use.local
   resolution: "@transloadit/convex@workspace:."
@@ -2219,6 +2235,7 @@ __metadata:
     "@convex-dev/auth": "npm:^0.0.95"
     "@edge-runtime/vm": "npm:^5.0.0"
     "@fal-ai/client": "npm:^1.10.1"
+    "@manypkg/get-packages": "npm:^3.1.0"
     "@playwright/test": "npm:^1.63.0"
     "@testing-library/dom": "npm:^10.4.2"
     "@testing-library/react": "npm:^16.3.3"
@@ -5203,6 +5220,32 @@ __metadata:
   checksum: 10c0/83130df2f649228aa91c17754b66248030a3af34911d713b5ea417066fa338aa4bc8668d06bd98aa21a2210f43fc0a3db8b9099e7747fb5830e40e39a6a1058e
   languageName: node
   linkType: hard
+
+"transloadit-convex-wedding-example@workspace:example":
+  version: 0.0.0-use.local
+  resolution: "transloadit-convex-wedding-example@workspace:example"
+  dependencies:
+    "@auth/core": "npm:^0.41.3"
+    "@convex-dev/auth": "npm:^0.0.95"
+    "@transloadit/convex": "npm:0.5.0"
+    "@transloadit/node": "npm:5.0.1"
+    "@transloadit/viewer": "npm:0.0.5"
+    "@transloadit/zod": "npm:5.0.1"
+    "@uppy/core": "npm:^6.0.1"
+    "@uppy/dashboard": "npm:^6.0.0"
+    "@uppy/locales": "npm:^5.2.0"
+    "@uppy/react": "npm:^6.0.0"
+    "@uppy/transloadit": "npm:^6.0.0"
+    convex: "npm:^1.45.0"
+    convex-helpers: "npm:^0.1.124"
+    motion: "npm:^13.4.0"
+    next: "npm:^16.3.5"
+    next-intl: "npm:^4.14.5"
+    react: "npm:^19.3.0"
+    react-dom: "npm:^19.3.0"
+    zod: "npm:^4.6.5"
+  languageName: unknown
+  linkType: soft
 
 "tslib@npm:^2.4.0, tslib@npm:^2.6.2, tslib@npm:^2.8.0":
   version: 2.8.1

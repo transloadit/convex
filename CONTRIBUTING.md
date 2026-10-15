@@ -98,6 +98,10 @@ The hosted wedding app is a Yarn workspace with an exact `@transloadit/convex@0.
 dependency. It does not alias package imports to this repository's `src/`. Both `example:build` and
 the production backend deploy check the resolved package before proceeding. Publish a component
 release first, then update `example/package.json` and the lockfile to dogfood it on the live demo.
+The workspace list includes `.` so Changesets continues to discover and release the root library;
+the private example is never published.
+Changesets only updates `workspace:` dependency ranges, keeping the demo's registry pin untouched
+until that new version is actually available on npm.
 
 Package unit tests and component codegen still exercise the repository source. Preview backend QA
 installs a freshly packed candidate, so unpublished changes remain testable; its Vercel frontend
