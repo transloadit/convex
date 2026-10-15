@@ -1,7 +1,7 @@
 import { createPublicKey, generateKeyPairSync } from 'node:crypto'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { getOptionalDeployEnv, loadEnv } from './env.ts'
+import { getProductionDeployEnv, loadEnv } from './env.ts'
 import { parseDeployOutput, requireEnv, run } from './qa/run.ts'
 
 loadEnv()
@@ -36,6 +36,7 @@ const sleep = (ms: number) =>
   })
 
 const deployDemo = async () => {
+  const optionalEnv = getProductionDeployEnv()
   requireEnv('TRANSLOADIT_KEY')
   requireEnv('TRANSLOADIT_SECRET')
   requireEnv('CONVEX_DEPLOY_KEY')
@@ -117,7 +118,7 @@ const deployDemo = async () => {
   })
   await setEnv('JWKS', jwks)
 
-  for (const [name, value] of getOptionalDeployEnv()) {
+  for (const [name, value] of optionalEnv) {
     await setEnv(name, value)
   }
 }

@@ -23,6 +23,7 @@ import {
   type StorageGalleryAsset,
   thumbnailSizes,
 } from '../lib/gallery'
+import { renewExpiredGrants } from '../lib/media-grant'
 
 const motionPreference = '(prefers-reduced-motion: reduce)'
 const subscribeToMotionPreference = (onChange: () => void) => {
@@ -47,6 +48,7 @@ const Media = ({
   onDimensions?: (width: number, height: number) => void
 }) => {
   const t = useTranslations('viewer')
+  if (item.kind === 'video' && !item.url) return <p>{t('videoUnavailable')}</p>
   // Private photos: each candidate is a stable same-origin route URL that reauthorizes the guest
   // and redirects to a short-lived CDN grant, so long-open albums keep loading.
   // Thumbnails fill a box of the photo's own ratio, so its opaque pixels cover the ThumbHash
@@ -67,6 +69,9 @@ const Media = ({
   return item.kind === 'video' ? (
     // biome-ignore lint/a11y/useMediaCaption: Guest clips do not have caption tracks.
     <video
+      // After a short Storage grant expires, a seek or resume reloads the same route URL, which
+      // reauthorizes the guest; legacy public R2 URLs are simply reloaded once.
+      ref={renewExpiredGrants}
       src={item.url}
       poster={item.posterUrl}
       controls={viewing}
@@ -183,7 +188,7 @@ const GalleryViewer = ({
     const opener = document.activeElement
     const overflow = document.body.style.overflow
     dialog?.showModal()
-    // Private photos add a download link before Close; keep the same safe initial action.
+    // Private media adds a download link before Close; keep the same safe initial action.
     closeRef.current?.focus({ preventScroll: true })
     document.body.style.overflow = 'hidden'
     return () => {
@@ -194,6 +199,7 @@ const GalleryViewer = ({
   }, [])
 
   const media = <Media key={item.id} item={item} viewing />
+  const original = item.original ?? item.receipt
 
   return (
     <dialog
@@ -225,10 +231,10 @@ const GalleryViewer = ({
           </span>
         </div>
         <div className="viewer-actions">
-          {item.receipt && (
+          {original && (
             <a
               className="viewer-download"
-              href={getStorageAssetHref(item.receipt, { action: 'download' })}
+              href={getStorageAssetHref(original, { action: 'download' })}
             >
               {t('download')}
             </a>

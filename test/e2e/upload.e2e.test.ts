@@ -81,6 +81,7 @@ describeE2e('e2e upload flow', () => {
     const browser = await chromium.launch(chromiumChannel ? { channel: chromiumChannel } : {})
     const page = await browser.newPage()
     let storedImageHref: string | undefined
+    const storedVideoHrefs: string[] = []
     const appRequestHeaders: Record<string, string> = useRemote
       ? { 'x-vercel-protection-bypass': vercelBypassToken }
       : {}
@@ -418,6 +419,22 @@ describeE2e('e2e upload flow', () => {
       if (!outcome) {
         throw new Error('Timed out waiting for upload outcome')
       }
+      if (process.env.E2E_EXPECT_UPLOADS_DISABLED === '1') {
+        expect(outcome.type).toBe('error')
+        await browserExpect(page.getByTestId('upload-error')).toHaveText(
+          'Uploads are temporarily unavailable. Please try again later.',
+        )
+        await browserExpect(page.getByTestId('upload-success')).toHaveCount(0)
+        await page.keyboard.press('Escape')
+        await page.getByRole('button', { name: 'Leave the album' }).click()
+        await browserExpect(entry).toBeVisible()
+        await browserExpect(enter).toBeEnabled()
+        await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
+        expect(
+          diagnostics.consoleMessages.filter((message) => message.startsWith('[pageerror]')),
+        ).toEqual([])
+        return
+      }
       if (outcome.type !== 'assembly') {
         throw new Error(`Upload failed: ${outcome.text}`)
       }
@@ -718,6 +735,53 @@ describeE2e('e2e upload flow', () => {
       await browserExpect
         .poll(() => viewer.locator('video').evaluate((video: HTMLVideoElement) => video.readyState))
         .toBeGreaterThanOrEqual(1)
+      if (process.env.E2E_EXPECT_STORAGE === '1') {
+        const videoSrc = await viewer.locator('video').getAttribute('src')
+        const posterSrc = await viewer.locator('video').getAttribute('poster')
+        expect(videoSrc).toMatch(/^\/api\/transloadit\/media\?/)
+        expect(posterSrc).toMatch(/^\/api\/transloadit\/media\?/)
+        if (!videoSrc || !posterSrc)
+          throw new Error('Private video needs playback and poster receipts')
+        const range = await page.request.get(new URL(videoSrc, serverUrl).href, {
+          headers: { ...appRequestHeaders, Range: 'bytes=0-1023' },
+        })
+        // Keep Range a release gate, but collect download/auth/logout evidence in the same run
+        // when the CDN ignores it. Soft assertions still fail the test; they are not a fallback.
+        expect.soft(range.status()).toBe(206)
+        expect.soft(range.headers()['content-range']).toMatch(/^bytes 0-1023\//)
+        expect.soft((await range.body()).length).toBe(1024)
+        const downloadHref = await viewer
+          .getByRole('link', { name: 'Download original' })
+          .getAttribute('href')
+        if (!downloadHref) throw new Error('Video original download is missing')
+        storedVideoHrefs.push(videoSrc, posterSrc, downloadHref)
+        const original = await page.request.get(new URL(downloadHref, serverUrl).href, {
+          headers: appRequestHeaders,
+        })
+        expect(original.ok()).toBe(true)
+        expect(
+          createHash('sha256')
+            .update(await original.body())
+            .digest('hex'),
+        ).toBe(createHash('sha256').update(readFileSync(videoPath)).digest('hex'))
+        const anonymous = await browser.newContext()
+        for (const href of [videoSrc, posterSrc, downloadHref]) {
+          const denied = await anonymous.request.get(new URL(href, serverUrl).href, {
+            headers: appRequestHeaders,
+            maxRedirects: 0,
+          })
+          expect(denied.status()).toBe(404)
+        }
+        await anonymous.close()
+      }
+      await viewer.locator('video').evaluate((video: HTMLVideoElement) => {
+        video.currentTime = Math.min(0.5, video.duration / 2)
+      })
+      await browserExpect
+        .poll(() =>
+          viewer.locator('video').evaluate((video: HTMLVideoElement) => video.currentTime),
+        )
+        .toBeGreaterThan(0)
       await page.keyboard.press('Escape')
       await browserExpect(viewer).toHaveCount(0)
       await page.evaluate(
@@ -800,6 +864,14 @@ describeE2e('e2e upload flow', () => {
       await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
       if (storedImageHref) {
         const denied = await page.request.get(storedImageHref, {
+          headers: appRequestHeaders,
+          maxRedirects: 0,
+        })
+        expect(denied.status()).toBe(404)
+        expect(denied.headers()['cache-control']).toContain('no-store')
+      }
+      for (const href of storedVideoHrefs) {
+        const denied = await page.request.get(new URL(href, serverUrl).href, {
           headers: appRequestHeaders,
           maxRedirects: 0,
         })

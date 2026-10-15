@@ -1,16 +1,18 @@
 import type { StoredAsset } from '@transloadit/convex'
-import type { StorageImageReceipt } from '@transloadit/viewer/react'
+import { getStorageAssetHref, type StorageImageReceipt } from '@transloadit/viewer/react'
 import type { GalleryResult } from './gallery-results'
 import { galleryResultSteps } from './gallery-steps'
 import { getResultOriginalKey } from './transloadit'
 
 export type { GalleryResult }
 
-/** One private Storage photo from `media:list`: a canonical receipt, never a URL. */
+/** One private original plus its authorized video renditions, from `media:list`. */
 export type StorageGalleryAsset = {
   id: string
   assemblyId: string
   asset: StoredAsset
+  video?: StoredAsset
+  poster?: StoredAsset
   uploadedBy: string
   createdAt: number
 }
@@ -37,9 +39,10 @@ export type GalleryItem = {
   id: string
   assemblyId?: string
   name: string
-  /** Public R2 rendition. Private Storage photos carry a receipt instead. */
+  /** Authorized Storage video route or a legacy public R2 rendition. */
   url?: string
   receipt?: StorageImageReceipt
+  original?: StoredAsset
   kind: 'image' | 'video'
   posterUrl?: string
   aspectRatio?: number
@@ -108,29 +111,48 @@ export const buildGalleryItems = (
   }))
 }
 
-// Private photos render from their receipt through the authorized media route.
+// Photos, video playback, posters and downloads share the same authorized Storage route.
 export const buildStorageGalleryItems = (
   assets: StorageGalleryAsset[],
   { now = Date.now(), retentionMs = galleryRetentionMs } = {},
 ): GalleryItem[] =>
-  assets.flatMap(({ id, assemblyId, asset, uploadedBy, createdAt }) => {
-    const { width, height } = asset
-    if (now - createdAt >= retentionMs || !width || !height) return []
-    return [
-      {
+  assets.flatMap(
+    ({ id, assemblyId, asset, video, poster, uploadedBy, createdAt }): GalleryItem[] => {
+      const { width, height } = asset
+      if (now - createdAt >= retentionMs) return []
+      const base = {
         id: `storage:${id}`,
         assemblyId,
         name: asset.path.slice(asset.path.lastIndexOf('/') + 1),
-        receipt: { ...asset, width, height },
-        kind: 'image' as const,
-        aspectRatio: width / height,
+        original: asset,
         uploadedBy,
         createdAt,
-      },
-    ]
-  })
+        aspectRatio: width && height ? width / height : undefined,
+      }
+      if (asset.mime?.startsWith('video/'))
+        return [
+          {
+            ...base,
+            kind: 'video',
+            // Encoders can apply a phone's rotation metadata; size the card for playback.
+            aspectRatio:
+              video?.width && video.height ? video.width / video.height : base.aspectRatio,
+            url: video ? getStorageAssetHref(video, { action: 'original' }) : undefined,
+            posterUrl: poster ? getStorageAssetHref(poster, { action: 'original' }) : undefined,
+          },
+        ]
+      if (!asset.mime?.startsWith('image/') || !width || !height) return []
+      return [
+        {
+          ...base,
+          receipt: { ...asset, width, height },
+          kind: 'image',
+        },
+      ]
+    },
+  )
 
-/** Newest first across private photos and R2 media; equal times keep their incoming order. */
+/** Newest first across private Storage and legacy R2 media; ties keep their incoming order. */
 export const mergeGalleryItems = (...lists: GalleryItem[][]) =>
   lists.flat().sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
 

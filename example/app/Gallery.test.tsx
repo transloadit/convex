@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { StoredAsset } from '@transloadit/convex'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AlbumIntlProvider } from '../i18n/AlbumIntlProvider'
@@ -55,6 +55,123 @@ const photo = (
 // ThumbHashes of a small opaque image and of one with transparent pixels (encoded alpha bit set).
 const opaqueHash = 'IvkFHYx/iHiHh3h3d3h4d494+IiI'
 const alphaHash = '4eiFE4gbb2iHh3dvePiGiHGAiIiHiIg='
+
+test.each([true, false])(
+  'downloads the private video original, with playback available=%s',
+  (playable) => {
+    const original = photo(1, 1920, 1080, { mime: 'video/quicktime', path: 'upload/clip.mov' })
+    const video = { ...photo(2).asset, mime: 'video/mp4', path: 'upload/play.mp4' }
+    render(
+      <AlbumIntlProvider initialLocale="en">
+        <Gallery
+          results={[]}
+          storageAssets={[{ ...original, video: playable ? video : undefined }]}
+        />
+      </AlbumIntlProvider>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'View clip.mov' }))
+    const href = screen.getByRole('link', { name: 'Download original' }).getAttribute('href')
+    const params = new URL(href ?? '', 'https://example.test').searchParams
+    expect(params.get('asset_id')).toBe(original.asset.asset_id)
+    expect(params.get('action')).toBe('download')
+    if (playable) {
+      const player = within(screen.getByRole('dialog')).getByLabelText('clip.mov')
+      expect(player.getAttribute('src')).toContain(video.asset_id)
+      expect(player.hasAttribute('controls')).toBe(true)
+    } else {
+      expect(screen.getByRole('dialog').textContent).toContain(
+        'Video preview unavailable. You can still download the original.',
+      )
+    }
+  },
+)
+
+// The parts of a real player's state that a network failure and a reload change.
+const openPlayer = () => {
+  const original = photo(1, 1920, 1080, { mime: 'video/quicktime', path: 'upload/clip.mov' })
+  const video = { ...photo(2).asset, mime: 'video/mp4', path: 'upload/play.mp4' }
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery results={[]} storageAssets={[{ ...original, video }]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View clip.mov' }))
+  const player = within(screen.getByRole('dialog')).getByLabelText('clip.mov') as HTMLVideoElement
+  const media = { currentTime: 0, paused: true, error: null as { code: number } | null }
+  for (const name of ['currentTime', 'paused', 'error'] as const)
+    Object.defineProperty(player, name, {
+      get: () => media[name],
+      set: (value) => Object.assign(media, { [name]: value }),
+    })
+  const load = vi.spyOn(player, 'load').mockImplementation(() => {
+    Object.assign(media, { currentTime: 0, paused: true, error: null })
+  })
+  const play = vi.spyOn(player, 'play').mockImplementation(async () => {
+    media.paused = false
+  })
+  // Chromium reports a refused byte range (expired grant) as a network error, then pauses.
+  const fail = (code = 2) => {
+    Object.assign(media, { error: { code }, paused: true })
+    fireEvent(player, new Event('error'))
+    fireEvent(player, new Event('pause'))
+  }
+  return { player, media, load, play, fail, src: player.getAttribute('src') }
+}
+
+test.each([true, false])(
+  'an expired video grant renews through the same route, keeping position and playing=%s',
+  (playing) => {
+    const { player, media, load, play, fail, src } = openPlayer()
+    fireEvent(player, new Event('loadedmetadata'))
+    if (playing) {
+      media.paused = false
+      fireEvent(player, new Event('play'))
+    }
+    media.currentTime = 93.5
+    fail()
+    expect(load).toHaveBeenCalledTimes(1)
+    // The stable route URL reauthorizes the guest; no CDN URL is ever put on the element.
+    expect(player.getAttribute('src')).toBe(src)
+    fireEvent(player, new Event('loadedmetadata'))
+    expect(media.currentTime).toBe(93.5)
+    fireEvent(player, new Event('seeked'))
+    expect(play).toHaveBeenCalledTimes(playing ? 1 : 0)
+    expect(media.paused).toBe(!playing)
+    // A renewed grant that delivered media can itself be renewed when it expires later.
+    media.currentTime = 400
+    fail()
+    expect(load).toHaveBeenCalledTimes(2)
+  },
+)
+
+test('a denied video reauthorization stays denied, without further retries', () => {
+  const { player, media, load, play, fail } = openPlayer()
+  fireEvent(player, new Event('loadedmetadata'))
+  media.paused = false
+  fireEvent(player, new Event('play'))
+  media.currentTime = 42
+  fail()
+  expect(load).toHaveBeenCalledTimes(1)
+  // The route refuses the expired or revoked guest: the reload fails before any metadata loads.
+  fail(4)
+  fail()
+  expect(load).toHaveBeenCalledTimes(1)
+  // Nothing from the refused renewal lingers to move or start a later source.
+  media.currentTime = 0
+  fireEvent(player, new Event('loadedmetadata'))
+  fireEvent(player, new Event('seeked'))
+  expect(media.currentTime).toBe(0)
+  expect(play).not.toHaveBeenCalled()
+})
+
+test('a video that never loaded, or failed to decode, is not reloaded', () => {
+  const { player, load, fail } = openPlayer()
+  fail()
+  expect(load).not.toHaveBeenCalled()
+  fireEvent(player, new Event('loadedmetadata'))
+  fail(3)
+  expect(load).not.toHaveBeenCalled()
+})
 
 const pictureImage = (root: ParentNode) => {
   const image = root.querySelector('picture img')

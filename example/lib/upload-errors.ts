@@ -8,6 +8,8 @@ export const uploadErrorCodes = [
   'LOGIN_FAILED',
   'INVITE_REQUIRED',
   'UPLOAD_LIMIT',
+  'UPLOADS_UNAVAILABLE',
+  'INVALID_FILE_COUNT',
   'UPLOAD_FAILED',
   'STATUS_FAILED',
 ] as const

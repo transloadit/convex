@@ -16,9 +16,8 @@ const storageNamespace = () => {
   }
 }
 
-// Transloadit Storage is optional in the demo: without a Workspace, uploads keep the R2-only
-// pipeline. A configured Workspace never silently falls back to public R2: it fails closed until
-// the deployment has a unique namespace.
+// The hosted demo requires Storage for new uploads. Keep this lookup optional for read-only
+// setup/cleanup diagnostics, but never silently fall back to public media on a missing Workspace.
 export const getStorageWorkspace = () => {
   const workspace = process.env.TRANSLOADIT_WORKSPACE?.trim()
   if (!workspace) return undefined

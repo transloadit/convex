@@ -8,7 +8,7 @@ affect the wedding archive.
 ## What the demo already provides
 
 - Resumable Uppy uploads of photos and videos, with signed Transloadit Assembly options.
-- Image resizing, video encoding, video posters, and export to Cloudflare R2.
+- Private Transloadit Storage originals, MP4 playback and posters; adaptive image delivery via Viewer.
 - Convex status/results, live gallery updates, and named guest sessions.
 - Required name entry, an optional invitation code for viewing and uploading, and a small per-session upload limit.
 - Editable contributor names on uploads, four interface languages, and search-engine exclusion.
@@ -23,12 +23,12 @@ An animation library handles presentation; it does not provide albums, access co
 
 | Area | Current demo | Wedding instance |
 | --- | --- | --- |
-| Retention | The UI and its album query default to 24 hours; the demo R2 lifecycle deletes objects after one day. | Separate bucket/workspace with explicit permanent retention. Setting the gallery retention to zero only removes the UI and query cutoff; it cannot undo bucket deletion. Exclude it from demo cleanup. |
-| Originals | Processing persists resized photos, encoded videos, and posters. | Preserve untouched originals and checksums as well as viewing derivatives. Keep an independent backup and demonstrate a restore. |
-| Viewing privacy | Album queries require a named guest session and the invitation code when configured. Direct media links remain public. | Configure a strong invitation code, private storage, and authorized delivery/downloads. Protect thumbnails and video URLs too. Without a code, anyone can enter a name. |
+| Retention | UI/query cutoff defaults to 24 hours; scheduled Storage cleanup expires originals and derivatives. Old R2 objects retain a one-day lifecycle. | Separate Workspace/prefix and explicit permanent retention, excluded from demo cleanup. Removing the UI cutoff alone does not prevent deletion. |
+| Originals | New photo and video originals are stored directly, separately from playback derivatives. | Keep an independent backup and demonstrate a restore; test intended source formats. |
+| Viewing privacy | Album and new media delivery require an admitted guest. Short-lived CDN grants remain usable until expiry. Legacy R2 links stay public. | Configure a strong invitation code and separate archive. Without a code, anyone can enter a name. Do not import public legacy links as if they were private. |
 | Backend authorization | Album reads require admission; status/results/refresh require ownership. Signing uses a fixed wedding action; ingestion and cleanup are internal. Logout and code changes revoke album access. | Extend membership checks to future editing and delivery paths. Names are self-reported. Use named Template credentials: raw R2 keys in inline instructions are visible to the uploader even when the diagnostic display is redacted. |
 | Ingestion | Guest batches are capped at 12 files; authenticated sessions have a six-batch hourly limit. | Separate owner/photographer bulk import with resumability, deduplication, progress, and retry/reconciliation. Keep tighter guest limits, including file size and total storage quotas. |
-| Organization | One demo album and a small capped result query. | Persistent asset records, pagination, photographer/our photos/guest collections, capture dates and time zones, contributor credit, and stable ordering. |
+| Organization | One album, persistent Storage receipts, paginated private media and contributor credit. | Add collections and capture dates/time zones only as needed for the real archive. |
 | Moderation | Successful uploads appear immediately. | Owner approval/hide/delete, a recoverable trash state, and upload acknowledgements. Explain who can see submitted files. |
 | Media | Basic resize and MP4 processing. | Verify HEIC, rotated phone photos, HDR/large phone videos, and photographer formats. Generate useful thumbnail sizes; add streaming renditions for long videos if needed. |
 | Operations | Demo diagnostics and test scripts. | Failed-upload recovery, storage/processing spend limits, monitoring, backups, download/export, and a restore procedure. |
@@ -43,14 +43,13 @@ restoration before the full collection or guest invitations.
 This album is the second real consumer of Storage and Viewer, after the Transloadit website: real
 guest uploads need dynamic receipts and private delivery, not a committed image catalog.
 
-Status, 25 September 2026:
+Current implementation (October 2026; deployment must be verified separately):
 
-- **Originals.** With `TRANSLOADIT_WORKSPACE` configured, photos are stored with
+- **Originals.** With the required `TRANSLOADIT_WORKSPACE`, photos and videos are stored with
   `/transloadit/store` under a server-chosen `convex-demo/<deployment>/<album>/<upload>/` prefix,
-  with a ThumbHash for the thumbnail placeholder. Without it, uploads keep the R2-only pipeline. On paid plans the stored bytes
-  are the uploaded originals. On the Community plan, API2 currently exempts only store Steps that
-  use `:original` directly from the upload watermark; this album stores a photo filter of
-  `:original`, so those photos are watermarked until API2 also recognizes filtered originals.
+  with photo ThumbHashes for placeholders. The store Step uses `:original` directly to preserve
+  uploaded bytes, including on the Community plan. Missing configuration or a pause refuses new
+  hosted uploads, never falls back to public storage.
 - **Receipts.** The component registers each verified receipt once, with its Assembly provenance.
   The app binds it to the server-created upload record (album, guest and prefix) before listing it.
 - **Sessions.** Hosted albums use the official Convex Auth Next.js integration: tokens live in
@@ -71,10 +70,16 @@ Status, 25 September 2026:
   no load handler. Transparent photos and the letterboxed (`contain`) viewer get none. A ThumbHash
   is preview pixels, so `media:list` and `media:forDelivery` return it only to an admitted guest
   and only for versions that guest may preview.
-- **Activation order.** Enabling `TRANSLOADIT_WORKSPACE` on Convex replaces public R2 photo
-  renditions with private Storage originals. Configure the delivery key on the Next.js host first;
-  without it the route answers 404 and new photos cannot be shown.
-- **Video** stays on R2. The album is not private end to end while video uses public R2 URLs.
+- **Activation order.** Configure the delivery key on the Next.js host before enabling hosted
+  uploads on Convex; without it the route answers 404. Validate in an isolated preview first.
+- **Video.** `/video/encode` and `/video/thumbs` produce private stored MP4s and posters. They use
+  Viewer's `getStorageAssetHref` and the same authorized route, with native browser playback/range
+  seeking. Download selects the original, not the MP4. A missing derivative leaves an explicit
+  preview-unavailable message and an original download, not a public fallback.
+- **Consumer code.** `yarn template:ensure --wedding` optionally publishes the shared processing
+  recipe. Only literal per-upload Storage paths stay in signed server instructions: multipart
+  fields are untrusted destination inputs. The app owns admission and retention; it does not proxy
+  media bytes or implement its own CDN signing. See `CONTRIBUTING.md` for setup.
 
 Delivery semantics, as verified against production with synthetic assets:
 
@@ -92,19 +97,20 @@ Delivery semantics, as verified against production with synthetic assets:
 Storage namespaces: each deployment writes under `convex-demo/<namespace>/<album>/`. Convex cloud
 deployments use their deployment name. Local and self-hosted deployments have no unique name, so a
 configured `TRANSLOADIT_WORKSPACE` fails closed there until `TRANSLOADIT_STORAGE_NAMESPACE` names
-one; only an unset Workspace keeps the R2-only pipeline.
+one. The separate legacy local harness still tests its old R2 pipeline and is not Storage proof.
 
-Demo retention: `node scripts/cleanup-demo.ts --older-than=24` expires Storage photos older than a
+Demo retention: `node scripts/cleanup-demo.ts --older-than=24` expires all Storage media older than a
 day through the ledger: hide, delete, then keep a tombstone so a late notification cannot restore
-the photo. Failures stay hidden and retryable.
+the media. Failures stay hidden and retryable.
 Without `--older-than` the script resets the whole demo album, including unregistered uploads under
 this deployment's prefix, R2 objects and Convex results. `--dry-run` reports every backend and changes
-nothing. A reset refuses to run while R2 or Storage is unconfigured unless `--skip-r2` or
-`--skip-storage` says so explicitly; a skip flag also leaves a configured backend untouched. Even
+nothing. A Storage-only reset needs no R2 credentials; legacy R2 references or a truncated reference
+scan require R2 credentials or explicit `--skip-r2`. Storage requires credentials or `--skip-storage`;
+a skip flag also leaves a configured backend untouched. Even
 then, Convex results that still reference R2 media are kept (and reported as incomplete), a partial
 R2 batch deletion counts as a failure, and Storage references stay in the ledger until Storage
 confirms each deletion. Cleanup never deletes Storage assets outside the deployment's demo prefix.
-Scheduling the daily expiry is still open; R2 keeps its one-day lifecycle rule.
+The existing daily expiry workflow is prefix-bound to the disposable demo; R2 keeps its one-day rule.
 
 For the real wedding, an independently tested backup and restore of the originals remains a gate,
 along with a separate Workspace or prefix that demo cleanup can never reach.

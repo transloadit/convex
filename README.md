@@ -148,9 +148,9 @@ const transloadit = new Transloadit(components.transloadit, { storageWorkspace: 
   checksums, dimensions), its Assembly provenance and its album, user and upload linkage. Nothing
   purges tombstones: the component keeps them and exposes no function to remove them.
 
-Byte-identical originals depend on the Assembly: on the Community plan, API2 currently exempts
-only store Steps that use `:original` directly from its upload watermark, so a Step that stores a
-filter of `:original` (as the wedding example does for photos) stores watermarked photos there.
+Byte-identical originals depend on the Assembly. Store `:original` directly, as the wedding
+example does for both photos and videos, rather than a filter or processing result. In particular,
+the Community-plan watermark exemption applies to direct originals, not filtered originals.
 
 Receipts are private metadata, not credentials. Signed Assembly fields are not ownership proof on
 their own: bind receipts to server-created upload records and authorize every read, as the
@@ -231,12 +231,18 @@ For status parsing and polling helpers, see `docs/advanced.md`.
 ## Example app (Next.js + Uppy wedding gallery)
 
 The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on
-the client and Convex Auth with a required guest name to enter the album. Uploads are stored via
-Transloadit directly into Cloudflare R2.
+the client and Convex Auth with a required guest name to enter the album. Hosted uploads store
+original photos/videos, MP4 playback renditions and posters in private Transloadit Storage.
+`@transloadit/viewer` supplies image rendering, authorized delivery redirects and download links;
+the browser's native video player uses the same delivery route. No R2 credentials are needed for
+new hosted uploads. An optional saved Transloadit Template holds the reusable processing recipe.
 
 Live demo: `https://convex-demo.transload.it`
 
 For setup, deployment, and verification details, see `CONTRIBUTING.md`.
+
+The [living DAM plan in API2](https://github.com/transloadit/api2/blob/main/docs/prompts/2026-10-15-handover-dam.md)
+tracks the cross-repository dogfooding work, release boundaries and next product slice.
 
 Customize the names, initials, optional date, and cover path in `example/lib/wedding.ts`.
 The included cover is a compressed copy of the existing wedding photo fixture. The album keeps
@@ -250,9 +256,10 @@ and shown beside photos and videos. A fully successful upload closes the dialog 
 of files added. The entrance and album send `noindex` directives to search engines.
 
 Without an invitation code, anyone can enter a name to access the album. Names are self-reported,
-not verified identities. Existing R2 media URLs remain public to anyone who has the link; fully
-private media requires private storage and authorized delivery too. The in-memory session API is
-only available in local development; hosted albums use Convex Auth.
+not verified identities. New media links reauthorize the guest before issuing a short-lived CDN
+grant. Existing R2 media URLs remain public to anyone who has the link; this change cannot make
+them private retroactively. The in-memory session API and R2 upload pipeline remain only in the
+legacy local component test harness; hosted albums use Convex Auth and require Storage.
 The globe menu switches between English, Dutch, Ukrainian, and German without discarding selected
 files; the `NEXT_LOCALE` cookie remembers the choice. Like the content site, this uses `next-intl`
 and ICU messages. Edit the complete catalogs in `example/messages/`; `yarn check` verifies their
@@ -261,4 +268,5 @@ keys and formatting. Uppy receives the same locale, with compatibility additions
 
 Photo viewing uses Motion 13.4 `AnimateView` with React 19.3, a keyboard-accessible dialog, and a
 reduced-motion path. See [the wedding archive recommendation](docs/wedding-gallery.md) before using
-the disposable demo for real wedding media, including the proposed Storage/`@transloadit/img` integration.
+the disposable demo for real wedding media. Demo retention and private delivery do not replace a
+separate archive and a tested backup/restore.

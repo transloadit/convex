@@ -218,16 +218,10 @@ jobs:
           CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_PREVIEW_DEPLOY_KEY }}
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
-          TRANSLOADIT_R2_CREDENTIALS: ${{ secrets.TRANSLOADIT_R2_CREDENTIALS }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_HOST: ${{ secrets.R2_HOST }}
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           # Only an explicitly chosen preview may opt in; the production switch is independent.
           TRANSLOADIT_WORKSPACE: ${{ (github.head_ref || github.ref_name) == vars.TRANSLOADIT_STORAGE_PREVIEW_BRANCH && vars.TRANSLOADIT_STORAGE_PREVIEW_WORKSPACE || '' }}
           TRANSLOADIT_STORAGE_UPLOADS_DISABLED: ""
+          TRANSLOADIT_WEDDING_TEMPLATE_ID: ${{ vars.TRANSLOADIT_WEDDING_TEMPLATE_ID }}
       - name: Resolve Vercel preview URL
         if: env.E2E_REMOTE_APP_URL == ''
         run: |
@@ -276,6 +270,9 @@ jobs:
           E2E_REMOTE_APP_URL: ${{ env.E2E_REMOTE_APP_URL }}
           E2E_REMOTE_CONVEX_URL: ${{ env.E2E_REMOTE_CONVEX_URL }}
           E2E_EXPECT_STORAGE: ${{ (github.head_ref || github.ref_name) == vars.TRANSLOADIT_STORAGE_PREVIEW_BRANCH && vars.TRANSLOADIT_STORAGE_PREVIEW_WORKSPACE != '' && '1' || '' }}
+          # Without R2, only the opted-in preview has a Storage Workspace to upload into. Other
+          # previews verify the refusal path; real upload/playback acceptance runs on that branch.
+          E2E_EXPECT_UPLOADS_DISABLED: ${{ ((github.head_ref || github.ref_name) != vars.TRANSLOADIT_STORAGE_PREVIEW_BRANCH || vars.TRANSLOADIT_STORAGE_PREVIEW_WORKSPACE == '') && '1' || '' }}
           PLAYWRIGHT_SKIP_INSTALL: "1"
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
@@ -314,15 +311,9 @@ jobs:
           E2E_REMOTE_CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
           TRANSLOADIT_KEY: ${{ secrets.TRANSLOADIT_KEY }}
           TRANSLOADIT_SECRET: ${{ secrets.TRANSLOADIT_SECRET }}
-          TRANSLOADIT_R2_CREDENTIALS: ${{ secrets.TRANSLOADIT_R2_CREDENTIALS }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          R2_HOST: ${{ secrets.R2_HOST }}
-          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          R2_PUBLIC_URL: ${{ secrets.R2_PUBLIC_URL }}
           TRANSLOADIT_WORKSPACE: ${{ vars.TRANSLOADIT_WORKSPACE }}
           TRANSLOADIT_STORAGE_UPLOADS_DISABLED: ${{ vars.TRANSLOADIT_STORAGE_UPLOADS_DISABLED }}
+          TRANSLOADIT_WEDDING_TEMPLATE_ID: ${{ vars.TRANSLOADIT_WEDDING_TEMPLATE_ID }}
       - name: Deploy Vercel and wait for the new production build
         run: timeout --foreground 8m node scripts/deploy-vercel.ts
         env:
@@ -334,6 +325,7 @@ jobs:
           E2E_REMOTE_APP_URL: ${{ secrets.E2E_REMOTE_APP_URL }}
           E2E_REMOTE_CONVEX_URL: ${{ secrets.E2E_REMOTE_CONVEX_URL }}
           E2E_EXPECT_STORAGE: ${{ vars.TRANSLOADIT_WORKSPACE != '' && vars.TRANSLOADIT_STORAGE_UPLOADS_DISABLED != '1' && '1' || '' }}
+          E2E_EXPECT_UPLOADS_DISABLED: ${{ vars.TRANSLOADIT_STORAGE_UPLOADS_DISABLED == '1' && '1' || '' }}
           PLAYWRIGHT_SKIP_INSTALL: "1"
           PLAYWRIGHT_CHROMIUM_CHANNEL: chrome
           VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}

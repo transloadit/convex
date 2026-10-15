@@ -187,8 +187,7 @@ test.each([
   const notice = screen.getByTestId('demo-notice').textContent ?? ''
   expect(notice).toContain('This is a demo, not a private archive.')
   expect(notice).toContain('Share only test photos and videos you can replace.')
-  expect(notice).toContain('Videos are public to anyone with their link.')
-  expect(notice).toContain('Photos are only private when this demo uses Transloadit Storage.')
+  expect(notice).toContain('This legacy local test uses public media links.')
   // Hiding is a display limit; physical cleanup happens later, so the copy never promises erasure.
   if (visibility) {
     expect(notice).toContain(visibility)
@@ -197,6 +196,14 @@ test.each([
     expect(notice).not.toContain('shows uploads for')
   }
   expect(notice).not.toMatch(/deleted|permanently/i)
+})
+
+test('explains private media delivery and the legacy-link limit in the hosted album', () => {
+  render(<Album authState="authenticated" />)
+  fireEvent.click(screen.getByTestId('open-upload'))
+  const notice = screen.getByTestId('demo-notice').textContent ?? ''
+  expect(notice).toContain('New photos, videos and originals use private Transloadit Storage.')
+  expect(notice).toContain('Older public links are not made private retroactively.')
 })
 
 const finished = {

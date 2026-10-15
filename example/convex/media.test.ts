@@ -5,7 +5,6 @@ import { convexTest } from 'convex-test'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import componentSchema from '../../src/component/schema'
 import { inviteVersion } from '../lib/album-access'
-import { r2OutputSteps } from '../lib/transloadit-steps'
 import schema from './schema'
 
 // Example deployment bindings are generated during deployment, not required for offline tests.
@@ -74,6 +73,7 @@ const upload = async (
     path: `${prefix}${seed}.jpg`,
   }),
   fieldOverrides: Record<string, unknown> = {},
+  stepName = ':original',
 ) => {
   const options = await guest.action(api.wedding.createWeddingAssemblyOptions, {
     guestName: 'Alex',
@@ -81,7 +81,7 @@ const upload = async (
   })
   const params = JSON.parse(options.assemblyOptions.params)
   // The store path ends with the literal Transloadit interpolation for the uploaded file name.
-  const prefix = String(params.steps.images_stored.path).replace(/\$\{file\.url_name\}$/, '')
+  const prefix = String(params.steps.originals_stored.path).replace(/\$\{file\.url_name\}$/, '')
   const asset = {
     id: `result-${seed}`,
     workspace,
@@ -100,7 +100,7 @@ const upload = async (
       assembly_id: `assembly-${seed}`,
       ok: 'ASSEMBLY_COMPLETED',
       fields: { ...params.fields, ...fieldOverrides },
-      results: { images_stored: [asset] },
+      results: { [stepName]: [asset] },
     },
   })
   return { params, prefix, asset }
@@ -117,7 +117,7 @@ beforeEach(() => {
   vi.stubEnv('TRANSLOADIT_KEY', 'test-key')
   vi.stubEnv('TRANSLOADIT_SECRET', 'test-secret')
   vi.stubEnv('TRANSLOADIT_NOTIFY_URL', 'https://example.com/notify')
-  vi.stubEnv('TRANSLOADIT_R2_CREDENTIALS', 'test-r2')
+  vi.stubEnv('TRANSLOADIT_R2_CREDENTIALS', '')
   vi.stubEnv('TRANSLOADIT_WORKSPACE', workspace)
   vi.stubEnv('CONVEX_CLOUD_URL', 'https://happy-otter-123.convex.cloud')
 })
@@ -125,18 +125,28 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs())
 
 describe('private Storage uploads', () => {
-  test('upload rollback uses R2 for new photos without disabling existing private receipts', async () => {
+  test.each([0, -1, 1.5, 13])(
+    'rejects invalid batch size %s before consuming quota',
+    async (fileCount) => {
+      const t = setup()
+      const guest = await admit(t, 'Alex')
+      await expect(
+        guest.action(api.wedding.createWeddingAssemblyOptions, { guestName: 'Alex', fileCount }),
+      ).rejects.toThrow('INVALID_FILE_COUNT')
+      expect(await t.run((ctx) => ctx.db.query('uploadLimits').collect())).toHaveLength(0)
+    },
+  )
+  test('pausing new uploads keeps existing private media readable without a public fallback', async () => {
     const t = setup()
     const guest = await admit(t, 'Alex')
     const { asset } = await upload(guest, t, 'before-rollback')
     vi.stubEnv('TRANSLOADIT_STORAGE_UPLOADS_DISABLED', '1')
-    const options = await guest.action(api.wedding.createWeddingAssemblyOptions, {
-      guestName: 'Alex',
-      fileCount: 1,
-    })
-    const { steps } = JSON.parse(options.assemblyOptions.params)
-    expect(steps.images_output.robot).toBe('/cloudflare/store')
-    expect(steps.images_stored).toBeUndefined()
+    await expect(
+      guest.action(api.wedding.createWeddingAssemblyOptions, {
+        guestName: 'Alex',
+        fileCount: 1,
+      }),
+    ).rejects.toThrow('UPLOADS_UNAVAILABLE')
     expect(await guest.query(api.media.forDelivery, request(asset))).toMatchObject({
       asset_id: asset.asset_id,
       version_id: asset.version_id,
@@ -153,17 +163,26 @@ describe('private Storage uploads', () => {
       robot: '/upload/handle',
       output_meta: { thumbhash: true },
     })
-    // Stores a photo filter of `:original`; see the watermark scope note on the Step.
-    expect(params.steps.images_stored).toMatchObject({
+    // Direct originals preserve photo and video bytes, independently of the viewing derivatives.
+    expect(params.steps.originals_stored).toMatchObject({
       robot: '/transloadit/store',
-      use: 'images_filtered',
+      use: ':original',
       conflict_strategy: 'rename',
     })
-    expect(params.steps.images_filtered).toMatchObject({ robot: '/file/filter', use: ':original' })
-    // Private photos must not also get public R2 renditions; video keeps its R2 path.
+    // No permanent public or temporary processing result URLs are sent to the gallery.
     expect(params.steps.images_output).toBeUndefined()
     expect(params.steps.images_resized).toBeUndefined()
-    expect(params.steps.videos_output).toMatchObject({ robot: '/cloudflare/store' })
+    expect(params.steps.videos_output).toBeUndefined()
+    expect(params.steps.videos_stored).toMatchObject({
+      robot: '/transloadit/store',
+      use: 'video_encode',
+    })
+    expect(params.steps.posters_stored).toMatchObject({
+      robot: '/transloadit/store',
+      use: 'video_poster',
+    })
+    expect(params.steps.video_encode.result).toBe(true)
+    expect(params.steps.video_poster.result).toBe(true)
     const uploads = await t.run((ctx) => ctx.db.query('uploads').collect())
     expect(uploads).toEqual([
       expect.objectContaining({ uploadId: params.fields.uploadId, storagePrefix: prefix }),
@@ -184,30 +203,123 @@ describe('private Storage uploads', () => {
     })
     vi.stubEnv('TRANSLOADIT_STORAGE_NAMESPACE', 'kvz-laptop')
     const params = JSON.parse((await sign()).assemblyOptions.params)
-    expect(params.steps.images_stored.path).toMatch(/^convex-demo\/kvz-laptop\/wedding-gallery\//)
+    expect(params.steps.originals_stored.path).toMatch(
+      /^convex-demo\/kvz-laptop\/wedding-gallery\//,
+    )
   })
 
-  test('keeps the R2-only pipeline when no Storage Workspace is configured', async () => {
+  test('refuses new uploads without a Storage Workspace before consuming the upload quota', async () => {
     vi.stubEnv('TRANSLOADIT_WORKSPACE', '')
     const t = setup()
     const guest = await admit(t, 'Alex')
-    const options = await guest.action(api.wedding.createWeddingAssemblyOptions, {
-      guestName: 'Alex',
-      fileCount: 1,
-    })
-    const params = JSON.parse(options.assemblyOptions.params)
-    expect(params.steps.images_stored).toBeUndefined()
-    expect(params.steps.images_output).toMatchObject({ robot: '/cloudflare/store' })
-    expect(params.steps[':original']).toEqual({ robot: '/upload/handle' })
-    // Cleanup relies on this list to know which results are the only references to R2 media.
-    const r2Steps = Object.entries(params.steps as Record<string, { robot: string }>)
-      .filter(([, step]) => step.robot === '/cloudflare/store')
-      .map(([name]) => name)
-    expect(r2Steps.sort()).toEqual([...r2OutputSteps].sort())
+    await expect(
+      guest.action(api.wedding.createWeddingAssemblyOptions, {
+        guestName: 'Alex',
+        fileCount: 1,
+      }),
+    ).rejects.toThrow('UPLOADS_UNAVAILABLE')
+    expect(await t.run((ctx) => ctx.db.query('uploadLimits').collect())).toHaveLength(0)
+  })
+
+  test('a saved processing Template still gets literal, signed server-owned Storage paths', async () => {
+    vi.stubEnv('TRANSLOADIT_WEDDING_TEMPLATE_ID', 'test-template')
+    const t = setup()
+    const guest = await admit(t, 'Alex')
+    const { params, prefix } = await upload(guest, t, 'template')
+    expect(params.template_id).toBe('test-template')
+    expect(Object.keys(params.steps).sort()).toEqual([
+      'originals_stored',
+      'posters_stored',
+      'videos_stored',
+    ])
+    expect(params.steps.originals_stored.path).toBe(`${prefix}\${file.url_name}`)
+    expect(JSON.stringify(params.steps)).not.toContain('${fields.')
   })
 })
 
 describe('gallery and delivery authorization', () => {
+  test('keeps existing private photos reported under their producing step', async () => {
+    const t = setup()
+    const guest = await admit(t, 'Alex')
+    const { asset } = await upload(guest, t, 'legacy', undefined, {}, 'images_filtered')
+    const page = await guest.query(api.media.list, {
+      paginationOpts: { numItems: 24, cursor: null },
+    })
+    expect(page.page).toEqual([
+      expect.objectContaining({ asset: expect.objectContaining({ asset_id: asset.asset_id }) }),
+    ])
+  })
+
+  test('joins private video renditions by source identity across pages, not by filename', async () => {
+    const t = setup()
+    const guest = await admit(t, 'Alex')
+    const { assemblyOptions } = await guest.action(api.wedding.createWeddingAssemblyOptions, {
+      guestName: 'Alex',
+      fileCount: 2,
+    })
+    const params = JSON.parse(assemblyOptions.params)
+    const prefix = String(params.steps.originals_stored.path).replace(/\$\{file\.url_name\}$/, '')
+    const result = (seed: string, mime: string, originalId: string) => ({
+      id: `result-${seed}`,
+      original_id: originalId,
+      workspace,
+      asset_id: damId(`asset${seed}`),
+      version_id: damId(`version${seed}`),
+      path: `${prefix}${seed}.dat`,
+      size: 1234,
+      mime,
+      width: 1280,
+      height: 720,
+    })
+    const original = result('original', 'video/quicktime', 'source-1')
+    const video = result('encoded', 'video/mp4', 'source-1')
+    const poster = result('poster', 'image/jpeg', 'source-1')
+    const other = result('other', 'video/mp4', 'source-2')
+    await t.action(components.transloadit.lib.handleWebhook, {
+      verifySignature: false,
+      storage: { workspace },
+      payload: {
+        assembly_id: 'assembly-video',
+        ok: 'ASSEMBLY_COMPLETED',
+        fields: params.fields,
+        results: {
+          ':original': [original],
+          video_encode: [video, other],
+          video_poster: [poster],
+        },
+      },
+    })
+    const first = await guest.query(api.media.list, {
+      paginationOpts: { numItems: 1, cursor: null },
+    })
+    const rest = await guest.query(api.media.list, {
+      paginationOpts: { numItems: 10, cursor: first.continueCursor },
+    })
+    expect([...first.page, ...rest.page]).toEqual([
+      expect.objectContaining({
+        asset: expect.objectContaining({ asset_id: original.asset_id }),
+        video: expect.objectContaining({ asset_id: video.asset_id }),
+        poster: expect.objectContaining({ asset_id: poster.asset_id }),
+      }),
+    ])
+    // Video dimensions do not turn a video into an authorized image-preview input.
+    expect(await guest.query(api.media.forDelivery, request(video))).toBeNull()
+    expect(await guest.query(api.media.forDelivery, request(poster))).toMatchObject({
+      mime: 'image/jpeg',
+    })
+    expect(await guest.query(api.media.forDelivery, request(original, 'download'))).toMatchObject({
+      mime: 'video/quicktime',
+    })
+    expect(await t.query(api.media.forDelivery, request(video, 'original'))).toBeNull()
+    expect(await t.query(api.media.forDelivery, request(poster, 'original'))).toBeNull()
+    await t.mutation(components.transloadit.lib.requestStoredAssetDeletion, {
+      album: 'wedding-gallery',
+      createdBefore: Date.now() + 1,
+    })
+    expect(await guest.query(api.media.forDelivery, request(video, 'original'))).toBeNull()
+    expect(await guest.query(api.media.forDelivery, request(poster, 'original'))).toBeNull()
+  })
+
   test('admitted guests list and receive exact receipts for every action', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')
@@ -286,6 +398,24 @@ describe('gallery and delivery authorization', () => {
     expect(await alex.query(api.media.forDelivery, request(asset, 'download'))).toMatchObject({
       mime: 'video/mp4',
     })
+  })
+
+  test('other files stored from :original are neither listed nor delivered', async () => {
+    const t = setup()
+    const alex = await admit(t, 'Alex')
+    // Uppy's type restriction is client-side only; the Assembly stores every uploaded original.
+    const { asset } = await upload(alex, t, 'page', (prefix) => ({
+      path: `${prefix}page.html`,
+      mime: 'text/html',
+      width: undefined,
+      height: undefined,
+    }))
+    const page = await alex.query(api.media.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    expect(page.page).toEqual([])
+    for (const action of ['preview', 'original', 'download'])
+      expect(await alex.query(api.media.forDelivery, request(asset, action))).toBeNull()
   })
 
   test('ThumbHash pixels reach only guests who may preview that exact version', async () => {
@@ -369,7 +499,7 @@ describe('cleanup previews follow the expiry rules', () => {
         assembly_id: 'assembly-overwrite',
         ok: 'ASSEMBLY_COMPLETED',
         fields: {},
-        results: { images_stored: [{ ...asset, id: 'v2', version_id: damId('fresh') }] },
+        results: { ':original': [{ ...asset, id: 'v2', version_id: damId('fresh') }] },
       },
     })
     const preview = await t.query(api.storageCleanup.previewExpiry, {
@@ -387,9 +517,7 @@ describe('council regressions', () => {
     const alex = await admit(t, 'Alex')
     await upload(alex, t, 'a', (prefix) => ({ path: `${prefix}a.jpg`, thumbhash: 'AAAAAAAA' }))
     const legacy = await alex.query(api.wedding.listGallery, {})
-    expect(legacy.map((result: { stepName: string }) => result.stepName)).not.toContain(
-      'images_stored',
-    )
+    expect(legacy.map((result: { stepName: string }) => result.stepName)).not.toContain(':original')
     expect(JSON.stringify(legacy)).not.toContain('AAAAAAAA')
   })
 
@@ -405,6 +533,26 @@ describe('council regressions', () => {
 })
 
 describe('cleanup summary', () => {
+  test('counts legacy public exports under producing steps before forgetting their references', async () => {
+    const t = setup()
+    await t.action(components.transloadit.lib.handleWebhook, {
+      verifySignature: false,
+      payload: {
+        assembly_id: 'legacy-public',
+        ok: 'ASSEMBLY_COMPLETED',
+        fields: { album: 'wedding-gallery' },
+        results: {
+          images_resized: [{ id: 'photo', ssl_url: 'https://legacy.example/photo.jpg' }],
+          videos_encoded: [{ id: 'video', ssl_url: 'https://legacy.example/clip.mp4' }],
+          videos_thumbs: [{ id: 'poster', ssl_url: 'https://legacy.example/poster.jpg' }],
+        },
+      },
+    })
+    expect(await t.query(api.storageCleanup.summary, { album: 'wedding-gallery' })).toMatchObject({
+      r2Results: 3,
+    })
+  })
+
   test('reports the backend prefix and pages visible receipts per album', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')

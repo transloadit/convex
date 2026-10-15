@@ -47,7 +47,8 @@
       "archive": "Dit is een demo, geen privéarchief.",
       "media": "Deel alleen testfoto’s en -video’s die je kunt vervangen.",
       "visibility": "{hours, plural, one {Het album toont uploads één uur lang.} other {Het album toont uploads # uur lang.}} Verborgen bestanden worden niet meteen gewist.",
-      "delivery": "Video’s zijn openbaar voor iedereen met de link. Foto’s zijn alleen privé als deze demo Transloadit Storage gebruikt."
+      "delivery": "Deze oudere lokale test gebruikt openbare medialinks.",
+      "privateDelivery": "Nieuwe foto’s, video’s en originelen staan privé in Transloadit Storage. Oudere openbare links worden niet achteraf privé."
     },
     "gettingReady": "We maken je upload klaar…",
     "name": "Je naam",
@@ -72,6 +73,7 @@
     "moment": "Trouwherinnering",
     "view": "Bekijk {name}",
     "video": "Video",
+    "videoUnavailable": "Videovoorbeeld niet beschikbaar. Je kunt het origineel nog downloaden.",
     "close": "Fotoviewer sluiten",
     "closeButton": "Sluiten",
     "previous": "Vorige",
@@ -87,6 +89,8 @@
     "uploadedUnknown": "{name} heeft nieuwe bestanden toegevoegd"
   },
   "errors": {
+    "UPLOADS_UNAVAILABLE": "Uploaden is tijdelijk niet beschikbaar. Probeer het later opnieuw.",
+    "INVALID_FILE_COUNT": "Kies tussen 1 en 12 bestanden per upload.",
     "ACCESS_REQUIRED": "Vul je naam en uitnodigingscode opnieuw in om het album te openen.",
     "LOGIN_FAILED": "Het album kon niet worden geopend. Probeer het opnieuw.",
     "NAME_REQUIRED": "Vul je naam in (maximaal 100 tekens).",

@@ -15,6 +15,8 @@ const vGalleryAsset = v.object({
   id: v.string(),
   assemblyId: v.string(),
   asset: vStoredAsset,
+  video: v.optional(vStoredAsset),
+  poster: v.optional(vStoredAsset),
   uploadedBy: v.string(),
   createdAt: v.number(),
 })
@@ -25,10 +27,14 @@ const findUpload = (ctx: QueryCtx, uploadId: string) =>
     .withIndex('by_uploadId', (q) => q.eq('uploadId', uploadId))
     .unique()
 
+// Originals are stored straight from :original and Uppy restricts types only in the browser, so
+// other uploaded files are kept until expiry but never listed or delivered.
+const isMedia = (asset: StoredAsset) => /^(image|video)\//.test(asset.mime ?? '')
+
 // A receipt's signed fields name an upload; it counts only when that server-created upload is in
 // this album, belongs to the same guest and reserved the prefix the file was written to.
 const findBoundUpload = async (ctx: QueryCtx, row: StoredAssetRow) => {
-  if (row.album !== album || !row.uploadId || !row.userId) return null
+  if (row.album !== album || !row.uploadId || !row.userId || !isMedia(row.asset)) return null
   const upload = await findUpload(ctx, row.uploadId)
   if (
     !upload ||
@@ -43,7 +49,8 @@ const findBoundUpload = async (ctx: QueryCtx, row: StoredAssetRow) => {
 
 // Previews need image geometry. A ThumbHash is preview pixels too: versions that only allow
 // originals never send it, from either query.
-const canPreview = (asset: StoredAsset) => Boolean(asset.width && asset.height)
+const canPreview = (asset: StoredAsset) =>
+  Boolean(asset.mime?.startsWith('image/') && asset.width && asset.height)
 const authorizedReceipt = (asset: StoredAsset) => {
   if (canPreview(asset)) return asset
   const { thumbhash: _thumbhash, ...receipt } = asset
@@ -51,7 +58,7 @@ const authorizedReceipt = (asset: StoredAsset) => {
 }
 
 /**
- * Newest private photos for admitted guests: canonical receipts, never URLs or credentials.
+ * Newest private originals for admitted guests: canonical receipts, never URLs or credentials.
  * Pages keep the component's cursors and split signals, which usePaginatedQuery from
  * convex-helpers uses to keep loaded pages stable in a live album.
  */
@@ -65,14 +72,50 @@ export const list = query({
       paginationOpts: args.paginationOpts,
     })
     const page = []
+    const assemblies = new Map<string, StoredAssetRow[]>()
     for (const row of result.page) {
+      // Keep old private photos readable. Renditions are attached to their original rather than
+      // becoming separate gallery cards or depending on which pagination page they land on.
+      // /transloadit/store publishes under the producer, not the store Step's name.
+      if (row.stepName !== ':original' && row.stepName !== 'images_filtered') continue
       const upload = await findBoundUpload(ctx, row)
       if (!upload) continue
+      let video: StoredAsset | undefined
+      let poster: StoredAsset | undefined
+      if (row.asset.mime?.startsWith('video/')) {
+        let siblings = assemblies.get(row.assemblyId)
+        if (!siblings) {
+          siblings = await ctx.runQuery(components.transloadit.lib.listStoredAssetsForAssembly, {
+            assemblyId: row.assemblyId,
+            limit: 500,
+          })
+          assemblies.set(row.assemblyId, siblings)
+        }
+        const sourceId = singleOriginalId(row.originalId)
+        for (const sibling of siblings) {
+          if (
+            !sourceId ||
+            singleOriginalId(sibling.originalId) !== sourceId ||
+            sibling.uploadId !== row.uploadId ||
+            sibling.album !== upload.album ||
+            sibling.userId !== upload.userId ||
+            !upload.storagePrefix ||
+            !isInUploadStoragePrefix(sibling.asset.path, upload.storagePrefix)
+          )
+            continue
+          if (sibling.stepName === 'video_encode' && sibling.asset.mime === 'video/mp4')
+            video = authorizedReceipt(sibling.asset)
+          if (sibling.stepName === 'video_poster' && canPreview(sibling.asset))
+            poster = authorizedReceipt(sibling.asset)
+        }
+      }
       const { workspace, asset_id, version_id } = row.asset
       page.push({
         id: `${workspace}:${asset_id}:${version_id}`,
         assemblyId: row.assemblyId,
         asset: authorizedReceipt(row.asset),
+        ...(video ? { video } : {}),
+        ...(poster ? { poster } : {}),
         uploadedBy: upload.guestName,
         createdAt: row.createdAt,
       })
@@ -80,6 +123,10 @@ export const list = query({
     return { ...result, page }
   },
 })
+
+// Filenames are not identities, and a multi-input rendition cannot name one original safely.
+const singleOriginalId = (id: StoredAssetRow['originalId']) =>
+  typeof id === 'string' ? id : id?.length === 1 ? (id[0] ?? undefined) : undefined
 
 /**
  * The delivery route's single authorization query: a live, current-invitation guest session, this

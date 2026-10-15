@@ -87,15 +87,16 @@ export const createWeddingAssemblyOptions = action({
 
     if (!isValidGuestName(args.guestName)) throw new ConvexError('NAME_REQUIRED')
 
-    const fileCount = Math.max(1, args.fileCount)
+    if (!Number.isInteger(args.fileCount) || args.fileCount < 1 || args.fileCount > 12)
+      throw new ConvexError('INVALID_FILE_COUNT')
+    const fileCount = args.fileCount
     const guestName = args.guestName.trim()
     // Generated here, never by the browser: the upload ID also names its private Storage prefix.
     const uploadId = crypto.randomUUID()
-    // Roll back only new uploads; keep the Workspace configured for retained private receipts.
-    const storagePrefix =
-      process.env.TRANSLOADIT_STORAGE_UPLOADS_DISABLED !== '1' && getStorageWorkspace()
-        ? getUploadStoragePrefix(uploadId)
-        : undefined
+    // Pause refuses new uploads; it must never make a private album silently write public media.
+    if (process.env.TRANSLOADIT_STORAGE_UPLOADS_DISABLED === '1' || !getStorageWorkspace())
+      throw new ConvexError('UPLOADS_UNAVAILABLE')
+    const storagePrefix = getUploadStoragePrefix(uploadId)
     await ctx.runMutation(internal.wedding.beginUpload, {
       uploadId,
       userId: guest.userId,
@@ -104,10 +105,12 @@ export const createWeddingAssemblyOptions = action({
       storagePrefix,
     })
 
-    const steps = buildWeddingSteps({ storagePrefix })
+    const templateId = process.env.TRANSLOADIT_WEDDING_TEMPLATE_ID || undefined
+    const steps = buildWeddingSteps({ storagePrefix, templateId })
     const notifyUrl = requireEnv('TRANSLOADIT_NOTIFY_URL')
     const assemblyArgs = {
       steps,
+      ...(templateId ? { templateId } : {}),
       notifyUrl,
       numExpectedUploadFiles: fileCount,
       fields: {

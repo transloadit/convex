@@ -402,7 +402,7 @@ export const WeddingLayout = ({
           <p>
             {Number.isFinite(retentionMs) &&
               `${t('upload.demo.visibility', { hours: retentionMs / 3600000 })} `}
-            {t('upload.demo.delivery')}
+            {t(authState ? 'upload.demo.privateDelivery' : 'upload.demo.delivery')}
           </p>
         </div>
         {authState && authState !== 'authenticated' && (
