@@ -103,6 +103,16 @@ the private example is never published.
 Changesets only updates `workspace:` dependency ranges, keeping the demo's registry pin untouched
 until that new version is actually available on npm.
 
+Ordinary production and preview deployments preserve the deployment's existing JWT signing key
+and matching public JWKS. They initialize auth only when both variables are absent; incomplete or
+mismatched pairs stop the deploy instead of silently rotating keys and breaking existing guests.
+An optional `JWT_PRIVATE_KEY` can seed a new deployment, but cannot replace an existing different
+key. Key rotation is a separate operator task, not a side effect of deploying application code.
+Initialization sends both variables together through stdin without `--force`; existing values and
+CLI output are never printed. If a pair is incomplete, restore the matching pair from the approved
+backup rather than clearing production auth to make a deploy pass. The auth check happens after
+the Convex code deployment, so a refusal is not a claim that no deployment changes occurred.
+
 Package unit tests and component codegen still exercise the repository source. Preview backend QA
 installs a freshly packed candidate, so unpublished changes remain testable; its Vercel frontend
 uses the example's released dependency. The legacy local R2 harness also retains its explicit test

@@ -1,8 +1,8 @@
-import { createPublicKey, generateKeyPairSync } from 'node:crypto'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ensureDeploymentAuth } from './deploy-auth.ts'
 import { getOptionalDeployEnv, loadEnv } from './env.ts'
 import { writeAppFiles } from './qa/app-template.ts'
 import { parseDeployOutput, requireEnv, run } from './qa/run.ts'
@@ -116,26 +116,14 @@ const deployCloud = async () => {
     await setEnv('TRANSLOADIT_KEY', requireEnv('TRANSLOADIT_KEY'))
     await setEnv('TRANSLOADIT_SECRET', requireEnv('TRANSLOADIT_SECRET'))
     await setEnv('TRANSLOADIT_NOTIFY_URL', notifyUrl)
-    let jwtPrivateKey = process.env.JWT_PRIVATE_KEY
-    if (!jwtPrivateKey) {
-      const { privateKey } = generateKeyPairSync('rsa', {
-        modulusLength: 2048,
-        publicKeyEncoding: { type: 'spki', format: 'pem' },
-        privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-      })
-      jwtPrivateKey = privateKey
-    }
-    await setEnv('JWT_PRIVATE_KEY', jwtPrivateKey)
-    const jwk = createPublicKey(jwtPrivateKey).export({ format: 'jwk' })
-    const jwks = JSON.stringify({
-      keys: [
-        {
-          use: 'sig',
-          ...jwk,
-        },
-      ],
-    })
-    await setEnv('JWKS', jwks)
+    log(
+      `Deployment auth keys ${ensureDeploymentAuth({
+        cwd: projectDir,
+        deploymentName,
+        env: deployEnv,
+        initialPrivateKey: process.env.JWT_PRIVATE_KEY,
+      })}.`,
+    )
 
     for (const [name, value] of getOptionalDeployEnv()) {
       await setEnv(name, value)

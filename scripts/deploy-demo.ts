@@ -1,6 +1,6 @@
-import { createPublicKey, generateKeyPairSync } from 'node:crypto'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { ensureDeploymentAuth } from './deploy-auth.ts'
 import { getProductionDeployEnv, loadEnv } from './env.ts'
 import { parseDeployOutput, requireEnv, run } from './qa/run.ts'
 
@@ -97,26 +97,14 @@ const deployDemo = async () => {
   await setEnv('TRANSLOADIT_SECRET', requireEnv('TRANSLOADIT_SECRET'))
   await setEnv('TRANSLOADIT_NOTIFY_URL', notifyUrl)
 
-  let jwtPrivateKey = process.env.JWT_PRIVATE_KEY
-  if (!jwtPrivateKey) {
-    const { privateKey } = generateKeyPairSync('rsa', {
-      modulusLength: 2048,
-      publicKeyEncoding: { type: 'spki', format: 'pem' },
-      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
-    })
-    jwtPrivateKey = privateKey
-  }
-  await setEnv('JWT_PRIVATE_KEY', jwtPrivateKey)
-  const jwk = createPublicKey(jwtPrivateKey).export({ format: 'jwk' })
-  const jwks = JSON.stringify({
-    keys: [
-      {
-        use: 'sig',
-        ...jwk,
-      },
-    ],
-  })
-  await setEnv('JWKS', jwks)
+  log(
+    `Deployment auth keys ${ensureDeploymentAuth({
+      cwd: exampleDir,
+      deploymentName,
+      env: deployEnv,
+      initialPrivateKey: process.env.JWT_PRIVATE_KEY,
+    })}.`,
+  )
 
   for (const [name, value] of optionalEnv) {
     await setEnv(name, value)

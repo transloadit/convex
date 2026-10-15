@@ -237,7 +237,7 @@ const uppy = new Uppy().use(Transloadit, {
   assemblyOptions: async () => {
     const { assemblyOptions } = await runAction(
       api.wedding.createWeddingAssemblyOptions,
-      { fileCount, guestName, uploadCode },
+      { fileCount, guestName },
     );
     return assemblyOptions;
   },
@@ -247,6 +247,8 @@ await uppy.upload();
 ```
 Note: `assemblyOptions()` is called once per batch, so pass per-file metadata via Uppy file meta
 (e.g. `uppy.setFileMeta(fileId, {...})`) and use `fields` for shared values.
+The wedding action requires an existing guest session; an optional invitation code belongs to
+sign-in, not the upload action.
 
 Migration note: the `@transloadit/convex/react` entrypoint has been removed; use Uppy +
 `@uppy/transloadit` directly.
