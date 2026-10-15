@@ -14,12 +14,6 @@
     "incremental": true,
     "esModuleInterop": true,
     "allowImportingTsExtensions": true,
-    "paths": {
-      "@transloadit/convex": ["./../src/client/index.ts"],
-      "@transloadit/convex/lib": ["./../src/component/lib.ts"],
-      "@transloadit/convex/test": ["./../src/test/index.ts"],
-      "@transloadit/convex/convex.config": ["./../src/component/convex.config.ts"]
-    },
     "plugins": [
       {
         "name": "next"

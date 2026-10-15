@@ -12,6 +12,6 @@ export default defineConfig({
   },
   test: {
     environment: 'edge-runtime',
-    exclude: ['node_modules/**', 'dist/**', 'test/e2e/**'],
+    exclude: ['**/node_modules/**', 'dist/**', 'test/e2e/**'],
   },
 })
