@@ -369,6 +369,95 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         }>,
         Name
       >;
+      listStoredMedia: FunctionReference<
+        "query",
+        "internal",
+        {
+          album: string;
+          originalSteps: Array<string>;
+          paginationOpts: {
+            cursor: string | null;
+            endCursor?: string | null;
+            id?: number;
+            maximumBytesRead?: number;
+            maximumRowsRead?: number;
+            numItems: number;
+          };
+          renditions: Record<string, string>;
+        },
+        {
+          continueCursor: string;
+          isDone: boolean;
+          page: Array<{
+            original: {
+              _creationTime: number;
+              _id: string;
+              album?: string;
+              assemblyId: string;
+              asset: {
+                asset_id: string;
+                has_alpha?: boolean;
+                height?: number;
+                md5hash?: string;
+                mime: string | null;
+                path: string;
+                sha256?: string;
+                size: number;
+                thumbhash?: string;
+                version_id: string;
+                width?: number;
+                workspace: string;
+              };
+              createdAt: number;
+              deletedAt?: number;
+              deletionAttempts?: number;
+              deletionError?: string;
+              deletionRequestedAt?: number;
+              originalId?: string | Array<string | null>;
+              resultId: string;
+              stepName: string;
+              uploadId?: string;
+              userId?: string;
+            };
+            renditions: Record<
+              string,
+              {
+                _creationTime: number;
+                _id: string;
+                album?: string;
+                assemblyId: string;
+                asset: {
+                  asset_id: string;
+                  has_alpha?: boolean;
+                  height?: number;
+                  md5hash?: string;
+                  mime: string | null;
+                  path: string;
+                  sha256?: string;
+                  size: number;
+                  thumbhash?: string;
+                  version_id: string;
+                  width?: number;
+                  workspace: string;
+                };
+                createdAt: number;
+                deletedAt?: number;
+                deletionAttempts?: number;
+                deletionError?: string;
+                deletionRequestedAt?: number;
+                originalId?: string | Array<string | null>;
+                resultId: string;
+                stepName: string;
+                uploadId?: string;
+                userId?: string;
+              }
+            >;
+          }>;
+          pageStatus?: "SplitRecommended" | "SplitRequired" | null;
+          splitCursor?: string | null;
+        },
+        Name
+      >;
       previewStoredAssetExpiry: FunctionReference<
         "query",
         "internal",

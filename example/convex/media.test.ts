@@ -292,6 +292,9 @@ describe('gallery and delivery authorization', () => {
     const first = await guest.query(api.media.list, {
       paginationOpts: { numItems: 1, cursor: null },
     })
+    // A page of one media item must not first spend a page on its poster or encode.
+    expect(first.page).toHaveLength(1)
+    expect(first.page[0]?.asset.asset_id).toBe(original.asset_id)
     const rest = await guest.query(api.media.list, {
       paginationOpts: { numItems: 10, cursor: first.continueCursor },
     })
@@ -339,6 +342,61 @@ describe('gallery and delivery authorization', () => {
     }
   })
 
+  test('grouped renditions still need their own upload-path and preview authorization', async () => {
+    const t = setup()
+    const guest = await admit(t, 'Alex')
+    const { params, prefix, asset } = await upload(guest, t, 'original', (path) => ({
+      path: `${path}original.mov`,
+      mime: 'video/quicktime',
+      original_id: 'video-source',
+    }))
+    const playback = {
+      ...asset,
+      id: 'playback',
+      asset_id: damId('outside-video'),
+      version_id: damId('outside-version'),
+      // Matching Assembly fields and source IDs do not authorize an outside-prefix path.
+      path: 'another-upload/video.mp4',
+      mime: 'video/mp4',
+    }
+    const poster = {
+      ...asset,
+      id: 'poster',
+      asset_id: damId('poster'),
+      version_id: damId('poster-version'),
+      path: `${prefix}poster.jpg`,
+      mime: 'image/jpeg',
+      width: undefined,
+      thumbhash: 'AAAAAAAA',
+    }
+    await t.action(components.transloadit.lib.handleWebhook, {
+      verifySignature: false,
+      storage: { workspace },
+      payload: {
+        assembly_id: 'assembly-original',
+        ok: 'ASSEMBLY_COMPLETED',
+        fields: params.fields,
+        results: { ':original': [asset], video_encode: [playback], video_poster: [poster] },
+      },
+    })
+    const page = await guest.query(api.media.list, {
+      paginationOpts: { numItems: 10, cursor: null },
+    })
+    expect(page.page).toHaveLength(1)
+    expect(page.page[0]).not.toHaveProperty('video')
+    expect(page.page[0]).not.toHaveProperty('poster')
+    expect(JSON.stringify(page)).not.toContain('AAAAAAAA')
+    expect(await guest.query(api.media.forDelivery, request(playback, 'original'))).toBeNull()
+    expect(await guest.query(api.media.forDelivery, request(poster, 'preview'))).toBeNull()
+    expect(
+      await guest.query(api.media.forDelivery, request(poster, 'download')),
+    ).not.toHaveProperty('thumbhash')
+    vi.stubEnv('WEDDING_UPLOAD_CODE', 'rotated-invitation')
+    await expect(
+      guest.query(api.media.list, { paginationOpts: { numItems: 10, cursor: null } }),
+    ).rejects.toThrow('ACCESS_REQUIRED')
+  })
+
   test('denies anonymous, expired and revoked sessions with null', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')
@@ -348,6 +406,9 @@ describe('gallery and delivery authorization', () => {
     expect(await expired.query(api.media.forDelivery, request(asset))).toBeNull()
     await expect(
       t.query(api.media.list, { paginationOpts: { numItems: 10, cursor: null } }),
+    ).rejects.toThrow('ACCESS_REQUIRED')
+    await expect(
+      expired.query(api.media.list, { paginationOpts: { numItems: 10, cursor: null } }),
     ).rejects.toThrow('ACCESS_REQUIRED')
     vi.stubEnv('WEDDING_UPLOAD_CODE', 'rotated-invitation')
     expect(await alex.query(api.media.forDelivery, request(asset, 'download'))).toBeNull()

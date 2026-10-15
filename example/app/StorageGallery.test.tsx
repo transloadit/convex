@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { ConvexProvider, type ConvexReactClient } from 'convex/react'
 import type { PaginationOptions } from 'convex/server'
 import { ConvexError } from 'convex/values'
@@ -97,13 +97,16 @@ test('refused cursors restart the album, other failures replace its photos with 
   expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
 })
 
-test('automatically advances initial rendition-only pages until a gallery card is visible', async () => {
+test('keeps manual pagination when app authorization filters a whole media page', () => {
   respond = ({ cursor }) =>
     cursor === null
       ? { page: [], isDone: false, continueCursor: 'next' }
       : { page: [photo(1)], isDone: true, continueCursor: 'end' }
   render(album)
-  await waitFor(() => expect(shown()).toBe(1))
+  expect(shown()).toBe(0)
+  expect(listeners.size).toBe(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Show more memories' }))
+  expect(shown()).toBe(1)
   expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
 })
 

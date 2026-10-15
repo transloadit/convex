@@ -137,6 +137,31 @@ const transloadit = new Transloadit(components.transloadit, { storageWorkspace: 
   that is not this album's index key (another album's, or one from an older deployment) fails with
   `InvalidCursor`, which restarts that hook. `getStoredAsset` returns one exact version. Neither
   contacts Storage or signs anything.
+- `listStoredMedia` pages originals with their optional renditions. Configure up to four
+  `originalSteps` and four named `renditions` on the server, for example:
+
+  ```ts
+  const media = await transloadit.listStoredMedia(ctx, {
+    album: authorizedAlbum,
+    originalSteps: [":original"],
+    renditions: { playback: "video_encode", poster: "video_poster" },
+    paginationOpts: args.paginationOpts,
+  });
+  ```
+
+  Each page item is `{ original, renditions }`, containing canonical receipt rows with their
+  provenance, not URLs. Step names are the **producers**, not the `/transloadit/store` Step names.
+  Multiple original producers can preserve old uploads without a migration; their indexed streams
+  merge newest first. Renditions never occupy their own pages. The app still authorizes every
+  returned row, including previews, against its live access rules and server-created upload record.
+  App authorization can therefore still leave an empty page.
+
+  A rendition matches only one source ID (a string or single-element array), in the same Assembly,
+  upload, album, user and Workspace. Missing, multi-input, ambiguous and deletion-requested
+  renditions are omitted. No filename matching, Assembly-wide result scan or Storage request is
+  performed. Original-only items remain visible even without a source ID. The existing cursor and
+  page-split contract applies; pages are capped at 100 originals, with loaded ranges split at 200
+  originals to bound rendition lookups. Producer mappings are app configuration, not browser input.
 - Deletion is a ledger for your own retention job: `previewStoredAssetExpiry` dry-runs a selection,
   `requestStoredAssetDeletion` hides every version of expired assets at once,
   `adoptStoredAssetsForDeletion` brings in Storage objects that no receipt registered, and

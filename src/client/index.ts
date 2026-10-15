@@ -21,6 +21,7 @@ import {
   vListAlbumResultsArgs,
   vListAssembliesArgs,
   vListResultsArgs,
+  type vListStoredMediaArgs,
   vPurgeAlbumArgs,
   vPurgeAlbumResponse,
   vQueueWebhookResponse,
@@ -89,6 +90,7 @@ export type {
   StoredAssetDeletion,
   StoredAssetReference,
   StoredAssetResponse,
+  StoredMediaResponse,
   VerifiedWebhookRequest,
   WebhookActionArgs,
 } from '../shared/schemas.ts'
@@ -96,6 +98,8 @@ export {
   vStoredAsset,
   vStoredAssetResponse,
   vStoredAssetResponsePage,
+  vStoredMediaResponse,
+  vStoredMediaResponsePage,
 } from '../shared/schemas.ts'
 export type { StoredAssemblyAsset, StoredAsset } from '../shared/storedAssets.ts'
 export { selectStoredAssets } from '../shared/storedAssets.ts'
@@ -254,6 +258,11 @@ export class TransloaditClient {
     args: { album: string; paginationOpts: PaginationOptions },
   ) {
     return ctx.runQuery(this.component.lib.listStoredAssets, args)
+  }
+
+  /** Grouped receipts for an app-authorized viewer; producer mappings must be server-chosen. */
+  async listStoredMedia(ctx: RunQueryCtx, args: ObjectType<typeof vListStoredMediaArgs>) {
+    return ctx.runQuery(this.component.lib.listStoredMedia, args)
   }
 
   /** One exact visible version, or null when it is unknown or awaiting deletion. */
