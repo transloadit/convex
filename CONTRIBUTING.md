@@ -94,6 +94,16 @@ privacy, moderation, and backup work required before importing real wedding medi
 
 ## Demo deployment (Vercel + stable Convex)
 
+The hosted wedding app is a Yarn workspace with an exact `@transloadit/convex@0.5.0` registry
+dependency. It does not alias package imports to this repository's `src/`. Both `example:build` and
+the production backend deploy check the resolved package before proceeding. Publish a component
+release first, then update `example/package.json` and the lockfile to dogfood it on the live demo.
+
+Package unit tests and component codegen still exercise the repository source. Preview backend QA
+installs a freshly packed candidate, so unpublished changes remain testable; its Vercel frontend
+uses the example's released dependency. The legacy local R2 harness also retains its explicit test
+imports and is not the hosted app's component implementation.
+
 For a public demo, deploy the `example/` app and point it at a stable Convex deployment.
 
 1. Deploy a Convex app that includes this component (stable/prod deployment).

@@ -49,8 +49,8 @@ const deployDemo = async () => {
     ...(targetDeployment ? { CONVEX_DEPLOYMENT: targetDeployment } : {}),
   }
 
-  log('Building @transloadit/convex...')
-  run('yarn', ['build'], { cwd: rootDir, stdio: runStdio })
+  log('Checking the demo’s published @transloadit/convex dependency...')
+  run('node', ['scripts/check-demo-package.ts'], { cwd: rootDir, stdio: runStdio })
 
   log('Deploying demo Convex app...')
   const deployOutput = run('npx', ['convex', 'deploy', '--typecheck', 'disable', '--yes'], {

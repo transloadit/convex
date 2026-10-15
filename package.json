@@ -4,6 +4,9 @@
   "version": "0.5.0",
   "type": "module",
   "packageManager": "yarn@4.18.0",
+  "workspaces": [
+    "example"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/transloadit/convex.git"
@@ -37,9 +40,9 @@
     "deploy:cloud": "node scripts/deploy-cloud.ts",
     "demo:cleanup": "node scripts/cleanup-demo.ts",
     "demo:media": "node scripts/generate-demo-media.ts",
-    "example:dev": "yarn build && cd example && next dev",
-    "example:build": "yarn build && cd example && next build",
-    "example:start": "yarn build && cd example && next start",
+    "example:dev": "node scripts/check-demo-package.ts && yarn workspace transloadit-convex-wedding-example dev",
+    "example:build": "node scripts/check-demo-package.ts && yarn workspace transloadit-convex-wedding-example build",
+    "example:start": "node scripts/check-demo-package.ts && yarn workspace transloadit-convex-wedding-example start",
     "lint": "biome check .",
     "format": "biome format . --write",
     "check": "yarn format && yarn lint && yarn typecheck && yarn test",
