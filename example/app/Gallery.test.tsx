@@ -13,6 +13,8 @@ HTMLDialogElement.prototype.showModal = function () {
 HTMLDialogElement.prototype.close = function () {
   this.open = false
 }
+// JSDOM does not decode pixels; the browser suite covers real and deliberately delayed decoding.
+HTMLImageElement.prototype.decode = () => Promise.resolve()
 
 beforeEach(() => {
   window.history.replaceState(null, '', '/')
@@ -303,7 +305,7 @@ test('navigation updates the shared URL and caption before the next photo loads'
   expect(within(dialog).getByRole('status').textContent).toBe('Loading photo…')
   expect(dialog.querySelector('img[aria-hidden]')).not.toBeNull()
   fireEvent.load(pictureImage(dialog))
-  expect(within(dialog).queryByRole('status')).toBeNull()
+  await waitFor(() => expect(within(dialog).queryByRole('status')).toBeNull())
   expect(dialog.querySelector('img[aria-hidden]')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Close viewer' }))
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())

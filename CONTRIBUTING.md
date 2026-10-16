@@ -125,6 +125,12 @@ commit. Browser QA never runs against the wrong deployment. A hosted app with no
 backend shows an unavailable state instead of leaving guest sign-in pending forever. Cloud browser
 QA opens the ordinary preview URL without a `convexUrl` override.
 
+An opted-in Storage preview also needs its three server-only `TRANSLOADIT_SMART_CDN_*` delivery
+variables scoped to that branch, as described below. A different branch's Secret variables are not
+inherited, and Vercel does not reveal their values afterward. Configure them from the approved
+secret store before testing; never copy secrets into commits or browser-visible configuration.
+Without them, uploads can complete but the private media route correctly refuses delivery.
+
 ## Demo Storage activation and rollback
 
 All new hosted media uses private Transloadit Storage: unchanged originals, MP4 playback and video

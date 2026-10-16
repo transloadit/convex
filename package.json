@@ -101,7 +101,7 @@
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@transloadit/node": "5.0.1",
-    "@transloadit/viewer": "0.0.6",
+    "@transloadit/viewer": "0.0.7",
     "@types/node": "^24.13.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",

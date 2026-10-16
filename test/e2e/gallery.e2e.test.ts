@@ -95,6 +95,43 @@ test('next and rapid navigation never wait for a delayed image; Back/Forward and
   }
 })
 
+test('preview feedback lasts through decoding, not only the image download', async () => {
+  const context = await browser.newContext({ baseURL: fixture.url })
+  await context.addInitScript(() => {
+    const decode = HTMLImageElement.prototype.decode
+    HTMLImageElement.prototype.decode = async function () {
+      const release =
+        this.alt === 'photo-2.jpg'
+          ? new Promise<void>((resolve) =>
+              document.addEventListener('release-photo-decode', () => resolve(), { once: true }),
+            )
+          : Promise.resolve()
+      await decode.call(this)
+      await release
+    }
+  })
+  const page = await context.newPage()
+  const errors = browserErrors(page)
+  try {
+    await page.goto(`/?media=${mediaId(2)}`)
+    const dialog = page.getByRole('dialog', { name: 'photo-2.jpg' })
+    await browserExpect
+      .poll(() =>
+        dialog
+          .getByRole('img')
+          .evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0),
+      )
+      .toBe(true)
+    await browserExpect(dialog.getByRole('status')).toHaveText('Loading photo…')
+    await page.evaluate(() => document.dispatchEvent(new Event('release-photo-decode')))
+    await browserExpect(dialog.getByRole('status')).toHaveCount(0)
+    await browserExpect(dialog.getByRole('img')).toBeInViewport()
+    expect(errors).toEqual([])
+  } finally {
+    await context.close()
+  }
+})
+
 test('only the next full photo is prefetched after current readiness, never on Save-Data', async () => {
   const context = await browser.newContext({
     baseURL: fixture.url,
