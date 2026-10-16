@@ -187,7 +187,7 @@ test.each([
   const notice = screen.getByTestId('demo-notice').textContent ?? ''
   expect(notice).toContain('This is a demo, not a private archive.')
   expect(notice).toContain('Share only test photos and videos you can replace.')
-  expect(notice).toContain('This legacy local test uses public media links.')
+  expect(notice).toContain('private Transloadit Storage')
   // Hiding is a display limit; physical cleanup happens later, so the copy never promises erasure.
   if (visibility) {
     expect(notice).toContain(visibility)

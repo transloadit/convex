@@ -6,6 +6,6 @@ const WeddingUploadsClient = dynamic(() => import('./WeddingUploadsClient'), {
   ssr: false,
 })
 
-export default function WeddingUploadsApp({ convexUrl }: { convexUrl?: string | null }) {
+export default function WeddingUploadsApp({ convexUrl }: { convexUrl: string }) {
   return <WeddingUploadsClient convexUrl={convexUrl} />
 }

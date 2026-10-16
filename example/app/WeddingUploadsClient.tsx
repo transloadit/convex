@@ -3,22 +3,19 @@
 import { useAction, useConvexAuth, useQuery } from 'convex/react'
 import { makeFunctionReference } from 'convex/server'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { type GalleryResult, galleryCreatedAfter } from '../lib/gallery'
 import { getGuestName, isValidGuestName } from '../lib/guest-name'
 import {
   ASSEMBLY_STATUS_COMPLETED,
   type AssemblyOptions,
   type AssemblyResponse,
   type AssemblyResultResponse,
-  type AssemblyStatus,
   getAssemblyStage,
   isAssemblyTerminal,
   parseAssemblyStatus,
   pollAssembly,
 } from '../lib/transloadit'
 import { getUploadErrorCode, type UploadErrorCode } from '../lib/upload-errors'
-import { CloudAlbumGate, LocalAlbumGate } from './AlbumGate'
-import { Gallery } from './Gallery'
+import { CloudAlbumGate } from './AlbumGate'
 import { Providers } from './providers'
 import { StorageGallery } from './StorageGallery'
 import {
@@ -104,11 +101,6 @@ const listResultsRef = makeFunctionReference<
   { assemblyId: string; stepName?: string; limit?: number },
   AssemblyResultResponse[]
 >('transloadit:listResults')
-const listGalleryRef = makeFunctionReference<
-  'query',
-  { limit?: number; createdAfter?: number },
-  GalleryResult[]
->('wedding:listGallery')
 const getAssemblyStatusRef = makeFunctionReference<
   'query',
   { assemblyId: string },
@@ -119,157 +111,6 @@ const refreshAssemblyRef = makeFunctionReference<
   { assemblyId: string },
   { assemblyId: string; resultCount: number; ok?: string; status?: string }
 >('transloadit:refreshAssembly')
-
-const LocalWeddingUploads = ({
-  initialName,
-  onLeave,
-}: {
-  initialName: string
-  onLeave: () => void
-}) => {
-  const [assemblyId, setAssemblyId] = useState<string | null>(null)
-  const [assemblyParams, setAssemblyParams] = useState<Record<string, unknown> | null>(null)
-  const [status, setStatus] = useState<string>('pending')
-  const [results, setResults] = useState<GalleryResult[]>([])
-  const [assemblyStatus, setAssemblyStatus] = useState<AssemblyStatus | null>(null)
-  const [error, setError] = useState<UploadErrorCode | null>(null)
-  const [isUploading, setIsUploading] = useState(false)
-  const [stage, setStage] = useState<UploadStage>('idle')
-  const [guestName, setGuestName] = useState(initialName)
-  const [uploadSuccess, setUploadSuccess] = useState<UploadSuccess | null>(null)
-  const assemblyOptionsPromise = useRef<Promise<WeddingAssemblyOptionsResponse> | null>(null)
-  const fileCountRef = useRef(0)
-
-  const getAssemblyOptions = useCallback(async () => {
-    if (assemblyOptionsPromise.current) {
-      const cached = await assemblyOptionsPromise.current
-      return cached.assemblyOptions
-    }
-    const fileCount = Math.max(1, fileCountRef.current || 1)
-    const promise = fetch('/api/assemblies', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        fileCount,
-        guestName: guestName.trim(),
-      }),
-    }).then(async (response) => {
-      if (!response.ok) {
-        const payload = await response.json().catch(() => ({}))
-        throw new Error(getUploadErrorCode(payload.error))
-      }
-      return (await response.json()) as WeddingAssemblyOptionsResponse
-    })
-    assemblyOptionsPromise.current = promise
-    const resolved = await promise
-    setAssemblyParams(resolved.params ?? null)
-    return resolved.assemblyOptions
-  }, [guestName])
-
-  const uppy = useWeddingUppy(getAssemblyOptions)
-
-  useAssemblyEvents(uppy, setAssemblyId, setStage)
-
-  const startUpload = async () => {
-    setError(null)
-    if (!isValidGuestName(guestName)) {
-      setError('NAME_REQUIRED')
-      setStage('error')
-      return
-    }
-    setStage('creating')
-    const files = uppy.getFiles()
-    if (!files.length) {
-      setError('FILES_REQUIRED')
-      setStage('error')
-      return
-    }
-
-    setIsUploading(true)
-    setAssemblyId(null)
-    setAssemblyStatus(null)
-    setStatus('pending')
-    assemblyOptionsPromise.current = null
-    fileCountRef.current = files.length
-    try {
-      const result = await uppy.upload()
-      if (!result || result.failed?.length || !result.successful?.length) {
-        throw new Error('UPLOAD_FAILED')
-      }
-      setUploadSuccess({ id: crypto.randomUUID(), count: result.successful.length })
-      setError(null)
-      setStage('complete')
-      uppy.clear()
-    } catch (err) {
-      setError(getUploadErrorCode(err))
-      setStage('error')
-    } finally {
-      setIsUploading(false)
-    }
-  }
-
-  useEffect(() => {
-    const nextStage = getAssemblyStage(assemblyStatus)
-    if (!nextStage) return
-    if (shouldAdvanceStage(stage, nextStage)) {
-      setStage(nextStage)
-    }
-  }, [assemblyStatus, stage])
-
-  const needsPolling =
-    !assemblyStatus || !isAssemblyTerminal(assemblyStatus) || results.length === 0
-  useEffect(() => {
-    if (!assemblyId || !needsPolling) return
-    const request = new AbortController()
-    const controller = pollAssembly({
-      intervalMs: 4000,
-      refresh: async () => {
-        const params = new URLSearchParams({ assemblyId, refresh: '1' })
-        const response = await fetch(`/api/assemblies?${params.toString()}`, {
-          signal: request.signal,
-        })
-        if (!response.ok) throw new Error('STATUS_FAILED')
-        const data = (await response.json()) as {
-          status: AssemblyResponse | null
-          results: GalleryResult[]
-        }
-        // A response for the previous batch must not complete or replace the next batch's state.
-        if (request.signal.aborted) return
-        const parsed = parseAssemblyStatus(data.status?.raw ?? null)
-        setAssemblyStatus(parsed)
-        setStatus(parsed && typeof parsed.ok === 'string' ? parsed.ok : 'pending')
-        setResults(data.results ?? [])
-        setError((current) => (current === 'STATUS_FAILED' ? null : current))
-      },
-      onError: () => {
-        if (!request.signal.aborted) setError('STATUS_FAILED')
-      },
-    })
-    return () => {
-      controller.stop()
-      request.abort()
-    }
-  }, [assemblyId, needsPolling])
-
-  return (
-    <WeddingLayout
-      uppy={uppy}
-      guestName={guestName}
-      onGuestNameChange={setGuestName}
-      onLeave={onLeave}
-      isUploading={isUploading}
-      onUpload={() => void startUpload()}
-      error={error}
-      assemblyId={assemblyId}
-      assemblyParams={assemblyParams}
-      status={status}
-      stage={stage}
-      uploadSuccess={uploadSuccess}
-    >
-      <Gallery results={results} />
-    </WeddingLayout>
-  )
-}
 
 const CloudWeddingUploads = ({
   initialName,
@@ -311,9 +152,6 @@ const CloudWeddingUploads = ({
   const uppy = useWeddingUppy(getAssemblyOptions)
   const status = useQuery(getAssemblyStatusRef, assemblyId ? { assemblyId } : 'skip')
   const results = useQuery(listResultsRef, assemblyId ? { assemblyId } : 'skip')
-  // Fixed for this visit: the gallery applies the exact retention boundary as time passes.
-  const [createdAfter] = useState(() => galleryCreatedAfter())
-  const albumResults = useQuery(listGalleryRef, { limit: 80, createdAfter })
   const assemblies = useQuery(listAssembliesRef, {
     status: ASSEMBLY_STATUS_COMPLETED,
     limit: 12,
@@ -358,7 +196,6 @@ const CloudWeddingUploads = ({
   }, [assemblyId, needsPolling, refreshAssembly])
 
   const statusOk = parsedStatus && typeof parsedStatus.ok === 'string' ? parsedStatus.ok : 'pending'
-  const galleryResults = albumResults ?? results ?? []
 
   const startUpload = async () => {
     setError(null)
@@ -418,22 +255,12 @@ const CloudWeddingUploads = ({
       toasts={toasts}
       authState={isLoading ? 'loading' : isAuthenticated ? 'authenticated' : 'guest'}
     >
-      <StorageGallery results={galleryResults} />
+      <StorageGallery />
     </WeddingLayout>
   )
 }
 
-export default function WeddingUploadsClient({ convexUrl }: { convexUrl?: string | null }) {
-  if (!convexUrl) {
-    return (
-      <LocalAlbumGate>
-        {(guest, onLeave) => (
-          <LocalWeddingUploads key={guest.userId} initialName={guest.name} onLeave={onLeave} />
-        )}
-      </LocalAlbumGate>
-    )
-  }
-
+export default function WeddingUploadsClient({ convexUrl }: { convexUrl: string }) {
   return (
     <Providers convexUrl={convexUrl}>
       <CloudAlbumGate>

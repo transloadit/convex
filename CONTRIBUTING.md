@@ -23,74 +23,28 @@ This runs format, lint, module and example typechecks, and unit tests. For the f
 yarn verify
 ```
 
-## Legacy local component harness
+## Local development and browser tests
 
-The `example/` app is a Next.js wedding gallery powered by Uppy + Convex. Without a hosted Convex
-URL, the local harness exercises the pre-existing public R2 pipeline. It is not a private Storage
-acceptance test. To test the hosted Storage flow, use an isolated branch preview below.
+The wedding example has one backend: Convex Auth and private Transloadit Storage. Configure
+`NEXT_PUBLIC_CONVEX_URL` and the server-only delivery credentials for your own deployment
+as described below, then run `yarn example:dev`. Missing backend configuration displays an
+unavailable state; there is no in-memory session API, direct R2 uploader, or public fallback.
 
-```bash
-export TRANSLOADIT_KEY=...
-export TRANSLOADIT_SECRET=...
-export TRANSLOADIT_R2_CREDENTIALS=...
+`yarn verify:local` needs no cloud credentials. It runs the actual gallery components in a
+test-only browser fixture with controlled image responses, covering URL navigation, slow images,
+bounded preloading, keyboard/focus behavior and reduced motion. It does not certify uploads or
+authorization. For those, use the isolated cloud preview and `yarn verify:cloud`.
 
-# Keep this running in another terminal (cloudflared is downloaded if needed).
-yarn tunnel --port 3000
-# Set TRANSLOADIT_NOTIFY_URL to the printed notifyUrl
-export TRANSLOADIT_NOTIFY_URL=...
+The demo applies per-user upload limits in `example/convex/wedding.ts`. Set
+`WEDDING_UPLOAD_CODE` on Convex to require an invitation code as well as a guest name.
+Changing the code invalidates existing album access. Without a code, entering a name is sufficient.
+Cloud tests accept `E2E_WEDDING_UPLOAD_CODE` for protected previews. Search indexing is disabled
+separately; it is not access control.
 
-yarn example:dev
-```
-
-Node 26 does not bundle Corepack. The bootstrap above installs it explicitly on both supported
-Node versions. Keep the tunnel running for uploads; `--once` prints a URL and stops the tunnel.
-
-If you want the API routes to talk to an existing Convex deployment (bypassing Convex Auth), set:
-
-```bash
-export CONVEX_URL=...
-export CONVEX_ADMIN_KEY=...
-```
-
-The example exposes `POST /transloadit/webhook` and forwards webhooks into Convex via
-`queueWebhook`. Realtime “new upload” toasts use a Convex subscription on recent assemblies. The
-demo also applies a simple per-user upload limit in the Convex backend (see
-`example/convex/wedding.ts`).
-
-## R2 (legacy local harness and old uploads only)
-
-The local harness uses `/cloudflare/store`. Configure one of these only for that harness:
-
-```bash
-# Option A: Transloadit template credentials (recommended)
-export TRANSLOADIT_R2_CREDENTIALS=...
-
-# Option B: supply R2 details directly
-export R2_BUCKET=...
-export R2_ACCESS_KEY_ID=...
-export R2_SECRET_ACCESS_KEY=...
-export R2_ACCOUNT_ID=...   # or R2_HOST
-export R2_PUBLIC_URL=...   # optional public URL prefix
-```
-
-The UI hides older items based on `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default: 24) to discourage
-spam/abuse. The album query receives that cutoff, rounded down to the hour, so expired results are
-not sent to the browser; it is a display policy, not access control, and deletion remains the
-lifecycle's job. The demo bucket auto-expires objects after 1 day via an R2 lifecycle rule (reapply with
-`yarn r2:lifecycle` or override with `R2_RETENTION_DAYS`). If you set `WEDDING_UPLOAD_CODE` on the
-Convex deployment, guests must enter the code and a name before viewing or uploading. Without a
-code, entering a name is sufficient. Set the variable in your local environment for local development.
-Changing the code invalidates existing album access; guests must enter the new code to continue.
-Cloud browser tests accept `E2E_WEDDING_UPLOAD_CODE` when testing a code-protected preview.
-
-Raw `R2_*` credentials are a local QA convenience: inline signed Assembly instructions are sent to
-the browser. For any guest-facing deployment, use named Transloadit Template credentials and omit
-raw storage keys. The diagnostic panel is redacted, but redaction does not hide the instructions
-Uppy must send. Album queries require a guest session, but existing R2 links remain public to anyone
-who has them. Search engines receive `noindex` on every page; this is separate from access control.
-
-The [wedding archive recommendation](docs/wedding-gallery.md) lists the separate storage, originals,
-privacy, moderation, and backup work required before importing real wedding media.
+The gallery hides items after `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default 24).
+This is a display policy, not deletion or permission revocation. The Storage cleanup job below
+performs deletion. Existing public R2 objects and their lifecycle configuration are untouched by
+this code removal; old URLs cannot be made private retroactively.
 
 ## Demo deployment (Vercel + stable Convex)
 
@@ -115,8 +69,7 @@ the Convex code deployment, so a refusal is not a claim that no deployment chang
 
 Package unit tests and component codegen still exercise the repository source. Preview backend QA
 installs a freshly packed candidate, so unpublished changes remain testable; its Vercel frontend
-uses the example's released dependency. The legacy local R2 harness also retains its explicit test
-imports and is not the hosted app's component implementation.
+uses the example's released dependency.
 
 For a public demo, deploy the `example/` app and point it at a stable Convex deployment.
 
@@ -221,7 +174,7 @@ The app still signs three literal, server-chosen Storage output paths per upload
 paths into `${fields.*}` Template variables: multipart fields can override signed fields and are
 not authorization. Receipts must also match the server-created upload record.
 
-## Demo cleanup (Convex + Storage + R2)
+## Demo cleanup (Convex + Storage)
 
 The demo hides media after 24 hours. `Expire demo Storage media` runs daily on main, first reports
 the selection, then expires originals and derivatives older than 24 hours. Physical removal can therefore take
@@ -241,11 +194,10 @@ existing production deployment key as the admin key. Manual workflow dispatch de
 Each deletion checks both the historical receipt path and current asset path. R2 is untouched by
 expiry; its existing one-day lifecycle handles legacy public objects separately.
 
-**Without `--older-than`, `demo:cleanup` resets the whole album**, including R2. Use that only for
-an intentional reset. A Storage-only album needs no R2 configuration. If legacy R2 references
-remain (or their scan is truncated), supply its credentials or explicitly use `--skip-r2`, which
-keeps those references and reports an incomplete reset. `--skip-storage` likewise preserves Storage
-references. Missing credentials never authorize forgetting still-live media.
+**Without `--older-than`, `demo:cleanup` resets the Convex album and its Storage media.** Use that
+only for an intentional reset. `--skip-storage` preserves the database references and reports an
+incomplete reset. Missing credentials never authorize forgetting still-live media. No command in
+this repository deletes legacy R2 objects, changes their lifecycle, or requires R2 credentials.
 `DEMO_ALBUM` defaults to `wedding-gallery`.
 
 ## Verification and QA
@@ -268,23 +220,18 @@ Additional commands:
 - `yarn format` (Biome write)
 - `yarn typecheck` (tsc)
 - `yarn test` (Vitest unit tests)
-- `yarn verify:local` (runs the Next.js wedding example + uploads an image + video)
+- `yarn verify:local` (deterministic browser gallery tests, no cloud credentials)
 - `yarn verify:cloud` (runs the browser flow against a deployed Next.js app)
 - `yarn deploy:cloud` (deploys a stable Convex backend for the demo app)
 - `yarn build` (tsc build + emit package json)
 
 Notes:
-- `yarn tunnel` is a support tool, not verification.
 - CI should run non-mutating checks; local `yarn check` may format/fix.
-- `yarn verify:local` needs `TRANSLOADIT_KEY`, `TRANSLOADIT_SECRET`, `TRANSLOADIT_NOTIFY_URL`, and R2
-  credentials.
 - `yarn verify:cloud` needs `E2E_REMOTE_APP_URL`.
 - Set `TRANSLOADIT_DEBUG=1` to enable verbose verify logs.
-- Local upload verification fails explicitly if Transloadit credentials are missing.
-- The browser flow also checks decoded photos, video metadata, native view transitions, keyboard
+- The browser flow also checks decoded photos, video metadata, shared exact-version links, keyboard
   navigation, focus restoration, and phone-sized reduced-motion viewing. Set `E2E_SCREENSHOT_DIR`
   to a local directory to retain gallery/viewer screenshots.
-- macOS tunnel bootstrap extracts the official cloudflared archive automatically.
 - Cloud QA deploys the checked-in `example/convex` sources against the packed module and uses the
   root dependency versions; it no longer maintains a separate generated implementation.
 

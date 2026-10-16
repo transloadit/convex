@@ -262,7 +262,7 @@ the client and Convex Auth with a required guest name to enter the album. Hosted
 original photos/videos, MP4 playback renditions and posters in private Transloadit Storage.
 `@transloadit/viewer` supplies image rendering, authorized delivery redirects and download links;
 the browser's native video player uses the same delivery route. No R2 credentials are needed for
-new hosted uploads. An optional saved Transloadit Template holds the reusable processing recipe.
+any uploads. An optional saved Transloadit Template holds the reusable processing recipe.
 
 Live demo: `https://convex-demo.transload.it`
 
@@ -285,15 +285,18 @@ of files added. The entrance and album send `noindex` directives to search engin
 Without an invitation code, anyone can enter a name to access the album. Names are self-reported,
 not verified identities. New media links reauthorize the guest before issuing a short-lived CDN
 grant. Existing R2 media URLs remain public to anyone who has the link; this change cannot make
-them private retroactively. The in-memory session API and R2 upload pipeline remain only in the
-legacy local component test harness; hosted albums use Convex Auth and require Storage.
+them private retroactively. The legacy in-memory session API and direct R2 pipeline have been
+removed; local and hosted albums use Convex Auth and require Storage.
 The globe menu switches between English, Dutch, Ukrainian, and German without discarding selected
 files; the `NEXT_LOCALE` cookie remembers the choice. Like the content site, this uses `next-intl`
 and ICU messages. Edit the complete catalogs in `example/messages/`; `yarn check` verifies their
 keys and formatting. Uppy receives the same locale, with compatibility additions in
 `example/i18n/uppy.ts`. Filenames, guest names, and wedding configuration remain user content.
 
-Photo viewing uses Motion 13.4 `AnimateView` with React 19.3, a keyboard-accessible dialog, and a
-reduced-motion path. See [the wedding archive recommendation](docs/wedding-gallery.md) before using
+Opening media writes its exact asset/version to the URL; sharing or reloading that URL opens the
+same item after album admission, even outside the loaded gallery page. Next/previous updates the
+slide and URL immediately, with a removable blur and loading feedback. Viewer warms only the next
+photo after the current one loads, skipping slow/data-saving connections and videos. The dialog
+supports keyboard navigation, Back/Forward, focus restoration and reduced motion. See [the wedding archive recommendation](docs/wedding-gallery.md) before using
 the disposable demo for real wedding media. Demo retention and private delivery do not replace a
 separate archive and a tested backup/restore.

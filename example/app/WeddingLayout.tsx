@@ -282,7 +282,7 @@ export const WeddingLayout = ({
   }
 
   return (
-    <main className="page" data-auth-state={authState ?? 'local'} suppressHydrationWarning>
+    <main className="page" data-auth-state={authState ?? 'authenticated'} suppressHydrationWarning>
       <a className="skip-link" href="#memories">
         {t('album.skip')}
       </a>
@@ -402,7 +402,7 @@ export const WeddingLayout = ({
           <p>
             {Number.isFinite(retentionMs) &&
               `${t('upload.demo.visibility', { hours: retentionMs / 3600000 })} `}
-            {t(authState ? 'upload.demo.privateDelivery' : 'upload.demo.delivery')}
+            {t('upload.demo.privateDelivery')}
           </p>
         </div>
         {authState && authState !== 'authenticated' && (

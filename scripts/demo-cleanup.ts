@@ -1,4 +1,4 @@
-// Demo cleanup across Convex, Transloadit Storage and R2. A reference is released (kept only as a
+// Demo cleanup across Convex and Transloadit Storage. A reference is released (kept only as a
 // tombstone) solely after Storage confirms the deletion, so an interrupted run is always safe to
 // repeat and nothing outside this deployment's demo prefix is ever deleted or forgotten.
 
@@ -31,7 +31,6 @@ export type CleanupConvex = {
   summary: () => Promise<{
     results: number
     resultsTruncated: boolean
-    r2Results: number
     storagePrefix: string | null
   }>
   /** One page of visible receipt versions per call, so large albums stay within transaction limits. */
@@ -79,31 +78,8 @@ export type CleanupStorage = {
   delete: (assetId: string) => Promise<void>
 }
 
-type DeleteObjectsResult = { Errors?: { Key?: string; Code?: string }[] }
-
-/** S3 DeleteObjects can answer 200 with per-key errors; any error means the batch failed. */
-export const deleteR2Batch = async (
-  send: (keys: string[]) => Promise<DeleteObjectsResult>,
-  keys: string[],
-) => {
-  const errors = (await send(keys)).Errors ?? []
-  if (errors.length > 0) {
-    const sample = errors.slice(0, 3).map((error) => `${error.Key}: ${error.Code}`)
-    throw new Error(
-      `R2 did not delete ${errors.length} of ${keys.length} objects (${sample.join(', ')})`,
-    )
-  }
-}
-
-export type CleanupR2 = {
-  list: () => Promise<string[]>
-  delete: (keys: string[]) => Promise<void>
-}
-
 export type CleanupOptions = {
   dryRun: boolean
-  /** Explicitly leave R2 objects untouched; otherwise a reset without R2 access refuses to run. */
-  skipR2?: boolean
   /** Explicitly leave Storage untouched; otherwise cleanup without Storage access refuses to run. */
   skipStorage?: boolean
   /** Undefined resets the whole demo album; a number expires Storage assets older than this. */
@@ -182,13 +158,12 @@ const drainStorageLedger = async (
 }
 
 export const runDemoCleanup = async (
-  deps: { convex: CleanupConvex; storage?: CleanupStorage; r2?: CleanupR2 },
+  deps: { convex: CleanupConvex; storage?: CleanupStorage },
   options: CleanupOptions,
 ) => {
   const { convex } = deps
   // A skip flag leaves that backend untouched even when it is configured.
   const storage = options.skipStorage ? undefined : deps.storage
-  const r2 = options.skipR2 ? undefined : deps.r2
   const now = options.now ?? Date.now()
   const batchSize = options.batchSize ?? 100
   const reset = options.olderThanMs === undefined
@@ -199,9 +174,6 @@ export const runDemoCleanup = async (
     throw new Error('Storage is not configured: set TRANSLOADIT_WORKSPACE or pass --skip-storage')
   }
   const summary = await convex.summary()
-  if (reset && !r2 && !options.skipR2 && (summary.r2Results > 0 || summary.resultsTruncated)) {
-    throw new Error('R2 is not configured: set the R2 variables or pass --skip-r2')
-  }
   const prefix = summary.storagePrefix ?? ''
   if (storage && !summary.storagePrefix) {
     throw new Error('This deployment has no unambiguous Storage namespace to clean up')
@@ -210,7 +182,6 @@ export const runDemoCleanup = async (
     throw new Error('Storage prefix does not match the expected deployment namespace')
   }
   const storageObjects = storage ? await storage.list(prefix) : []
-  const r2Keys = reset && r2 ? await r2.list() : []
 
   if (options.dryRun) {
     // Page by page in separate transactions; each asset counts once, as in the real run.
@@ -245,7 +216,6 @@ export const runDemoCleanup = async (
             wouldHide: expired.size,
           }
         : 'skipped',
-      r2: r2 ? { objects: r2Keys.length } : reset ? 'skipped' : 'unchanged',
     }
   }
 
@@ -283,22 +253,11 @@ export const runDemoCleanup = async (
     : undefined
   const storageIncomplete =
     storageReport !== undefined && storageReport.failed + storageReport.outsidePrefix > 0
-  // Skipping R2 must not forget results that are the only references to R2 media (or when that
-  // cannot be established from a truncated count).
-  const r2MediaKept = reset && !r2 && (summary.r2Results > 0 || summary.resultsTruncated)
-  const retryNeeded = storageIncomplete || r2MediaKept
+  const retryNeeded = storageIncomplete || (reset && !storage)
 
-  // 4. A reset clears R2 before the Convex results that point at it.
-  let r2Deleted = 0
+  // Results can be purged only after every Storage deletion succeeded.
   let purged = { deletedResults: 0, deletedAssemblies: 0 }
   if (reset) {
-    if (r2) {
-      for (let index = 0; index < r2Keys.length; index += 1000) {
-        const batch = r2Keys.slice(index, index + 1000)
-        await r2.delete(batch)
-        r2Deleted += batch.length
-      }
-    }
     if (!retryNeeded) purged = await convex.purgeAlbum()
     // Stored assets are never purged here: the ledger keeps Storage references until deletion.
   }
@@ -308,8 +267,7 @@ export const runDemoCleanup = async (
     mode: reset ? 'reset' : 'expire',
     createdBefore,
     storage: storageReport ?? 'skipped',
-    r2: reset ? (r2 ? { deleted: r2Deleted } : 'skipped') : 'unchanged',
-    convex: r2MediaKept ? 'kept: results reference skipped R2 media' : purged,
+    convex: purged,
     retryNeeded,
   }
 }

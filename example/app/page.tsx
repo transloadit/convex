@@ -9,9 +9,8 @@ export default async function WeddingUploadsPage() {
   const convexUrl = getConvexUrl()
 
   // Convex assigns preview hosts independently of Git branch names. A missing deployment URL
-  // must not start guest authentication against a guessed host or fall back to local upload mode.
-  const hosted = process.env.VERCEL_ENV === 'preview' || process.env.VERCEL_ENV === 'production'
-  if (hosted && !convexUrl) {
+  // must not start guest authentication against a guessed host or fall back to another backend.
+  if (!convexUrl) {
     const t = await getTranslations('album')
     return (
       <main className="page unavailable-message">

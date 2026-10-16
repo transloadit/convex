@@ -1,12 +1,6 @@
 // @vitest-environment node
 import { describe, expect, test, vi } from 'vitest'
-import {
-  type CleanupConvex,
-  type CleanupR2,
-  type CleanupStorage,
-  deleteR2Batch,
-  runDemoCleanup,
-} from './demo-cleanup.ts'
+import { type CleanupConvex, type CleanupStorage, runDemoCleanup } from './demo-cleanup.ts'
 
 const hour = 60 * 60 * 1000
 const now = 100 * hour
@@ -21,7 +15,6 @@ const fakeConvex = (rows: Row[]) => {
     summary: async () => ({
       results: 3,
       resultsTruncated: false,
-      r2Results: 0,
       storagePrefix: prefix,
     }),
     visiblePage: async () => ({
@@ -171,7 +164,6 @@ describe('demo cleanup', () => {
     convex.summary = async () => ({
       results: 1,
       resultsTruncated: false,
-      r2Results: 0,
       storagePrefix: null,
     })
     await expect(
@@ -185,33 +177,27 @@ describe('demo cleanup', () => {
     const rows = [row('old', 30), row('recent', 1)]
     const { convex } = fakeConvex(rows)
     const { storage, deleted } = fakeStorage(['old', 'recent'])
-    const r2: CleanupR2 = { list: vi.fn(), delete: vi.fn() }
     await runDemoCleanup(
-      { convex, storage, r2 },
+      { convex, storage },
       { dryRun: false, olderThanMs: 24 * hour, now, expectedStoragePrefix: prefix },
     )
     expect(deleted).toEqual(['old'])
     expect(rows).toEqual([row('recent', 1)])
-    expect(r2.list).not.toHaveBeenCalled()
-    expect(r2.delete).not.toHaveBeenCalled()
   })
 
   test('a dry run reports every backend and changes nothing', async () => {
     const rows = [row('old', 30), row('new', 1)]
     const { convex, calls } = fakeConvex(rows)
     const { storage, deleted } = fakeStorage(['old', 'new', 'orphan'])
-    const r2: CleanupR2 = { list: async () => ['wedding/a.jpg'], delete: vi.fn() }
-    const report = await runDemoCleanup({ convex, storage, r2 }, { dryRun: true, now })
+    const report = await runDemoCleanup({ convex, storage }, { dryRun: true, now })
     expect(report).toMatchObject({
       dryRun: true,
       mode: 'reset',
       convex: { visibleStoredAssets: 2, results: 3 },
       storage: { objects: 3, wouldHide: 2, prefix },
-      r2: { objects: 1 },
     })
     expect(calls).toEqual([])
     expect(deleted).toEqual([])
-    expect(r2.delete).not.toHaveBeenCalled()
     expect(rows.every((candidate) => !candidate.hidden)).toBe(true)
   })
 
@@ -226,7 +212,6 @@ describe('demo cleanup', () => {
     expect(report).toMatchObject({
       mode: 'expire',
       storage: { hidden: 1, deleted: 1 },
-      r2: 'unchanged',
       retryNeeded: false,
     })
     expect(deleted).toEqual(['old'])
@@ -318,29 +303,7 @@ describe('demo cleanup', () => {
     expect(rows).toEqual([expect.objectContaining({ hidden: false })])
   })
 
-  test('a reset refuses to forget results while their R2 objects are unreachable', async () => {
-    const { convex, calls } = fakeConvex([row('old', 30)])
-    convex.summary = async () => ({
-      results: 3,
-      resultsTruncated: false,
-      r2Results: 1,
-      storagePrefix: prefix,
-    })
-    const { storage, deleted } = fakeStorage(['old'])
-    await expect(runDemoCleanup({ convex, storage }, { dryRun: false, now })).rejects.toThrow(
-      '--skip-r2',
-    )
-    expect(calls).toEqual([])
-    expect(deleted).toEqual([])
-    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now, skipR2: true })
-    expect(report).toMatchObject({
-      r2: 'skipped',
-      retryNeeded: true,
-      convex: 'kept: results reference skipped R2 media',
-    })
-  })
-
-  test('a Storage-only album resets without R2 credentials or a skip flag', async () => {
+  test('a Storage album resets without a skip flag', async () => {
     const { convex } = fakeConvex([row('old', 30)])
     const { storage, deleted } = fakeStorage(['old'])
     const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now })
@@ -354,22 +317,17 @@ describe('demo cleanup', () => {
     convex.summary = async () => ({
       results: 3,
       resultsTruncated: false,
-      r2Results: 1,
       storagePrefix: prefix,
     })
     const { storage, deleted } = fakeStorage(['old'])
-    const r2: CleanupR2 = { list: vi.fn(async () => ['wedding/a.jpg']), delete: vi.fn() }
-    const skip = { now, skipStorage: true, skipR2: true }
-    const preview = await runDemoCleanup({ convex, storage, r2 }, { ...skip, dryRun: true })
-    expect(preview).toMatchObject({ storage: 'skipped', r2: 'skipped' })
-    const report = await runDemoCleanup({ convex, storage, r2 }, { ...skip, dryRun: false })
+    const skip = { now, skipStorage: true }
+    const preview = await runDemoCleanup({ convex, storage }, { ...skip, dryRun: true })
+    expect(preview).toMatchObject({ storage: 'skipped' })
+    const report = await runDemoCleanup({ convex, storage }, { ...skip, dryRun: false })
     expect(report).toMatchObject({
       storage: 'skipped',
-      r2: 'skipped',
-      convex: 'kept: results reference skipped R2 media',
+      convex: { deletedResults: 0, deletedAssemblies: 0 },
     })
-    expect(r2.list).not.toHaveBeenCalled()
-    expect(r2.delete).not.toHaveBeenCalled()
     expect(deleted).toEqual([])
     expect(calls).toEqual([])
     expect(rows).toEqual([expect.objectContaining({ hidden: false })])
@@ -394,69 +352,28 @@ describe('demo cleanup', () => {
     expect(report).toMatchObject({ storage: { wouldHide: 2 } })
   })
 
-  test('a reset records orphans in the ledger, then clears Storage and R2 before results', async () => {
+  test('a reset records orphans in the ledger, then clears Storage before results', async () => {
     const rows = [row('registered', 1)]
     const { convex, calls } = fakeConvex(rows)
     const { storage, deleted } = fakeStorage(['registered', 'orphan'])
-    const r2Deleted: string[] = []
-    const r2: CleanupR2 = {
-      list: async () => ['wedding/wedding-gallery/a.jpg'],
-      delete: async (keys) => {
-        calls.push('r2')
-        r2Deleted.push(...keys)
-      },
-    }
-    const report = await runDemoCleanup({ convex, storage, r2 }, { dryRun: false, now })
+    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now })
     expect(report).toMatchObject({
       mode: 'reset',
       storage: { hidden: 1, deleted: 2, orphans: 1 },
-      r2: { deleted: 1 },
       convex: { deletedResults: 3 },
     })
     expect(deleted.sort()).toEqual(['orphan', 'registered'])
     // The orphan is adopted before any byte is deleted, so a late notification cannot restore it.
     expect(calls.indexOf('adopt:registered,orphan')).toBeLessThan(calls.indexOf('complete:orphan'))
     expect(rows).toEqual([])
-    expect(calls.indexOf('r2')).toBeLessThan(calls.indexOf('purge'))
+    expect(calls.indexOf('complete:orphan')).toBeLessThan(calls.indexOf('purge'))
   })
 
   test('a reset keeps Convex results while Storage deletions still need a retry', async () => {
     const { convex, calls } = fakeConvex([row('flaky', 1)])
     const { storage } = fakeStorage(['flaky'], { failing: new Set(['flaky']) })
-    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now, skipR2: true })
+    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now })
     expect(report).toMatchObject({ retryNeeded: true, storage: { failed: 1 } })
     expect(calls).not.toContain('purge')
-  })
-
-  test('skipping R2 never forgets results that still point at R2 media', async () => {
-    const { convex, calls } = fakeConvex([row('stored', 30)])
-    convex.summary = async () => ({
-      results: 5,
-      resultsTruncated: false,
-      r2Results: 2,
-      storagePrefix: prefix,
-    })
-    const { storage } = fakeStorage(['stored'])
-    const report = await runDemoCleanup({ convex, storage }, { dryRun: false, now, skipR2: true })
-    expect(report).toMatchObject({
-      retryNeeded: true,
-      convex: 'kept: results reference skipped R2 media',
-    })
-    expect(calls).not.toContain('purge')
-  })
-
-  test('a partial R2 deletion is a failure, so Convex results are kept for a retry', async () => {
-    const { convex, calls } = fakeConvex([row('stored', 1)])
-    const { storage } = fakeStorage(['stored'])
-    const send = vi.fn(async () => ({ Errors: [{ Key: 'wedding/a.jpg', Code: 'AccessDenied' }] }))
-    const r2: CleanupR2 = {
-      list: async () => ['wedding/a.jpg', 'wedding/b.jpg'],
-      delete: (keys) => deleteR2Batch(send, keys),
-    }
-    await expect(runDemoCleanup({ convex, storage, r2 }, { dryRun: false, now })).rejects.toThrow(
-      'AccessDenied',
-    )
-    expect(calls).not.toContain('purge')
-    expect(send).toHaveBeenCalledTimes(1)
   })
 })

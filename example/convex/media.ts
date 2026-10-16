@@ -57,6 +57,36 @@ const authorizedReceipt = (asset: StoredAsset) => {
   return receipt
 }
 
+const galleryAsset = async (
+  ctx: QueryCtx,
+  row: StoredAssetRow,
+  renditions: Record<string, StoredAssetRow | undefined>,
+) => {
+  const upload = await findBoundUpload(ctx, row)
+  if (!upload) return null
+  let video: StoredAsset | undefined
+  let poster: StoredAsset | undefined
+  if (row.asset.mime?.startsWith('video/')) {
+    // The component groups provenance; current access and safe upload paths remain app policy.
+    const playback = renditions.playback
+    if (playback?.asset.mime === 'video/mp4' && (await findBoundUpload(ctx, playback)))
+      video = authorizedReceipt(playback.asset)
+    const preview = renditions.poster
+    if (preview && canPreview(preview.asset) && (await findBoundUpload(ctx, preview)))
+      poster = authorizedReceipt(preview.asset)
+  }
+  const { workspace, asset_id, version_id } = row.asset
+  return {
+    id: `${workspace}:${asset_id}:${version_id}`,
+    assemblyId: row.assemblyId,
+    asset: authorizedReceipt(row.asset),
+    ...(video ? { video } : {}),
+    ...(poster ? { poster } : {}),
+    uploadedBy: upload.guestName,
+    createdAt: row.createdAt,
+  }
+}
+
 /**
  * Newest private originals for admitted guests: canonical receipts, never URLs or credentials.
  * Pages keep the component's cursors and split signals, which usePaginatedQuery from
@@ -76,29 +106,8 @@ export const list = query({
     })
     const page = []
     for (const { original: row, renditions } of result.page) {
-      const upload = await findBoundUpload(ctx, row)
-      if (!upload) continue
-      let video: StoredAsset | undefined
-      let poster: StoredAsset | undefined
-      if (row.asset.mime?.startsWith('video/')) {
-        // The component groups provenance; current access and safe upload paths remain app policy.
-        const playback = renditions.playback
-        if (playback?.asset.mime === 'video/mp4' && (await findBoundUpload(ctx, playback)))
-          video = authorizedReceipt(playback.asset)
-        const preview = renditions.poster
-        if (preview && canPreview(preview.asset) && (await findBoundUpload(ctx, preview)))
-          poster = authorizedReceipt(preview.asset)
-      }
-      const { workspace, asset_id, version_id } = row.asset
-      page.push({
-        id: `${workspace}:${asset_id}:${version_id}`,
-        assemblyId: row.assemblyId,
-        asset: authorizedReceipt(row.asset),
-        ...(video ? { video } : {}),
-        ...(poster ? { poster } : {}),
-        uploadedBy: upload.guestName,
-        createdAt: row.createdAt,
-      })
+      const item = await galleryAsset(ctx, row, renditions)
+      if (item) page.push(item)
     }
     return { ...result, page }
   },
@@ -123,5 +132,53 @@ export const forDelivery = query({
     if (!row || !(await findBoundUpload(ctx, row))) return null
     if (args.action === 'preview' && !canPreview(row.asset)) return null
     return authorizedReceipt(row.asset)
+  },
+})
+
+/** Resolve a shared exact-version link without walking every page of the album. */
+export const get = query({
+  args: { assetId: v.string(), versionId: v.string() },
+  returns: v.union(vGalleryAsset, v.null()),
+  handler: async (ctx, args) => {
+    const workspace = getStorageWorkspace()
+    if (!workspace || !(await findGuest(ctx))) return null
+    const row = await ctx.runQuery(components.transloadit.lib.getStoredAsset, {
+      workspace,
+      ...args,
+    })
+    if (
+      !row ||
+      ![':original', 'images_filtered'].includes(row.stepName) ||
+      !(await findBoundUpload(ctx, row))
+    )
+      return null
+    if (!row.asset.mime?.startsWith('video/')) return galleryAsset(ctx, row, {})
+    // This app signs batches of at most 12 uploads with three stored outputs per video. Reuse
+    // the component's bounded Assembly lookup; custom/ambiguous excess results fail closed.
+    const siblings = await ctx.runQuery(components.transloadit.lib.listStoredAssetsForAssembly, {
+      assemblyId: row.assemblyId,
+      limit: 500,
+    })
+    if (siblings.length === 500) return null
+    const sourceId = (id: StoredAssetRow['originalId']) =>
+      typeof id === 'string' ? id : id?.length === 1 ? id[0] : undefined
+    const original = sourceId(row.originalId)
+    const rendition = (step: string) => {
+      if (!original) return undefined
+      const matches = siblings.filter(
+        (item) =>
+          item.stepName === step &&
+          sourceId(item.originalId) === original &&
+          item.album === row.album &&
+          item.userId === row.userId &&
+          item.uploadId === row.uploadId &&
+          item.asset.workspace === workspace,
+      )
+      return matches.length === 1 ? matches[0] : undefined
+    }
+    return galleryAsset(ctx, row, {
+      playback: rendition('video_encode'),
+      poster: rendition('video_poster'),
+    })
   },
 })

@@ -15,13 +15,6 @@ export function getProductionDeployEnv(env: NodeJS.ProcessEnv = process.env): [s
 export function getOptionalDeployEnv(env: NodeJS.ProcessEnv = process.env): [string, string][] {
   const entries: [string, string][] = []
   for (const name of [
-    'TRANSLOADIT_R2_CREDENTIALS',
-    'R2_BUCKET',
-    'R2_ACCESS_KEY_ID',
-    'R2_SECRET_ACCESS_KEY',
-    'R2_ACCOUNT_ID',
-    'R2_HOST',
-    'R2_PUBLIC_URL',
     'WEDDING_UPLOAD_CODE',
     'TRANSLOADIT_WORKSPACE',
     'TRANSLOADIT_STORAGE_UPLOADS_DISABLED',

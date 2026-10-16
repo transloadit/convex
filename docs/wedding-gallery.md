@@ -1,6 +1,6 @@
 # From demo to a wedding archive
 
-Recommendation, 16 September 2026: deploy a separate private wedding instance of the example,
+Deploy a separate private wedding instance of the example,
 sharing its gallery and upload components. Keep the public demo disposable. Use a dedicated
 Convex deployment and storage namespace so demo cleanup, test uploads, and guest access cannot
 affect the wedding archive.
@@ -12,12 +12,9 @@ affect the wedding archive.
 - Convex status/results, live gallery updates, and named guest sessions.
 - Required name entry, an optional invitation code for viewing and uploading, and a small per-session upload limit.
 - Editable contributor names on uploads, four interface languages, and search-engine exclusion.
-- A Motion `AnimateView` photo viewer with keyboard navigation and reduced-motion support.
-
-The [Motion announcement](https://x.com/motiondotdev/status/2100212174413062260) introduces
-`AnimateView` in Motion 13.4. It is open source, works with React 19.3, and supports shared-element
-view transitions and springs. See the [official API](https://motion.dev/docs/react-animate-view).
-An animation library handles presentation; it does not provide albums, access control, or storage.
+- Exact-photo/video links, immediate navigation with blur/loading feedback, keyboard navigation,
+  and reduced-motion support. The gallery selects one neighboring photo to warm after the current
+  image loads; Viewer skips speculative loading on slow/data-saving connections.
 
 ## Required before importing the real wedding
 
@@ -26,7 +23,7 @@ An animation library handles presentation; it does not provide albums, access co
 | Retention | UI/query cutoff defaults to 24 hours; scheduled Storage cleanup expires originals and derivatives. Old R2 objects retain a one-day lifecycle. | Separate Workspace/prefix and explicit permanent retention, excluded from demo cleanup. Removing the UI cutoff alone does not prevent deletion. |
 | Originals | New photo and video originals are stored directly, separately from playback derivatives. | Keep an independent backup and demonstrate a restore; test intended source formats. |
 | Viewing privacy | Album and new media delivery require an admitted guest. Short-lived CDN grants remain usable until expiry. Legacy R2 links stay public. | Configure a strong invitation code and separate archive. Without a code, anyone can enter a name. Do not import public legacy links as if they were private. |
-| Backend authorization | Album reads require admission; status/results/refresh require ownership. Signing uses a fixed wedding action; ingestion and cleanup are internal. Logout and code changes revoke album access. | Extend membership checks to future editing and delivery paths. Names are self-reported. Use named Template credentials: raw R2 keys in inline instructions are visible to the uploader even when the diagnostic display is redacted. |
+| Backend authorization | Album reads and exact-version links require admission; status/results/refresh require ownership. Signing uses a fixed wedding action; ingestion and cleanup are internal. Logout and code changes revoke album access. | Extend membership checks to future editing and delivery paths. Names are self-reported. Keep credentials server-side. |
 | Ingestion | Guest batches are capped at 12 files; authenticated sessions have a six-batch hourly limit. | Separate owner/photographer bulk import with resumability, deduplication, progress, and retry/reconciliation. Keep tighter guest limits, including file size and total storage quotas. |
 | Organization | One album, persistent Storage receipts, paginated private media and contributor credit. | Add collections and capture dates/time zones only as needed for the real archive. |
 | Moderation | Successful uploads appear immediately. | Owner approval/hide/delete, a recoverable trash state, and upload acknowledgements. Explain who can see submitted files. |
@@ -62,13 +59,16 @@ Current implementation (October 2026; deployment must be verified separately):
 - **Delivery.** `/api/transloadit/media` is Viewer's `createStorageRoute` with explicit,
   server-only `TRANSLOADIT_SMART_CDN_KEY`, `TRANSLOADIT_SMART_CDN_SECRET` and
   `TRANSLOADIT_SMART_CDN_WORKSPACE` (a least-privilege `smart_cdn:sign` key). The gallery renders
-  private photos with `@transloadit/viewer/react` `Image` and pages through `media:list` with
-  cursors, freezing loaded pages so live uploads never shift photos between pages. The example
-  pins the published Viewer alpha (`@transloadit/viewer` 0.0.5, npm tag `alpha`).
+  thumbnails with `@transloadit/viewer/react` `Image` and full photos with `ImagePreview` from
+  `@transloadit/viewer/react/preview`. It pages through `media:list` with cursors, freezing loaded
+  pages so live uploads never shift photos between pages. A shared exact-version link outside the
+  loaded pages uses the same album authorization through `media:get`. The example pins its
+  published Viewer alpha in `example/package.json`.
 - **Placeholders.** Thumbnails use `placeholder="blur"` with an explicit `objectFit="cover"`: the
   receipt's ThumbHash is painted as an inline background that the loaded opaque pixels cover, with
-  no load handler. Transparent photos and the letterboxed (`contain`) viewer get none. A ThumbHash
-  is preview pixels, so `media:list` and `media:forDelivery` return it only to an admitted guest
+  no load handler. The full-photo `ImagePreview` removes its blur once the image loads and provides
+  loading/error feedback without delaying navigation. Transparent photos get no blur. A ThumbHash
+  is preview pixels, so album queries and `media:forDelivery` return it only to an admitted guest
   and only for versions that guest may preview.
 - **Activation order.** Configure the delivery key on the Next.js host before enabling hosted
   uploads on Convex; without it the route answers 404. Validate in an isolated preview first.
@@ -97,20 +97,19 @@ Delivery semantics, as verified against production with synthetic assets:
 Storage namespaces: each deployment writes under `convex-demo/<namespace>/<album>/`. Convex cloud
 deployments use their deployment name. Local and self-hosted deployments have no unique name, so a
 configured `TRANSLOADIT_WORKSPACE` fails closed there until `TRANSLOADIT_STORAGE_NAMESPACE` names
-one. The separate legacy local harness still tests its old R2 pipeline and is not Storage proof.
+one. Local browser QA uses the real gallery with controlled media; real upload, authorization and
+delivery acceptance run separately against the isolated cloud preview.
 
 Demo retention: `node scripts/cleanup-demo.ts --older-than=24` expires all Storage media older than a
 day through the ledger: hide, delete, then keep a tombstone so a late notification cannot restore
 the media. Failures stay hidden and retryable.
 Without `--older-than` the script resets the whole demo album, including unregistered uploads under
-this deployment's prefix, R2 objects and Convex results. `--dry-run` reports every backend and changes
-nothing. A Storage-only reset needs no R2 credentials; legacy R2 references or a truncated reference
-scan require R2 credentials or explicit `--skip-r2`. Storage requires credentials or `--skip-storage`;
-a skip flag also leaves a configured backend untouched. Even
-then, Convex results that still reference R2 media are kept (and reported as incomplete), a partial
-R2 batch deletion counts as a failure, and Storage references stay in the ledger until Storage
-confirms each deletion. Cleanup never deletes Storage assets outside the deployment's demo prefix.
-The existing daily expiry workflow is prefix-bound to the disposable demo; R2 keeps its one-day rule.
+this deployment's prefix and Convex results. `--dry-run` reports the selection and changes nothing.
+Storage requires credentials; explicit `--skip-storage` leaves it and its database references
+untouched and reports an incomplete reset. References stay in the ledger until Storage confirms
+each deletion. Cleanup never deletes Storage assets outside the deployment's demo prefix.
+The daily expiry workflow is prefix-bound to the disposable demo. No code in this repository
+deletes legacy R2 objects or changes their external lifecycle.
 
 For the real wedding, an independently tested backup and restore of the originals remains a gate,
 along with a separate Workspace or prefix that demo cleanup can never reach.

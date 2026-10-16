@@ -44,12 +44,8 @@ test('optional credentials are not erased when absent and unrelated secrets are 
   expect(
     getOptionalDeployEnv({
       TRANSLOADIT_WORKSPACE: 'demo',
-      R2_BUCKET: 'video',
-      R2_SECRET_ACCESS_KEY: '',
+      TRANSLOADIT_SECRET: '',
       UNRELATED_SECRET: 'not-forwarded',
     }),
-  ).toEqual([
-    ['R2_BUCKET', 'video'],
-    ['TRANSLOADIT_WORKSPACE', 'demo'],
-  ])
+  ).toEqual([['TRANSLOADIT_WORKSPACE', 'demo']])
 })

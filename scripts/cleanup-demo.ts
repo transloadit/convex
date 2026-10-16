@@ -1,11 +1,8 @@
-import { DeleteObjectsCommand, ListObjectsV2Command, S3Client } from '@aws-sdk/client-s3'
 import { Transloadit } from '@transloadit/node'
 import { ConvexHttpClient } from 'convex/browser'
 import {
   type CleanupConvex,
-  type CleanupR2,
   type CleanupStorage,
-  deleteR2Batch,
   runDemoCleanup,
   type StorageObject,
 } from './demo-cleanup.ts'
@@ -14,14 +11,13 @@ import { loadEnv } from './env.ts'
 loadEnv()
 
 // Usage:
-//   node scripts/cleanup-demo.ts --dry-run            reset preview across Convex, Storage and R2
+//   node scripts/cleanup-demo.ts --dry-run            reset preview across Convex and Storage
 //   node scripts/cleanup-demo.ts                      reset the whole demo album
 //   node scripts/cleanup-demo.ts --older-than=24      expire Storage photos older than 24 hours
-// A missing Storage or R2 configuration is refused unless skipped on purpose with --skip-storage
-// or --skip-r2: references are never forgotten while their media stays reachable.
+// Missing Storage access must be skipped explicitly. This tool never operates on old public exports.
 const argMap = new Map<string, string | boolean>()
 for (const arg of process.argv.slice(2)) {
-  if (arg === '--dry-run' || arg === '--skip-r2' || arg === '--skip-storage') {
+  if (arg === '--dry-run' || arg === '--skip-storage') {
     argMap.set(arg.slice(2), true)
     continue
   }
@@ -43,7 +39,6 @@ const requireEnv = (name: string) => {
 
 const album =
   (argMap.get('album') as string | undefined) || process.env.DEMO_ALBUM || 'wedding-gallery'
-const prefix = (argMap.get('prefix') as string | undefined) || `wedding/${album}/`
 const dryRun = argMap.get('dry-run') === true
 const olderThan = argMap.get('older-than')
 const expectedStoragePrefix = argMap.get('expected-prefix')
@@ -152,72 +147,17 @@ const storage: CleanupStorage | undefined =
       }
     : undefined
 
-const r2Config = {
-  bucket: process.env.R2_BUCKET,
-  accessKeyId: process.env.R2_ACCESS_KEY_ID,
-  secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  host:
-    process.env.R2_HOST ||
-    (process.env.R2_ACCOUNT_ID
-      ? `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-      : ''),
-}
-const r2: CleanupR2 | undefined =
-  r2Config.bucket && r2Config.accessKeyId && r2Config.secretAccessKey && r2Config.host
-    ? (() => {
-        const bucket = r2Config.bucket
-        const s3 = new S3Client({
-          region: 'auto',
-          endpoint: r2Config.host.startsWith('http') ? r2Config.host : `https://${r2Config.host}`,
-          credentials: {
-            accessKeyId: r2Config.accessKeyId,
-            secretAccessKey: r2Config.secretAccessKey,
-          },
-        })
-        return {
-          list: async () => {
-            const keys: string[] = []
-            let continuationToken: string | undefined
-            do {
-              const response = await s3.send(
-                new ListObjectsV2Command({
-                  Bucket: bucket,
-                  Prefix: prefix,
-                  ContinuationToken: continuationToken,
-                }),
-              )
-              for (const entry of response.Contents ?? []) if (entry.Key) keys.push(entry.Key)
-              continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined
-            } while (continuationToken)
-            return keys
-          },
-          delete: (keys) =>
-            deleteR2Batch(
-              (batch) =>
-                s3.send(
-                  new DeleteObjectsCommand({
-                    Bucket: bucket,
-                    Delete: { Objects: batch.map((Key) => ({ Key })) },
-                  }),
-                ),
-              keys,
-            ),
-        }
-      })()
-    : undefined
-
 runDemoCleanup(
-  { convex, storage, r2 },
+  { convex, storage },
   {
     dryRun,
-    skipR2: argMap.get('skip-r2') === true,
     skipStorage: argMap.get('skip-storage') === true,
     ...(olderThanHours === undefined ? {} : { olderThanMs: olderThanHours * 60 * 60 * 1000 }),
     ...(expectedStoragePrefix === undefined ? {} : { expectedStoragePrefix }),
   },
 )
   .then((report) => {
-    console.log(JSON.stringify({ album, r2Prefix: prefix, ...report }, null, 2))
+    console.log(JSON.stringify({ album, ...report }, null, 2))
     if (!report.dryRun && report.retryNeeded) process.exitCode = 1
   })
   .catch((error) => {

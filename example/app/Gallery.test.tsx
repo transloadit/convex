@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { StoredAsset } from '@transloadit/convex'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AlbumIntlProvider } from '../i18n/AlbumIntlProvider'
@@ -15,7 +15,8 @@ HTMLDialogElement.prototype.close = function () {
 }
 
 beforeEach(() => {
-  // Full motion, so thumbnails use the animated boundaries that opening the viewer toggles.
+  window.history.replaceState(null, '', '/')
+
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: false,
     media: query,
@@ -63,10 +64,7 @@ test.each([true, false])(
     const video = { ...photo(2).asset, mime: 'video/mp4', path: 'upload/play.mp4' }
     render(
       <AlbumIntlProvider initialLocale="en">
-        <Gallery
-          results={[]}
-          storageAssets={[{ ...original, video: playable ? video : undefined }]}
-        />
+        <Gallery storageAssets={[{ ...original, video: playable ? video : undefined }]} />
       </AlbumIntlProvider>,
     )
     fireEvent.click(screen.getByRole('button', { name: 'View clip.mov' }))
@@ -92,7 +90,7 @@ const openPlayer = () => {
   const video = { ...photo(2).asset, mime: 'video/mp4', path: 'upload/play.mp4' }
   render(
     <AlbumIntlProvider initialLocale="en">
-      <Gallery results={[]} storageAssets={[{ ...original, video }]} />
+      <Gallery storageAssets={[{ ...original, video }]} />
     </AlbumIntlProvider>,
   )
   fireEvent.click(screen.getByRole('button', { name: 'View clip.mov' }))
@@ -184,27 +182,21 @@ const placeholder = (image: HTMLImageElement) => ({
   objectFit: image.style.objectFit,
 })
 
-// React's view transitions wait for images that have no onLoad handler.
-const handlers = (image: HTMLImageElement) => {
-  const key = Object.keys(image).find((name) => name.startsWith('__reactProps$'))
-  const props = (key ? (image as unknown as Record<string, object>)[key] : {}) ?? {}
-  return Object.keys(props).filter((name) => /^on[A-Z]/.test(name))
-}
-
 const thumbnails = (container: HTMLElement) =>
   [...container.querySelectorAll('[data-testid="gallery"] .card picture')].map((picture) => ({
     sizes: [...picture.querySelectorAll('source')].map((source) => source.getAttribute('sizes')),
     srcsets: [...picture.querySelectorAll('source')].map((source) => source.getAttribute('srcset')),
   }))
 
-test('opening and closing the viewer keeps every thumbnail on the same candidates', () => {
+test('opening and closing the viewer preserves thumbnail nodes and candidates', async () => {
   const assets = [photo(1), photo(2, 800, 1200), photo(3, 1600, 900)]
   const { container } = render(
     <AlbumIntlProvider initialLocale="en">
-      <Gallery results={[]} storageAssets={assets} />
+      <Gallery storageAssets={assets} />
     </AlbumIntlProvider>,
   )
   const before = thumbnails(container)
+  const nodes = [...container.querySelectorAll('.gallery picture img')]
   expect(before).toHaveLength(3)
   for (const { sizes } of before) {
     // Explicit layout sizes: `auto` resolves differently for remounted images.
@@ -217,7 +209,9 @@ test('opening and closing the viewer keeps every thumbnail on the same candidate
   expect(thumbnails(container)).toEqual(before)
   fireEvent.keyDown(container.querySelector('.gallery-viewer') as Element, { key: 'Escape' })
   fireEvent(container.querySelector('.gallery-viewer') as Element, new Event('cancel'))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   expect(thumbnails(container)).toEqual(before)
+  expect([...container.querySelectorAll('.gallery picture img')]).toEqual(nodes)
 })
 
 test('a page emptied by filtering still offers the next page instead of the empty album', () => {
@@ -225,7 +219,7 @@ test('a page emptied by filtering still offers the next page instead of the empt
   // No listable photos on this page (binding or geometry filtered every row), but more may follow.
   render(
     <AlbumIntlProvider initialLocale="en">
-      <Gallery results={[]} storageAssets={[photo(1, 0, 0)]} onLoadMore={onLoadMore} />
+      <Gallery storageAssets={[photo(1, 0, 0)]} onLoadMore={onLoadMore} />
     </AlbumIntlProvider>,
   )
   expect(screen.queryByTestId('gallery-empty')).toBeNull()
@@ -236,17 +230,17 @@ test('a page emptied by filtering still offers the next page instead of the empt
 test('an album without photos or later pages shows the empty state', () => {
   render(
     <AlbumIntlProvider initialLocale="en">
-      <Gallery results={[]} storageAssets={[]} />
+      <Gallery storageAssets={[]} />
     </AlbumIntlProvider>,
   )
   expect(screen.getByTestId('gallery-empty')).not.toBeNull()
   expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
 })
 
-test('a private photo opens on Close rather than the new original-download link', () => {
+test('a private photo opens on Close rather than the new original-download link', async () => {
   render(
     <AlbumIntlProvider initialLocale="en">
-      <Gallery results={[]} storageAssets={[photo(1)]} />
+      <Gallery storageAssets={[photo(1)]} />
     </AlbumIntlProvider>,
   )
   const opener = screen.getByRole('button', { name: /View photo-1/ })
@@ -255,14 +249,13 @@ test('a private photo opens on Close rather than the new original-download link'
   expect(screen.getByRole('link', { name: 'Download original' })).not.toBeNull()
   expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close viewer' }))
   fireEvent(screen.getByRole('dialog'), new Event('cancel'))
-  expect(document.activeElement).toBe(opener)
+  await waitFor(() => expect(document.activeElement).toBe(opener))
 })
 
-test('opaque thumbnails paint their ThumbHash behind the final pixels, without load handlers', () => {
+test('opaque thumbnails paint their ThumbHash behind the final pixels without changing on load', () => {
   const { container } = render(
     <AlbumIntlProvider initialLocale="en">
       <Gallery
-        results={[]}
         storageAssets={[
           photo(1, 1200, 800, { thumbhash: opaqueHash, has_alpha: false }),
           photo(2, 1200, 800, { thumbhash: alphaHash, has_alpha: true }),
@@ -288,33 +281,139 @@ test('opaque thumbnails paint their ThumbHash behind the final pixels, without l
   const loading = opaque.outerHTML
   fireEvent.load(opaque)
   expect(opaque.outerHTML).toBe(loading)
-  expect(images.flatMap(handlers)).toEqual([])
 })
 
-test('the letterboxed viewer never shows a placeholder, across transitions', () => {
-  const assets = [
-    photo(1, 1200, 800, { thumbhash: opaqueHash, has_alpha: false }),
-    photo(2, 800, 1200, { thumbhash: opaqueHash, has_alpha: false }),
-  ]
-  const { container } = render(
+test('navigation updates the shared URL and caption before the next photo loads', async () => {
+  const first = photo(1, 1200, 800, { thumbhash: opaqueHash })
+  const second = photo(2, 1200, 800, { thumbhash: opaqueHash })
+  render(
     <AlbumIntlProvider initialLocale="en">
-      <Gallery results={[]} storageAssets={assets} />
+      <Gallery storageAssets={[first, second]} />
     </AlbumIntlProvider>,
   )
-  const cards = () => [...container.querySelectorAll('[data-testid="gallery"] .card')]
-  const before = cards().map((card) => placeholder(pictureImage(card)))
-  const [firstCard] = screen.getAllByRole('button', { name: /View photo-1/ })
-  if (!firstCard) throw new Error('expected a thumbnail button')
-  fireEvent.click(firstCard)
-  const viewer = container.querySelector('.gallery-viewer')
-  if (!viewer) throw new Error('expected the viewer')
-  const viewed = () => pictureImage(viewer.querySelector('.viewer-media') as Element)
-  expect(placeholder(viewed())).toEqual({ blur: false, objectFit: 'contain' })
-  expect(handlers(viewed())).toEqual([])
-  fireEvent.keyDown(viewer, { key: 'ArrowRight' })
-  expect(viewer.querySelector('p')?.textContent).toBe('photo-2.jpg')
-  expect(placeholder(viewed())).toEqual({ blur: false, objectFit: 'contain' })
-  expect(handlers(viewed())).toEqual([])
-  fireEvent(viewer, new Event('cancel'))
-  expect(cards().map((card) => placeholder(pictureImage(card)))).toEqual(before)
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-1.jpg' }))
+  expect(new URLSearchParams(location.search).get('media')).toBe(
+    `${first.asset.asset_id}.${first.asset.version_id}`,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+  const dialog = screen.getByRole('dialog', { name: 'photo-2.jpg' })
+  expect(new URLSearchParams(location.search).get('media')).toBe(
+    `${second.asset.asset_id}.${second.asset.version_id}`,
+  )
+  expect(within(dialog).getByRole('status').textContent).toBe('Loading photo…')
+  expect(dialog.querySelector('img[aria-hidden]')).not.toBeNull()
+  fireEvent.load(pictureImage(dialog))
+  expect(within(dialog).queryByRole('status')).toBeNull()
+  expect(dialog.querySelector('img[aria-hidden]')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Close viewer' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect(new URLSearchParams(location.search).get('media')).toBeNull()
+})
+
+test('preloads the previous neighbor after navigating backwards and loading the current photo', async () => {
+  const assets = [photo(1), photo(2), photo(3)]
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={assets} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-3.jpg' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Previous' }))
+  const dialog = screen.getByRole('dialog', { name: 'photo-2.jpg' })
+  // Speculative images are deliberately hidden, so their network attributes are the contract.
+  expect(dialog.querySelector('img[fetchpriority="low"]')).toBeNull()
+  fireEvent.load(within(dialog).getByRole('img', { name: 'photo-2.jpg' }))
+  await waitFor(() => {
+    expect(dialog.querySelector('img[fetchpriority="low"]')?.getAttribute('src')).toContain(
+      assets[0].asset.asset_id,
+    )
+  })
+  expect(dialog.querySelectorAll('img[fetchpriority="low"]')).toHaveLength(1)
+})
+
+test('returning to a photo waits for its current render instead of reusing old ready state', async () => {
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[photo(1), photo(2), photo(3)]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-2.jpg' }))
+  const second = screen.getByRole('dialog', { name: 'photo-2.jpg' })
+  fireEvent.load(within(second).getByRole('img', { name: 'photo-2.jpg' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Previous' }))
+  expect(within(screen.getByRole('dialog')).getByRole('status').textContent).toBe('Loading photo…')
+  expect(screen.getByRole('dialog').querySelector('img[fetchpriority="low"]')).toBeNull()
+  fireEvent.load(within(screen.getByRole('dialog')).getByRole('img', { name: 'photo-2.jpg' }))
+  await waitFor(() =>
+    expect(screen.getByRole('dialog').querySelectorAll('img[fetchpriority="low"]')).toHaveLength(1),
+  )
+})
+
+test('opening a thumbnail starts prefetching forwards after a previous backward visit', async () => {
+  const assets = [photo(1), photo(2), photo(3)]
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={assets} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-3.jpg' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Previous' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Close viewer' }))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-1.jpg' }))
+  const dialog = screen.getByRole('dialog', { name: 'photo-1.jpg' })
+  fireEvent.load(within(dialog).getByRole('img', { name: 'photo-1.jpg' }))
+  await waitFor(() => {
+    expect(dialog.querySelector('img[fetchpriority="low"]')?.getAttribute('src')).toContain(
+      assets[1].asset.asset_id,
+    )
+  })
+})
+
+test('a changed delivery workspace invalidates readiness even for the same asset and version', async () => {
+  const first = photo(1)
+  const second = photo(2)
+  const view = (asset: StorageGalleryAsset) => (
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[asset, second]} />
+    </AlbumIntlProvider>
+  )
+  const { rerender } = render(view(first))
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-1.jpg' }))
+  fireEvent.load(within(screen.getByRole('dialog')).getByRole('img', { name: 'photo-1.jpg' }))
+  await waitFor(() =>
+    expect(screen.getByRole('dialog').querySelectorAll('img[fetchpriority="low"]')).toHaveLength(1),
+  )
+  rerender(view({ ...first, asset: { ...first.asset, workspace: 'other-workspace' } }))
+  const dialog = screen.getByRole('dialog')
+  expect(within(dialog).getByRole('status').textContent).toBe('Loading photo…')
+  expect(dialog.querySelector('img[fetchpriority="low"]')).toBeNull()
+})
+
+test('opens a shared link outside the loaded page, and fails closed after access loss', () => {
+  const asset = photo(99)
+  const id = `${asset.asset.asset_id}.${asset.asset.version_id}`
+  window.history.replaceState(null, '', `/?media=${id}&keep=1`)
+  const { rerender } = render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery linkLoading />
+    </AlbumIntlProvider>,
+  )
+  expect(within(screen.getByRole('dialog')).getByRole('status')).not.toBeNull()
+  rerender(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery linkedAsset={asset} />
+    </AlbumIntlProvider>,
+  )
+  expect(screen.getByRole('dialog', { name: 'photo-99.jpg' })).not.toBeNull()
+  rerender(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery loadFailed />
+    </AlbumIntlProvider>,
+  )
+  expect(within(screen.getByRole('dialog')).getByRole('alert').textContent).toMatch(/unavailable/)
+  expect(screen.queryByRole('link', { name: 'Download original' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Close viewer' }))
+  expect(location.search).toBe('?keep=1')
 })

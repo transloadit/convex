@@ -786,14 +786,17 @@ summary:focus-visible {
   cursor: default;
 }
 
-.viewer-media {
+.viewer-stage {
   min-height: 0;
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
+  overflow: hidden;
+  position: relative;
 }
 
-/* Native view transitions need a box on the picture that AnimateView names. */
-.viewer-media picture {
+/* Keep the preview box stable while its responsive image loads. */
+.viewer-stage picture {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -809,7 +812,7 @@ summary:focus-visible {
 
 /* Browsers still select candidates from hidden sources. Displayed, they would become extra grid
    rows beside the image and push it off centre. */
-.viewer-media source,
+.viewer-stage source,
 .card source {
   display: none;
 }
@@ -856,8 +859,8 @@ summary:focus-visible {
   }
 }
 
-.viewer-media img,
-.viewer-media video {
+.viewer-stage img,
+.viewer-stage video {
   width: auto;
   height: auto;
   max-width: 100%;
@@ -1011,4 +1014,51 @@ summary:focus-visible {
   position: static;
   margin-top: 20px;
   max-width: none;
+}
+
+/* Constrain intrinsic image dimensions so loading feedback stays inside the viewport. */
+.viewer-slide {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  place-items: center;
+  animation: gallery-slide 180ms ease-out;
+}
+.viewer-slide-previous {
+  --slide-from: -24px;
+}
+.viewer-slide-next {
+  --slide-from: 24px;
+}
+@keyframes gallery-slide {
+  from {
+    transform: translateX(var(--slide-from));
+    opacity: 0.65;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.viewer-loading {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #191714dd;
+  font: 14px var(--ui-font);
+}
+.viewer-error {
+  display: grid;
+  place-content: center;
+  height: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .viewer-slide {
+    animation: none;
+  }
 }

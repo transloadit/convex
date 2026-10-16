@@ -41,13 +41,13 @@ describe('gallery deployment connection', () => {
     expect(html).toContain('data-convex-url="https://actual-preview.convex.cloud"')
   })
 
-  test('keeps local upload mode available outside Vercel', async () => {
+  test('requires the same authenticated backend outside Vercel', async () => {
     vi.stubEnv('VERCEL_ENV', undefined)
     vi.stubEnv('NEXT_PUBLIC_CONVEX_URL', undefined)
     vi.stubEnv('CONVEX_URL', undefined)
 
     const html = renderToStaticMarkup(await WeddingUploadsPage())
-    expect(html).toContain('data-testid="gallery"')
+    expect(html).toContain('Gallery temporarily unavailable')
     expect(html).not.toContain('data-convex-url')
   })
 })
