@@ -1,10 +1,5 @@
 import type { StoredAsset } from '@transloadit/convex'
 import { getStorageAssetHref, type StorageImageReceipt } from '@transloadit/viewer/react'
-import type { GalleryResult } from './gallery-results'
-import { galleryResultSteps } from './gallery-steps'
-import { getResultOriginalKey } from './transloadit'
-
-export type { GalleryResult }
 
 /** One private original plus its authorized video renditions, from `media:list`. */
 export type StorageGalleryAsset = {
@@ -26,20 +21,11 @@ export const galleryRetentionLabel = Number.isFinite(galleryRetentionMs)
   ? `${retentionHours}h`
   : 'all time'
 
-const hourMs = 60 * 60 * 1000
-
-/**
- * Cutoff for the gallery query to apply in its index. Floored to the hour, so it is never later
- * than the exact boundary `buildGalleryItems` applies, and repeated loads reuse the same arguments.
- */
-export const galleryCreatedAfter = (now = Date.now(), retentionMs = galleryRetentionMs) =>
-  Number.isFinite(retentionMs) ? Math.floor((now - retentionMs) / hourMs) * hourMs : undefined
-
 export type GalleryItem = {
   id: string
   assemblyId?: string
   name: string
-  /** Authorized Storage video route or a legacy public R2 rendition. */
+  /** Authorized Storage video route. */
   url?: string
   receipt?: StorageImageReceipt
   original?: StoredAsset
@@ -50,115 +36,47 @@ export type GalleryItem = {
   createdAt?: number
 }
 
-const getAspectRatio = (raw: unknown) => {
-  if (!raw || typeof raw !== 'object' || !('meta' in raw)) return undefined
-  const meta = raw.meta
-  if (!meta || typeof meta !== 'object' || !('width' in meta) || !('height' in meta))
-    return undefined
-  const { width, height } = meta
-  if (typeof width !== 'number' || typeof height !== 'number' || width <= 0 || height <= 0)
-    return undefined
-  const ratio = width / height
-  return Number.isFinite(ratio) && ratio > 0 ? ratio : undefined
-}
-
-const steps = galleryResultSteps
-
-// Keep Assembly/result shapes at the boundary so the viewer can also consume Storage assets.
-export const buildGalleryItems = (
-  results: GalleryResult[],
-  { now = Date.now(), retentionMs = galleryRetentionMs } = {},
-): GalleryItem[] => {
-  const media = new Map<string, { item: GalleryItem; stored: boolean }>()
-  const posters = new Map<string, { url: string; stored: boolean }>()
-
-  for (const result of results) {
-    if (typeof result.createdAt === 'number' && now - result.createdAt >= retentionMs) continue
-    const step = steps[result.stepName as keyof typeof steps]
-    if (!step || !result.sslUrl) continue
-    // Names/basenames are not identities: two guests can upload IMG_0001.jpg in one batch.
-    // Without source metadata, preserve each result rather than silently hiding an upload.
-    const sourceId = getResultOriginalKey(result, { allowNameFallback: false })
-    const original = `${result.assemblyId}:${sourceId ?? `result-${result.resultId ?? result._id}`}`
-    if (step.kind === 'poster') {
-      if (!posters.has(original) || step.stored) {
-        posters.set(original, { url: result.sslUrl, stored: step.stored })
-      }
-      continue
-    }
-    const id = `${original}:${step.kind}`
-    const existing = media.get(id)
-    if (existing?.stored || (existing && !step.stored)) continue
-    media.set(id, {
-      stored: step.stored,
-      item: {
-        id,
-        assemblyId: result.assemblyId,
-        name: result.name ?? '',
-        url: result.sslUrl,
-        kind: step.kind,
-        aspectRatio: getAspectRatio(result.raw),
-        uploadedBy: result.uploadedBy,
-        createdAt: result.createdAt,
-      },
-    })
-  }
-
-  return [...media.values()].map(({ item }) => ({
-    ...item,
-    posterUrl:
-      item.kind === 'video' ? posters.get(item.id.slice(0, -':video'.length))?.url : undefined,
-  }))
-}
-
 // Photos, video playback, posters and downloads share the same authorized Storage route.
 export const buildStorageGalleryItems = (
   assets: StorageGalleryAsset[],
   { now = Date.now(), retentionMs = galleryRetentionMs } = {},
 ): GalleryItem[] =>
-  assets.flatMap(
-    ({ id, assemblyId, asset, video, poster, uploadedBy, createdAt }): GalleryItem[] => {
-      const { width, height } = asset
-      if (now - createdAt >= retentionMs) return []
-      const base = {
-        id: `storage:${id}`,
-        assemblyId,
-        name: asset.path.slice(asset.path.lastIndexOf('/') + 1),
-        original: asset,
-        uploadedBy,
-        createdAt,
-        aspectRatio: width && height ? width / height : undefined,
-      }
-      if (asset.mime?.startsWith('video/'))
-        return [
-          {
-            ...base,
-            kind: 'video',
-            // Encoders can apply a phone's rotation metadata; size the card for playback.
-            aspectRatio:
-              video?.width && video.height ? video.width / video.height : base.aspectRatio,
-            url: video ? getStorageAssetHref(video, { action: 'original' }) : undefined,
-            posterUrl: poster ? getStorageAssetHref(poster, { action: 'original' }) : undefined,
-          },
-        ]
-      if (!asset.mime?.startsWith('image/') || !width || !height) return []
+  assets.flatMap(({ assemblyId, asset, video, poster, uploadedBy, createdAt }): GalleryItem[] => {
+    const { width, height } = asset
+    if (now - createdAt >= retentionMs) return []
+    const base = {
+      id: `${asset.asset_id}.${asset.version_id}`,
+      assemblyId,
+      name: asset.path.slice(asset.path.lastIndexOf('/') + 1),
+      original: asset,
+      uploadedBy,
+      createdAt,
+      aspectRatio: width && height ? width / height : undefined,
+    }
+    if (asset.mime?.startsWith('video/'))
       return [
         {
           ...base,
-          receipt: { ...asset, width, height },
-          kind: 'image',
+          kind: 'video',
+          // Encoders can apply a phone's rotation metadata; size the card for playback.
+          aspectRatio: video?.width && video.height ? video.width / video.height : base.aspectRatio,
+          url: video ? getStorageAssetHref(video, { action: 'original' }) : undefined,
+          posterUrl: poster ? getStorageAssetHref(poster, { action: 'original' }) : undefined,
         },
       ]
-    },
-  )
-
-/** Newest first across private Storage and legacy R2 media; ties keep their incoming order. */
-export const mergeGalleryItems = (...lists: GalleryItem[][]) =>
-  lists.flat().sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    if (!asset.mime?.startsWith('image/') || !width || !height) return []
+    return [
+      {
+        ...base,
+        receipt: { ...asset, width, height },
+        kind: 'image',
+      },
+    ]
+  })
 
 // Mirrors `.gallery` in globals.css: rows are --row-height tall (250px, or 150px up to 640px) and
 // spare width grows each card in proportion to its ratio, measured below 1.25x on desktop. On
 // narrow screens one photo can fill the row. Fixed sizes, never `auto`, keep the chosen candidate
-// identical when opening the viewer remounts thumbnails, so no larger rendition is requested.
+// identical across gallery layout changes, so no larger rendition is requested.
 export const thumbnailSizes = (aspectRatio = 3 / 2) =>
   `(max-width: 640px) 100vw, ${Math.round(250 * aspectRatio * 1.25)}px`

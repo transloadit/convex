@@ -4,7 +4,7 @@ import { useAuthActions, useAuthToken } from '@convex-dev/auth/react'
 import { useConvexAuth, useQuery } from 'convex/react'
 import { makeFunctionReference } from 'convex/server'
 import { useTranslations } from 'next-intl'
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useState } from 'react'
 import { maxGuestNameLength } from '../lib/guest-name'
 import { getUploadErrorCode, type UploadErrorCode } from '../lib/upload-errors'
 import { wedding } from '../lib/wedding'
@@ -145,68 +145,6 @@ export const CloudAlbumGate = ({ children }: GateProps) => {
         } catch (error) {
           const reason = getUploadErrorCode(error)
           setError(reason === 'UPLOAD_FAILED' ? 'LOGIN_FAILED' : reason)
-        } finally {
-          setBusy(false)
-        }
-      }}
-    />
-  )
-}
-
-export const LocalAlbumGate = ({ children }: GateProps) => {
-  const [guest, setGuest] = useState<Guest | null>(null)
-  const [settings, setSettings] = useState<Settings | null>(null)
-  const [busy, setBusy] = useState(true)
-  const [error, setError] = useState<UploadErrorCode | null>(null)
-  useEffect(() => {
-    const request = new AbortController()
-    void fetch('/api/session', { signal: request.signal, cache: 'no-store' })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('LOGIN_FAILED')
-        const result = await response.json()
-        if (!request.signal.aborted) {
-          setGuest(result.guest)
-          setSettings(result)
-        }
-      })
-      .catch(() => {
-        if (!request.signal.aborted) setError('LOGIN_FAILED')
-      })
-      .finally(() => {
-        if (!request.signal.aborted) setBusy(false)
-      })
-    return () => request.abort()
-  }, [])
-  if (guest && !busy && !error)
-    return children(guest, () => {
-      setBusy(true)
-      void fetch('/api/session', { method: 'DELETE' })
-        .then((response) => {
-          if (!response.ok) throw new Error('LOGIN_FAILED')
-          setGuest(null)
-        })
-        .catch(() => setError('LOGIN_FAILED'))
-        .finally(() => setBusy(false))
-    })
-  return (
-    <EntryForm
-      requiresInviteCode={settings?.requiresInviteCode ?? false}
-      busy={busy}
-      error={error}
-      onEnter={async (name, code) => {
-        setBusy(true)
-        setError(null)
-        try {
-          const response = await fetch('/api/session', {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ guestName: name, uploadCode: code }),
-          })
-          const result = await response.json()
-          if (!response.ok) throw new Error(result.error ?? 'LOGIN_FAILED')
-          setGuest(result.guest)
-        } catch (error) {
-          setError(getUploadErrorCode(error))
         } finally {
           setBusy(false)
         }

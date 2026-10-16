@@ -25,7 +25,9 @@
     "loadMore": "Weitere Erinnerungen anzeigen",
     "loadFailed": "Einige Fotos konnten nicht geladen werden. Bitte lade die Seite neu."
   },
-  "language": { "label": "Sprache: {language}" },
+  "language": {
+    "label": "Sprache: {language}"
+  },
   "access": {
     "eyebrow": "Du bist eingeladen",
     "intro": "Unser Tag, durch eure Augen. Gib deinen Namen ein, um das Album zu öffnen.",
@@ -47,7 +49,6 @@
       "archive": "Dies ist eine Demo, kein privates Archiv.",
       "media": "Teile nur Testfotos und -videos, die du ersetzen kannst.",
       "visibility": "{hours, plural, one {Das Album zeigt Uploads eine Stunde lang.} other {Das Album zeigt Uploads # Stunden lang.}} Ausgeblendete Dateien werden nicht sofort gelöscht.",
-      "delivery": "Dieser ältere lokale Test verwendet öffentliche Medienlinks.",
       "privateDelivery": "Neue Fotos, Videos und Originale werden privat in Transloadit Storage gespeichert. Ältere öffentliche Links werden nicht nachträglich privat."
     },
     "gettingReady": "Dein Upload wird vorbereitet…",
@@ -81,7 +82,10 @@
     "position": "{current, number} / {total, number}",
     "addedBy": "Hinzugefügt von {name}",
     "unknownContributor": "Beitrag von einem unbekannten Gast",
-    "download": "Original herunterladen"
+    "download": "Original herunterladen",
+    "loading": "Foto wird geladen…",
+    "loadFailed": "Dieses Foto konnte nicht geladen werden. Wähle ein anderes Foto oder lade die Seite neu.",
+    "unavailable": "Diese Erinnerung ist nicht verfügbar oder nicht mehr im Album."
   },
   "notifications": {
     "guest": "Ein Gast",

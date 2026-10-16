@@ -10,17 +10,21 @@ import { StorageGallery } from './StorageGallery'
 
 // A client whose subscriptions answer from `respond`; `update` pushes a new answer to all of them.
 let respond: (options: PaginationOptions) => unknown = () => undefined
+let respondLinked: (args: { assetId?: string; versionId?: string }) => unknown = () => null
 const listeners = new Set<() => void>()
 const warn = vi.fn()
 const client = {
   logger: { warn },
-  watchQuery: (_query: unknown, args: { paginationOpts: PaginationOptions }) => ({
+  watchQuery: (
+    _query: unknown,
+    args: { paginationOpts?: PaginationOptions; assetId?: string; versionId?: string },
+  ) => ({
     onUpdate: (listener: () => void) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
     },
     localQueryResult: () => {
-      const result = respond(args.paginationOpts)
+      const result = args.paginationOpts ? respond(args.paginationOpts) : respondLinked(args)
       if (result instanceof Error) throw result
       return result
     },
@@ -35,6 +39,14 @@ const update = (next: typeof respond) => {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/')
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true
+  }
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false
+  }
+  respondLinked = () => null
   vi.stubGlobal('matchMedia', (query: string) => ({
     matches: true,
     media: query,
@@ -71,7 +83,7 @@ const photo = (index: number): StorageGalleryAsset => ({
 const album = (
   <ConvexProvider client={client}>
     <AlbumIntlProvider initialLocale="en">
-      <StorageGallery results={[]} />
+      <StorageGallery />
     </AlbumIntlProvider>
   </ConvexProvider>
 )
@@ -115,4 +127,43 @@ test('an exhausted empty album does not request more pages', () => {
   render(album)
   expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
   expect(listeners.size).toBe(1)
+})
+
+test('resolves a shared item outside the first page without fetching every page, and removes revoked data', () => {
+  const linked = photo(99)
+  const selected = `${linked.asset.asset_id}.${linked.asset.version_id}`
+  window.history.replaceState(null, '', `/?media=${selected}`)
+  const list = vi.fn((_options: PaginationOptions) => ({
+    page: [photo(1)],
+    isDone: false,
+    continueCursor: 'next',
+  }))
+  const get = vi.fn(() => linked)
+  respond = list
+  respondLinked = get
+  render(album)
+  expect(screen.getByRole('dialog', { name: 'photo-99.jpg' })).not.toBeNull()
+  expect(shown()).toBe(1)
+  expect(screen.getByRole('button', { name: 'Previous' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.getByRole('button', { name: 'Next' }).hasAttribute('disabled')).toBe(true)
+  expect(screen.queryByText('2 / 2')).toBeNull()
+  expect(get).toHaveBeenCalledWith({
+    assetId: linked.asset.asset_id,
+    versionId: linked.asset.version_id,
+  })
+  expect(list.mock.calls.every(([args]) => args.cursor === null)).toBe(true)
+  respondLinked = () => null
+  update(list)
+  expect(screen.getByRole('dialog').textContent).toContain('This memory is unavailable')
+  expect(screen.queryByRole('link', { name: 'Download original' })).toBeNull()
+})
+
+test('a malformed link never reaches the exact-asset query', () => {
+  window.history.replaceState(null, '', '/?media=invalid')
+  respond = () => ({ page: [], isDone: true, continueCursor: 'end' })
+  const get = vi.fn()
+  respondLinked = get
+  render(album)
+  expect(screen.getByRole('alert').textContent).toContain('This memory is unavailable')
+  expect(get).not.toHaveBeenCalled()
 })

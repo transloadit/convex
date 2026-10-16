@@ -3,7 +3,8 @@ import { type NextFetchEvent, type NextRequest, NextResponse } from 'next/server
 import { getConvexUrl } from './lib/convex-url'
 
 // Hosted albums keep Convex Auth tokens in httpOnly cookies, refreshed here, so server routes such
-// as private media delivery can authorize the viewer. The local harness has no Convex deployment.
+// as private media delivery can authorize the viewer. Missing backend configuration fails closed
+// in the album and delivery route instead of creating a separate local session.
 const sessionMaxAge = 30 * 24 * 60 * 60
 
 let convexAuth: ReturnType<typeof convexAuthNextjsMiddleware> | undefined

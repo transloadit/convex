@@ -1,162 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import {
-  buildGalleryItems,
-  buildStorageGalleryItems,
-  galleryCreatedAfter,
-  mergeGalleryItems,
-  type StorageGalleryAsset,
-  thumbnailSizes,
-} from './gallery'
-import { toGalleryResult } from './gallery-results'
-import type { AssemblyResultResponse } from './transloadit'
-
-const result = (
-  stepName: string,
-  overrides: Partial<AssemblyResultResponse> = {},
-): AssemblyResultResponse => ({
-  _id: 'result',
-  _creationTime: 1000,
-  assemblyId: 'first',
-  stepName,
-  sslUrl: `https://example.com/${stepName}`,
-  name: 'photo.jpg',
-  createdAt: 1000,
-  raw: { original_id: 'original' },
-  ...overrides,
-})
-
-describe('gallery media', () => {
-  test.each([{}, { original_basename: 'photo.jpg' }, { original_id: [] }])(
-    'does not hide same-named uploads without reliable original IDs (%j)',
-    (raw) => {
-      const items = buildGalleryItems(
-        [
-          result('images_output', { _id: 'first-result', raw }),
-          result('images_output', { _id: 'second-result', raw }),
-        ],
-        { now: 1000 },
-      )
-      expect(items).toHaveLength(2)
-      expect(items[0]?.id).not.toBe(items[1]?.id)
-    },
-  )
-
-  test('normalizes array source IDs while preserving different uploads with the same name', () => {
-    const items = buildGalleryItems(
-      [
-        result('images_resized', { raw: { original_id: ['first'] } }),
-        result('images_output', { raw: { original_id: ['first'] } }),
-        result('images_output', { raw: { original_id: ['second'] } }),
-      ],
-      { now: 1000 },
-    )
-    expect(items).toHaveLength(2)
-    expect(items.every((item) => item.url?.endsWith('images_output'))).toBe(true)
-  })
-
-  test.each([false, true])(
-    'prefers permanent exports regardless of result order (%s)',
-    (reverse) => {
-      const results = [result('images_resized'), result('images_output')]
-      const items = buildGalleryItems(reverse ? results.reverse() : results, { now: 1000 })
-      expect(items).toHaveLength(1)
-      expect(items[0]?.url).toBe('https://example.com/images_output')
-    },
-  )
-
-  test('keeps legacy results visible and ignores unknown steps or missing URLs', () => {
-    const items = buildGalleryItems(
-      [
-        result('images_resized'),
-        result('originals'),
-        result('videos_output', { sslUrl: undefined }),
-      ],
-      { now: 1000 },
-    )
-    expect(items).toHaveLength(1)
-    expect(items[0]?.kind).toBe('image')
-  })
-
-  test('associates persistent video posters within the same Assembly', () => {
-    const items = buildGalleryItems(
-      [
-        result('videos_output'),
-        result('videos_thumbs_output'),
-        result('videos_thumbs'),
-        result('videos_output', { assemblyId: 'second' }),
-        result('videos_thumbs_output', {
-          assemblyId: 'second',
-          sslUrl: 'https://example.com/second',
-        }),
-      ],
-      { now: 1000 },
-    )
-    expect(items.map((item) => item.posterUrl)).toEqual([
-      'https://example.com/videos_thumbs_output',
-      'https://example.com/second',
-    ])
-  })
-
-  test('applies the retention boundary and can disable the UI cutoff', () => {
-    const results = [result('images_output')]
-    expect(buildGalleryItems(results, { now: 2000, retentionMs: 1000 })).toEqual([])
-    expect(buildGalleryItems(results, { now: 2000, retentionMs: Infinity })).toHaveLength(1)
-  })
-})
-
-describe('gallery result projection', () => {
-  test('keeps exactly what the gallery renders, so projected results build identical items', () => {
-    const results = [
-      result('images_resized', {
-        _id: 'resized',
-        raw: { original_id: ['first'], meta: { width: 4000, height: 3000, exif: 'private' } },
-      }),
-      result('images_output', {
-        _id: 'output',
-        resultId: 'output-result',
-        album: 'wedding-gallery',
-        userId: 'guest',
-        size: 1,
-        mime: 'image/jpeg',
-        raw: { original_id: ['first'], meta: { width: 4000, height: 3000 } },
-      }),
-      result('images_output', { _id: 'pair', raw: { original_id: ['a', 'b'] } }),
-      result('images_output', {
-        _id: 'invalid',
-        raw: { original_id: [null], original_basename: 'photo', meta: { width: '1', height: 2 } },
-      }),
-      result('videos_output', { _id: 'video', raw: 'unexpected' }),
-      result('videos_thumbs_output', { _id: 'poster' }),
-    ]
-    const projected = results.map((full) => toGalleryResult(full, 'Alex'))
-    expect(buildGalleryItems(projected, { now: 1000 })).toEqual(
-      buildGalleryItems(
-        results.map((full) => ({ ...full, uploadedBy: 'Alex' })),
-        { now: 1000 },
-      ),
-    )
-    expect(projected[1]).toEqual({
-      _id: 'output',
-      assemblyId: 'first',
-      stepName: 'images_output',
-      resultId: 'output-result',
-      sslUrl: 'https://example.com/images_output',
-      name: 'photo.jpg',
-      createdAt: 1000,
-      uploadedBy: 'Alex',
-      raw: { original_id: ['first'], meta: { width: 4000, height: 3000 } },
-    })
-    expect(projected[3]?.raw).toEqual({ meta: { height: 2 } })
-    expect(projected[4]?.raw).toEqual({})
-  })
-
-  test('asks the server for an hourly cutoff that never hides what the exact boundary shows', () => {
-    const hour = 60 * 60 * 1000
-    expect(galleryCreatedAfter(100 * hour + 59 * 60 * 1000, 24 * hour)).toBe(76 * hour)
-    expect(galleryCreatedAfter(100 * hour, 24 * hour)).toBe(76 * hour)
-    expect(galleryCreatedAfter(100 * hour, Number.POSITIVE_INFINITY)).toBeUndefined()
-  })
-})
+import { buildStorageGalleryItems, type StorageGalleryAsset, thumbnailSizes } from './gallery'
 
 const stored = (
   id: string,
@@ -212,7 +55,7 @@ describe('private Storage photos', () => {
   test('render from receipts with their credited guest, never from a URL', () => {
     const [item] = buildStorageGalleryItems([stored('a', 1000)], { now: 1000 })
     expect(item).toMatchObject({
-      id: 'storage:a',
+      id: `${stored('a', 0).asset.asset_id}.${stored('a', 0).asset.version_id}`,
       name: 'a.jpg',
       kind: 'image',
       aspectRatio: 1.6,
@@ -225,18 +68,6 @@ describe('private Storage photos', () => {
   test('apply the retention boundary and skip receipts without image geometry', () => {
     const assets = [stored('old', 0), stored('raw', 1500, { width: undefined })]
     expect(buildStorageGalleryItems(assets, { now: 2000, retentionMs: 1000 })).toEqual([])
-  })
-
-  test('merge with R2 media newest first, keeping the incoming order for equal times', () => {
-    const photos = buildStorageGalleryItems([stored('new', 3000), stored('same', 1000)], {
-      now: 3000,
-    })
-    const videos = buildGalleryItems([result('videos_output', { createdAt: 2000 })], { now: 3000 })
-    expect(mergeGalleryItems(photos, videos).map((item) => item.id)).toEqual([
-      'storage:new',
-      videos[0]?.id,
-      'storage:same',
-    ])
   })
 })
 

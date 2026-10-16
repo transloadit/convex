@@ -4,13 +4,12 @@ import { join, resolve } from 'node:path'
 import { expect as browserExpect, chromium } from '@playwright/test'
 import { ConvexHttpClient } from 'convex/browser'
 import { makeFunctionReference } from 'convex/server'
-import { afterAll, beforeAll, describe, expect, test } from 'vitest'
+import { beforeAll, describe, expect, test } from 'vitest'
 import { attachBrowserDiagnostics } from './support/diagnostics.js'
-import { startExampleApp } from './support/example-app.js'
 import { runtime } from './support/runtime.js'
 import { sleep } from './support/sleep.js'
 
-const { authKey, authSecret, useRemote, remoteAppUrl, shouldRun } = runtime
+const { remoteAppUrl, shouldRun } = runtime
 
 type DebugUppy = {
   getFiles?: () => unknown[]
@@ -35,10 +34,9 @@ describeE2e('e2e upload flow', () => {
   const vercelBypassToken = process.env.VERCEL_PROTECTION_BYPASS ?? ''
   const remoteConvexUrl = process.env.E2E_REMOTE_CONVEX_URL ?? ''
   let serverUrl = ''
-  let app: Awaited<ReturnType<typeof startExampleApp>> | null = null
 
   beforeAll(async () => {
-    if (useRemote) {
+    {
       if (!remoteAppUrl) {
         throw new Error('Missing E2E_REMOTE_APP_URL for cloud e2e run')
       }
@@ -51,113 +49,20 @@ describeE2e('e2e upload flow', () => {
       serverUrl = parsed.toString()
       return
     }
-
-    app = await startExampleApp({
-      env: {
-        E2E_MODE: 'local',
-        WEDDING_UPLOAD_CODE: 'browser-invitation-test',
-        TRANSLOADIT_KEY: authKey,
-        TRANSLOADIT_SECRET: authSecret,
-        TRANSLOADIT_R2_CREDENTIALS: process.env.TRANSLOADIT_R2_CREDENTIALS,
-        R2_BUCKET: process.env.R2_BUCKET,
-        R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
-        R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
-        R2_ACCOUNT_ID: process.env.R2_ACCOUNT_ID,
-        R2_HOST: process.env.R2_HOST,
-        R2_PUBLIC_URL: process.env.R2_PUBLIC_URL,
-      },
-    })
-    serverUrl = app.url
-  })
-
-  afterAll(async () => {
-    if (app) {
-      await app.close()
-      app = null
-    }
   })
 
   test('uploads wedding photos and videos', async () => {
     const browser = await chromium.launch(chromiumChannel ? { channel: chromiumChannel } : {})
     const page = await browser.newPage()
     let storedImageHref: string | undefined
+    let sharedPhotoUrl: string | undefined
     const storedVideoHrefs: string[] = []
-    const appRequestHeaders: Record<string, string> = useRemote
-      ? { 'x-vercel-protection-bypass': vercelBypassToken }
-      : {}
-    const localStatusRequests: number[] = []
-    page.on('request', (request) => {
-      const url = new URL(request.url())
-      if (!useRemote && url.pathname === '/api/assemblies' && request.method() === 'GET') {
-        localStatusRequests.push(Date.now())
-      }
-    })
+    const appRequestHeaders: Record<string, string> = {
+      'x-vercel-protection-bypass': vercelBypassToken,
+    }
     const connectedHosts = new Set<string>()
     page.on('websocket', (socket) => connectedHosts.add(new URL(socket.url()).host))
-    await page.addInitScript(() => {
-      const start = document.startViewTransition?.bind(document)
-      if (!start) return
-      const state = window as typeof window & {
-        __viewTransitions: number
-        __viewTransitionFinished?: Promise<void>
-        __viewTransitionTrace: unknown[]
-        __viewSlideFrames: { layer: string; transforms: string[] }[]
-      }
-      state.__viewTransitions = 0
-      state.__viewTransitionTrace = []
-      state.__viewSlideFrames = []
-      document.startViewTransition = (...args) => {
-        state.__viewTransitions += 1
-        state.__viewSlideFrames = []
-        const id = state.__viewTransitions
-        const trace = (phase: string, error?: unknown) => {
-          state.__viewTransitionTrace.push({
-            id,
-            phase,
-            time: Math.round(performance.now()),
-            media: document.querySelector('dialog .viewer-media')?.firstElementChild?.tagName,
-            width: innerWidth,
-            visibility: document.visibilityState,
-            navigation: Boolean(window.navigation?.transition),
-            reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches,
-            error: error instanceof Error ? error.message : error ? String(error) : undefined,
-          })
-        }
-        trace('start')
-        const transition = start(...args)
-        state.__viewTransitionFinished = transition.finished
-        transition.updateCallbackDone.then(
-          () => trace('updated'),
-          (error) => trace('update rejected', error),
-        )
-        transition.ready.then(
-          () => {
-            trace('ready')
-            // Inspect the browser's actual animation layers after Motion has configured them.
-            requestAnimationFrame(() => {
-              state.__viewSlideFrames = document.getAnimations().flatMap(({ effect }) => {
-                if (!(effect instanceof KeyframeEffect) || !effect.pseudoElement) return []
-                return [
-                  {
-                    layer: effect.pseudoElement,
-                    transforms: effect
-                      .getKeyframes()
-                      .map((frame) => String(frame.transform ?? 'none')),
-                  },
-                ]
-              })
-            })
-          },
-          (error) => trace('ready rejected', error),
-        )
-        transition.finished.then(
-          () => trace('finished'),
-          (error) => trace('finish rejected', error),
-        )
-        return transition
-      }
-    })
-    const appOrigin = useRemote ? new URL(serverUrl).origin : serverUrl
+    const appOrigin = new URL(serverUrl).origin
     const shouldTrackRequest = (url: string) =>
       url.includes('transloadit') ||
       url.includes('resumable') ||
@@ -167,7 +72,7 @@ describeE2e('e2e upload flow', () => {
     const diagnostics = attachBrowserDiagnostics(page, { shouldTrackRequest })
 
     try {
-      if (useRemote && vercelBypassToken) {
+      if (vercelBypassToken) {
         await page.route('**/*', async (route) => {
           const url = route.request().url()
           if (new URL(url).origin !== appOrigin) {
@@ -193,14 +98,11 @@ describeE2e('e2e upload flow', () => {
       await browserExpect(page.locator('.cover-image')).toHaveCount(0)
       expect(navigation?.headers()['x-robots-tag']).toContain('noindex')
       await browserExpect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
-      if (useRemote && remoteConvexUrl) {
+      if (remoteConvexUrl) {
         const unauthenticated = new ConvexHttpClient(remoteConvexUrl)
         await expect(
           unauthenticated.query(makeFunctionReference<'query'>('wedding:listGallery'), {}),
         ).rejects.toThrow('ACCESS_REQUIRED')
-      } else if (!useRemote) {
-        const response = await page.request.get(`${serverUrl}/api/assemblies?assemblyId=private`)
-        expect(response.status()).toBe(401)
       }
       const enter = entry.getByTestId('enter-album')
       await browserExpect(enter).toBeEnabled()
@@ -221,108 +123,91 @@ describeE2e('e2e upload flow', () => {
       }
       await entryName.fill('Preview Guest')
       const invitation = entry.getByLabel('Invite code')
-      if (!useRemote) {
-        await browserExpect(invitation).toBeVisible()
-        await invitation.fill('wrong-code')
-        await enter.click()
-        await browserExpect(entry.getByRole('alert')).toHaveText(
-          'Please enter the correct invite code.',
-        )
-        await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
-      }
       if (await invitation.isVisible()) {
-        const code = useRemote
-          ? process.env.E2E_WEDDING_UPLOAD_CODE || process.env.WEDDING_UPLOAD_CODE
-          : 'browser-invitation-test'
+        const code = process.env.E2E_WEDDING_UPLOAD_CODE || process.env.WEDDING_UPLOAD_CODE
         if (!code) throw new Error('Set E2E_WEDDING_UPLOAD_CODE to test this code-protected album')
         await invitation.fill(code)
       }
       await enter.click()
       await browserExpect(entry).toBeHidden({ timeout: 60_000 })
-
-      if (useRemote) {
-        try {
-          await page.waitForSelector('[data-auth-state="authenticated"]', {
-            timeout: 60_000,
-          })
-        } catch (error) {
-          const title = await page.title().catch(() => null)
-          const status = navigation?.status() ?? null
-          const authState = await page
-            .getAttribute('main.page', 'data-auth-state')
-            .catch(() => null)
-          const headingText = await page
-            .locator('h1, h2')
-            .first()
-            .textContent()
-            .catch(() => null)
-          const headline = await page
-            .locator('.headline')
-            .first()
-            .textContent()
-            .catch(() => null)
-          const bodyHtml = await page.evaluate(() => document.body?.outerHTML ?? '').catch(() => '')
-          const bodyTextSnippet = await page
-            .evaluate(() => document.body?.innerText?.slice(0, 500) ?? '')
-            .catch(() => '')
-          const authStorage = await page
-            .evaluate(() => {
-              const entries: string[] = []
-              try {
-                for (let index = 0; index < localStorage.length; index += 1) {
-                  const key = localStorage.key(index)
-                  if (!key) continue
-                  if (!key.includes('__convexAuth')) continue
-                  entries.push(key)
-                }
-              } catch {
-                return { error: 'localStorage unavailable' }
+      try {
+        await page.waitForSelector('[data-auth-state="authenticated"]', {
+          timeout: 60_000,
+        })
+      } catch (error) {
+        const title = await page.title().catch(() => null)
+        const status = navigation?.status() ?? null
+        const authState = await page.getAttribute('main.page', 'data-auth-state').catch(() => null)
+        const headingText = await page
+          .locator('h1, h2')
+          .first()
+          .textContent()
+          .catch(() => null)
+        const headline = await page
+          .locator('.headline')
+          .first()
+          .textContent()
+          .catch(() => null)
+        const bodyHtml = await page.evaluate(() => document.body?.outerHTML ?? '').catch(() => '')
+        const bodyTextSnippet = await page
+          .evaluate(() => document.body?.innerText?.slice(0, 500) ?? '')
+          .catch(() => '')
+        const authStorage = await page
+          .evaluate(() => {
+            const entries: string[] = []
+            try {
+              for (let index = 0; index < localStorage.length; index += 1) {
+                const key = localStorage.key(index)
+                if (!key) continue
+                if (!key.includes('__convexAuth')) continue
+                entries.push(key)
               }
-              return entries
-            })
-            .catch(() => 'localStorage read failed')
-          const hasVercelProtection = bodyHtml.includes('Vercel')
-          console.log('Cloud auth wait failed.', {
-            title,
-            status,
-            authState,
-            headingText,
-            headline,
-            bodyTextSnippet,
-            authStorage,
-            hasVercelProtection,
-            url: new URL(page.url()).origin,
+            } catch {
+              return { error: 'localStorage unavailable' }
+            }
+            return entries
           })
-          throw error
-        }
-        if (remoteConvexUrl) {
-          expect(connectedHosts.has(new URL(remoteConvexUrl).host)).toBe(true)
+          .catch(() => 'localStorage read failed')
+        const hasVercelProtection = bodyHtml.includes('Vercel')
+        console.log('Cloud auth wait failed.', {
+          title,
+          status,
+          authState,
+          headingText,
+          headline,
+          bodyTextSnippet,
+          authStorage,
+          hasVercelProtection,
+          url: new URL(page.url()).origin,
+        })
+        throw error
+      }
+      if (remoteConvexUrl) {
+        expect(connectedHosts.has(new URL(remoteConvexUrl).host)).toBe(true)
 
-          // A returning guest may still have a valid JWT for a session that no longer admits
-          // them. End only this test's server session, retaining its browser storage.
-          const previousToken = await page.evaluate(
-            () =>
-              Object.entries(localStorage).find(([key]) => key.startsWith('__convexAuthJWT_'))?.[1],
-          )
-          if (!previousToken) throw new Error('The test guest did not receive a session token')
-          await page.goto('about:blank')
-          const previousSession = new ConvexHttpClient(remoteConvexUrl, { logger: false })
-          previousSession.setAuth(previousToken)
-          await previousSession.action(makeFunctionReference<'action'>('auth:signOut'), {})
-          await page.goto(serverUrl, { waitUntil: 'domcontentloaded' })
-          await browserExpect(entry).toBeVisible()
-          await browserExpect(enter).toBeEnabled()
-          await entryName.fill('Preview Guest')
-          if (await invitation.isVisible()) {
-            const code = process.env.E2E_WEDDING_UPLOAD_CODE || process.env.WEDDING_UPLOAD_CODE
-            if (!code)
-              throw new Error('Set E2E_WEDDING_UPLOAD_CODE to re-enter this protected album')
-            await invitation.fill(code)
-          }
-          await enter.click()
-          await browserExpect(entry).toBeHidden({ timeout: 30_000 })
-          await browserExpect(page.getByTestId('open-upload')).toBeVisible()
+        // A returning guest may still have a valid JWT for a session that no longer admits
+        // them. End only this test's server session, retaining its browser storage.
+        const previousToken = await page.evaluate(
+          () =>
+            Object.entries(localStorage).find(([key]) => key.startsWith('__convexAuthJWT_'))?.[1],
+        )
+        if (!previousToken) throw new Error('The test guest did not receive a session token')
+        await page.goto('about:blank')
+        const previousSession = new ConvexHttpClient(remoteConvexUrl, { logger: false })
+        previousSession.setAuth(previousToken)
+        await previousSession.action(makeFunctionReference<'action'>('auth:signOut'), {})
+        await page.goto(serverUrl, { waitUntil: 'domcontentloaded' })
+        await browserExpect(entry).toBeVisible()
+        await browserExpect(enter).toBeEnabled()
+        await entryName.fill('Preview Guest')
+        if (await invitation.isVisible()) {
+          const code = process.env.E2E_WEDDING_UPLOAD_CODE || process.env.WEDDING_UPLOAD_CODE
+          if (!code) throw new Error('Set E2E_WEDDING_UPLOAD_CODE to re-enter this protected album')
+          await invitation.fill(code)
         }
+        await enter.click()
+        await browserExpect(entry).toBeHidden({ timeout: 30_000 })
+        await browserExpect(page.getByTestId('open-upload')).toBeVisible()
       }
 
       const imagePath = join(fixturesDir, 'wedding-photo-01.png')
@@ -533,14 +418,6 @@ describeE2e('e2e upload flow', () => {
 
       await waitForAssemblyMedia(assemblyId)
 
-      if (!useRemote && localStatusRequests.length > 0) {
-        const pollingDuration = Date.now() - localStatusRequests[0]
-        // One initial poll, one explicit refresh after upload, and the four-second polling cadence.
-        expect(localStatusRequests.length).toBeLessThanOrEqual(
-          2 + Math.ceil(pollingDuration / 4000),
-        )
-      }
-
       const cards = page.locator(`[data-testid="gallery"] [data-assembly-id="${assemblyId}"]`)
       await browserExpect(cards).toHaveCount(3)
       if (process.env.E2E_EXPECT_STORAGE === '1') {
@@ -578,15 +455,27 @@ describeE2e('e2e upload flow', () => {
         mkdirSync(screenshots, { recursive: true })
         await page.screenshot({ path: join(screenshots, 'gallery-desktop.png'), fullPage: true })
       }
-      const transitions = await page.evaluate(
-        () => (window as typeof window & { __viewTransitions?: number }).__viewTransitions,
-      )
       const photo = cards
         .filter({ has: page.locator('img') })
         .first()
         .getByRole('button')
       await photo.click()
       const viewer = page.getByRole('dialog')
+      await browserExpect(viewer).toBeVisible()
+      sharedPhotoUrl = page.url()
+      expect(new URL(sharedPhotoUrl).searchParams.get('media')).toMatch(
+        /^[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{22}$/,
+      )
+      const selectedTitle = await viewer.getAttribute('aria-labelledby')
+      expect(selectedTitle).toBeTruthy()
+      const selectedName = await viewer.locator('.viewer-caption p').textContent()
+      if (!selectedName) throw new Error('A shared photo must have an accessible title')
+      await page.reload({ waitUntil: 'domcontentloaded' })
+      await browserExpect(page.getByRole('dialog', { name: selectedName })).toBeVisible()
+      // Reload discards the old opener. Establish a new one for the later focus-return check.
+      await viewer.getByRole('button', { name: 'Close viewer' }).click()
+      await browserExpect(viewer).toHaveCount(0)
+      await photo.click()
       await browserExpect(viewer).toBeVisible()
       if (storedImageHref) {
         const href = await viewer
@@ -615,31 +504,14 @@ describeE2e('e2e upload flow', () => {
       }
       await browserExpect(viewer.locator('.viewer-credit')).toHaveText('Added by Preview Guest')
       await browserExpect(viewer.getByRole('button', { name: 'Close viewer' })).toBeFocused()
-      if (transitions !== undefined) {
-        await browserExpect
-          .poll(() =>
-            page.evaluate(
-              () => (window as typeof window & { __viewTransitions: number }).__viewTransitions,
-            ),
-          )
-          .toBeGreaterThan(transitions)
-        await page.evaluate(
-          () =>
-            (window as typeof window & { __viewTransitionFinished?: Promise<void> })
-              .__viewTransitionFinished,
-        )
-      }
-      await browserExpect(viewer.locator('img')).toHaveJSProperty('complete', true)
-      const viewingBounds = await viewer.locator('img').boundingBox()
+      await browserExpect(viewer.getByRole('img')).toHaveJSProperty('complete', true)
+      const viewingBounds = await viewer.getByRole('img').boundingBox()
       expect(viewingBounds?.width).toBeGreaterThan(600)
       if (screenshots) {
         await page.screenshot({ path: join(screenshots, 'viewer-desktop.png') })
       }
       const photoTitle = await viewer.locator('.viewer-toolbar p').textContent()
       for (const direction of ['next', 'previous', 'batched next'] as const) {
-        const before = await page.evaluate(
-          () => (window as typeof window & { __viewTransitions: number }).__viewTransitions,
-        )
         if (direction !== 'previous') {
           if (direction === 'batched next') {
             await viewer.evaluate((dialog) => {
@@ -655,57 +527,15 @@ describeE2e('e2e upload flow', () => {
           await viewer.getByRole('button', { name: 'Previous' }).click()
           await browserExpect(viewer.locator('.viewer-toolbar p')).toHaveText(photoTitle ?? '')
         }
-        if (before !== undefined) {
-          await browserExpect
-            .poll(() =>
-              page.evaluate(
-                () => (window as typeof window & { __viewTransitions: number }).__viewTransitions,
-              ),
-            )
-            .toBeGreaterThan(before)
-          const frames = await page.evaluate(async () => {
-            const state = window as typeof window & {
-              __viewTransitionFinished?: Promise<void>
-              __viewSlideFrames: { layer: string; transforms: string[] }[]
-            }
-            await state.__viewTransitionFinished
-            return state.__viewSlideFrames
-          })
-          const incoming = direction === 'previous' ? '-100' : '100'
-          const outgoing = direction === 'previous' ? '100' : '-100'
-          expect(frames).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({
-                layer: expect.stringContaining('::view-transition-new('),
-                transforms: [`translateX(${incoming}%)`, 'translateX(0%)'],
-              }),
-              expect.objectContaining({
-                layer: expect.stringContaining('::view-transition-old('),
-                transforms: expect.arrayContaining([`translateX(${outgoing}%)`]),
-              }),
-            ]),
-          )
-        }
       }
       await page.keyboard.press('Escape')
       await browserExpect(viewer).toHaveCount(0)
       await browserExpect(photo).toBeFocused()
-      // The dialog disappears before Chrome finishes capturing its exit animation. Resizing during
-      // that capture can stall the native transition, so finish it before the separate phone case.
-      await page.evaluate(
-        () =>
-          (window as typeof window & { __viewTransitionFinished?: Promise<void> })
-            .__viewTransitionFinished,
-      )
-
       // Phone-sized viewing and reduced motion must keep every navigation control usable.
       await page.setViewportSize({ width: 390, height: 844 })
       await page.emulateMedia({ reducedMotion: 'reduce' })
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         390,
-      )
-      const reducedMotionTransitions = await page.evaluate(
-        () => (window as typeof window & { __viewTransitions?: number }).__viewTransitions,
       )
       await allCards.first().getByRole('button').click()
       await browserExpect(viewer).toBeVisible()
@@ -720,11 +550,6 @@ describeE2e('e2e upload flow', () => {
       }
       await viewer.getByRole('button', { name: 'Close viewer' }).click()
       await browserExpect(viewer).toHaveCount(0)
-      expect(
-        await page.evaluate(
-          () => (window as typeof window & { __viewTransitions?: number }).__viewTransitions,
-        ),
-      ).toBe(reducedMotionTransitions)
 
       await cards
         .filter({ has: page.locator('video') })
@@ -784,11 +609,6 @@ describeE2e('e2e upload flow', () => {
         .toBeGreaterThan(0)
       await page.keyboard.press('Escape')
       await browserExpect(viewer).toHaveCount(0)
-      await page.evaluate(
-        () =>
-          (window as typeof window & { __viewTransitionFinished?: Promise<void> })
-            .__viewTransitionFinished,
-      )
       await openUpload.click()
       const uploadBounds = await uploadDialog.boundingBox()
       expect(uploadBounds?.x).toBe(0)
@@ -850,12 +670,10 @@ describeE2e('e2e upload flow', () => {
         'Preview Guest',
       )
       await page.keyboard.press('Escape')
-      if (useRemote) {
-        await browserExpect(cards.locator('.gallery-credit')).toHaveText(
-          Array(3).fill('Toegevoegd door Preview Guest'),
-          { timeout: 30_000 },
-        )
-      }
+      await browserExpect(cards.locator('.gallery-credit')).toHaveText(
+        Array(3).fill('Toegevoegd door Preview Guest'),
+        { timeout: 30_000 },
+      )
       await page.getByRole('button', { name: 'Album verlaten' }).click()
       await browserExpect(entry).toBeVisible()
       // The gate is shown immediately to stop subscriptions; its button stays disabled until
@@ -878,6 +696,32 @@ describeE2e('e2e upload flow', () => {
         expect(denied.status()).toBe(404)
         expect(denied.headers()['cache-control']).toContain('no-store')
       }
+      if (!sharedPhotoUrl) throw new Error('Missing shared photo link')
+      await page.goto(sharedPhotoUrl, { waitUntil: 'domcontentloaded' })
+      await browserExpect(entry).toBeVisible()
+      await browserExpect(page.getByRole('dialog')).toHaveCount(0)
+      expect(new URL(page.url()).searchParams.get('media')).toBe(
+        new URL(sharedPhotoUrl).searchParams.get('media'),
+      )
+      // A recipient must enter normally, then land on the exact shared photo rather than the grid.
+      await entry.getByRole('textbox', { name: 'Je naam' }).fill('Shared Link Guest')
+      const sharedInvitation = entry.getByLabel('Uitnodigingscode')
+      if (await sharedInvitation.isVisible()) {
+        const code = process.env.E2E_WEDDING_UPLOAD_CODE || process.env.WEDDING_UPLOAD_CODE
+        if (!code) throw new Error('Set E2E_WEDDING_UPLOAD_CODE to open this protected shared link')
+        await sharedInvitation.fill(code)
+      }
+      await enter.click()
+      await browserExpect(entry).toBeHidden({ timeout: 30_000 })
+      await browserExpect(page.getByRole('dialog', { name: selectedName })).toBeVisible()
+      expect(new URL(page.url()).searchParams.get('media')).toBe(
+        new URL(sharedPhotoUrl).searchParams.get('media'),
+      )
+      await page.keyboard.press('Escape')
+      await browserExpect(viewer).toHaveCount(0)
+      await page.getByRole('button', { name: 'Album verlaten' }).click()
+      await browserExpect(entry).toBeVisible()
+      await browserExpect(enter).toBeEnabled()
       // A crafted invitation URL cannot send credentials to a backend of its choice.
       const craftedUrl = new URL(serverUrl)
       craftedUrl.searchParams.set('convexUrl', 'https://example.invalid')
@@ -886,24 +730,11 @@ describeE2e('e2e upload flow', () => {
       await browserExpect(entry.getByTestId('enter-album')).toBeEnabled()
       await browserExpect(entry.getByRole('textbox', { name: 'Je naam' })).toHaveValue('')
       await browserExpect(page.getByTestId('gallery')).toHaveCount(0)
-      if (!useRemote) {
-        const response = await page.request.get(
-          `${serverUrl}/api/assemblies?assemblyId=${assemblyId}`,
-        )
-        expect(response.status()).toBe(401)
-      }
       expect(
         diagnostics.consoleMessages.filter((message) => message.startsWith('[pageerror]')),
       ).toEqual([])
     } catch (error) {
       diagnostics.dump()
-      console.log(
-        'View transition trace:',
-        await page.evaluate(
-          () =>
-            (window as typeof window & { __viewTransitionTrace?: unknown[] }).__viewTransitionTrace,
-        ),
-      )
       const uppyState = await page
         .evaluate(() => {
           const uppy = (window as { __uppy?: DebugUppy }).__uppy

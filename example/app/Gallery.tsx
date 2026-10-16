@@ -1,76 +1,62 @@
 'use client'
 
 import { getStorageAssetHref, Image } from '@transloadit/viewer/react'
-import { spring } from 'motion'
-import { AnimateView } from 'motion/react-animate-view'
+import { ImagePrefetch, ImagePreview } from '@transloadit/viewer/react/preview'
 import { useTranslations } from 'next-intl'
+import { type CSSProperties, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
-  addTransitionType,
-  type CSSProperties,
-  startTransition,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react'
-import {
-  buildGalleryItems,
   buildStorageGalleryItems,
   type GalleryItem,
-  type GalleryResult,
-  mergeGalleryItems,
   type StorageGalleryAsset,
   thumbnailSizes,
 } from '../lib/gallery'
+import { selectGalleryMedia, useGalleryLocation } from '../lib/gallery-location'
 import { renewExpiredGrants } from '../lib/media-grant'
 
-const motionPreference = '(prefers-reduced-motion: reduce)'
-const subscribeToMotionPreference = (onChange: () => void) => {
-  const query = window.matchMedia(motionPreference)
-  query.addEventListener('change', onChange)
-  return () => query.removeEventListener('change', onChange)
-}
-const readMotionPreference = () => window.matchMedia(motionPreference).matches
-const slideTransition = { type: spring, visualDuration: 0.3, bounce: 0.2 }
-const isNavigation = (types: string[]) => types.includes('next') || types.includes('previous')
-// React can batch opposite directions. Prefer next for that ambiguous combination, even if the
-// net movement is backward; both snapshot layers must use the same rule to move oppositely.
-const slideOffset = (types: string[]) => (types.includes('next') ? 100 : -100)
+const viewerDelivery = { sizes: '100vw' }
 
-const Media = ({
+function Media({
   item,
   viewing = false,
-  onDimensions,
+  onLoad,
 }: {
   item: GalleryItem
   viewing?: boolean
-  onDimensions?: (width: number, height: number) => void
-}) => {
+  onLoad?: () => void
+}) {
   const t = useTranslations('viewer')
-  if (item.kind === 'video' && !item.url) return <p>{t('videoUnavailable')}</p>
-  // Private photos: each candidate is a stable same-origin route URL that reauthorizes the guest
-  // and redirects to a short-lived CDN grant, so long-open albums keep loading.
-  // Thumbnails fill a box of the photo's own ratio, so its opaque pixels cover the ThumbHash
-  // background once loaded, without a load handler; Viewer skips transparent photos. The fullscreen
-  // photo is letterboxed. Both fits are explicit, so the stylesheet cannot change what Viewer's
-  // placeholder guard sees.
   if (item.receipt)
-    return (
+    return viewing ? (
+      <ImagePreview
+        src={item.receipt}
+        alt={item.name || t('moment')}
+        {...viewerDelivery}
+        loadingFallback={
+          <span role="status" className="viewer-loading">
+            {t('loading')}
+          </span>
+        }
+        errorFallback={
+          <p role="alert" className="viewer-error">
+            {t('loadFailed')}
+          </p>
+        }
+        onReady={onLoad}
+      />
+    ) : (
       <Image
         src={item.receipt}
         alt={item.name || t('moment')}
-        sizes={viewing ? '100vw' : thumbnailSizes(item.aspectRatio)}
-        loading={viewing ? 'eager' : 'lazy'}
-        placeholder={viewing ? 'empty' : 'blur'}
-        objectFit={viewing ? 'contain' : 'cover'}
+        sizes={thumbnailSizes(item.aspectRatio)}
+        loading="lazy"
+        placeholder="blur"
+        objectFit="cover"
       />
     )
-  return item.kind === 'video' ? (
+  if (!item.url) return <p>{t('videoUnavailable')}</p>
+  return (
     // biome-ignore lint/a11y/useMediaCaption: Guest clips do not have caption tracks.
     <video
-      // After a short Storage grant expires, a seek or resume reloads the same route URL, which
-      // reauthorizes the guest; legacy public R2 URLs are simply reloaded once.
       ref={renewExpiredGrants}
       src={item.url}
       poster={item.posterUrl}
@@ -78,55 +64,17 @@ const Media = ({
       playsInline
       preload={viewing ? 'metadata' : 'none'}
       aria-label={item.name || t('moment')}
-      onLoadedMetadata={(event) =>
-        onDimensions?.(event.currentTarget.videoWidth, event.currentTarget.videoHeight)
-      }
-    />
-  ) : (
-    <img
-      src={item.url}
-      alt={item.name || t('moment')}
-      loading={viewing ? 'eager' : 'lazy'}
-      decoding="async"
-      // An onLoad handler opts out of React's image-loading wait during view transitions.
-      onLoad={
-        onDimensions
-          ? (event) =>
-              onDimensions(event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)
-          : undefined
-      }
     />
   )
 }
 
-const GalleryCard = ({
-  item,
-  name,
-  animate,
-  onSelect,
-}: {
-  item: GalleryItem
-  name: string
-  animate: boolean
-  onSelect: () => void
-}) => {
+function GalleryCard({ item, onSelect }: { item: GalleryItem; onSelect: () => void }) {
   const t = useTranslations('viewer')
-  const [ratio, setRatio] = useState(item.aspectRatio ?? 3 / 2)
-  const media = (
-    <div className="gallery-media">
-      <Media
-        item={item}
-        onDimensions={(width, height) => {
-          if (width > 0 && height > 0) setRatio(width / height)
-        }}
-      />
-    </div>
-  )
   return (
     <div
       className="card"
       data-assembly-id={item.assemblyId}
-      style={{ '--media-ratio': ratio } as CSSProperties}
+      style={{ '--media-ratio': item.aspectRatio ?? 3 / 2 } as CSSProperties}
     >
       <button
         type="button"
@@ -134,23 +82,14 @@ const GalleryCard = ({
         onClick={onSelect}
         aria-label={t('view', { name: item.name || t('moment') })}
       >
-        {animate ? (
-          <AnimateView
-            name={name}
-            transition={{ type: spring, duration: 0.45, bounce: 0.12 }}
-            enter={{ opacity: 1, transition: { type: false, duration: 0 } }}
-            exit={{ opacity: 0, transition: { type: false, duration: 0 } }}
-          >
-            {media}
-          </AnimateView>
-        ) : (
-          media
-        )}
-        {item.kind === 'video' && (
+        <div className="gallery-media">
+          <Media item={item} />
+        </div>
+        {item.kind === 'video' ? (
           <span className="badge">
             <span aria-hidden="true">▶</span> {t('video')}
           </span>
-        )}
+        ) : null}
       </button>
       <p className="gallery-credit">
         {item.uploadedBy ? t('addedBy', { name: item.uploadedBy }) : t('unknownContributor')}
@@ -159,36 +98,59 @@ const GalleryCard = ({
   )
 }
 
-const GalleryViewer = ({
+function GallerySlide({
   item,
-  position,
-  total,
-  name,
-  onClose,
-  onPrevious,
-  onNext,
-  reducedMotion,
+  neighbor,
+  direction,
 }: {
   item: GalleryItem
+  neighbor?: GalleryItem
+  direction: 'next' | 'previous'
+}) {
+  // This keyed visit owns readiness. Returning to a photo must not reuse an older load event.
+  const [ready, setReady] = useState(false)
+  return (
+    <>
+      <div className={`viewer-slide viewer-slide-${direction}`}>
+        <Media item={item} viewing onLoad={() => setReady(true)} />
+      </div>
+      {ready && neighbor?.receipt ? (
+        <ImagePrefetch key={neighbor.id} src={neighbor.receipt} {...viewerDelivery} />
+      ) : null}
+    </>
+  )
+}
+
+function GalleryViewer({
+  item,
+  neighbor,
+  position,
+  total,
+  pending,
+  direction,
+  onPrevious,
+  onNext,
+}: {
+  item?: GalleryItem
+  neighbor?: GalleryItem
   position: number
   total: number
-  name: string
-  onClose: () => void
+  pending: boolean
+  direction: 'next' | 'previous'
   onPrevious: () => void
   onNext: () => void
-  reducedMotion: boolean
-}) => {
+}) {
   const t = useTranslations('viewer')
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const previousRef = useRef<HTMLButtonElement>(null)
+  const nextRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
-
   useLayoutEffect(() => {
     const dialog = dialogRef.current
     const opener = document.activeElement
     const overflow = document.body.style.overflow
     dialog?.showModal()
-    // Private media adds a download link before Close; keep the same safe initial action.
     closeRef.current?.focus({ preventScroll: true })
     document.body.style.overflow = 'hidden'
     return () => {
@@ -197,10 +159,23 @@ const GalleryViewer = ({
       if (opener instanceof HTMLElement) opener.focus({ preventScroll: true })
     }
   }, [])
-
-  const media = <Media key={item.id} item={item} viewing />
-  const original = item.original ?? item.receipt
-
+  useLayoutEffect(() => {
+    if (position > 0 && position < total - 1) return
+    // Disabling the focused boundary button can move browser focus outside the modal.
+    // Keep subsequent arrow/Escape keys in the viewer without replacing native disabled buttons.
+    const focused = document.activeElement
+    if (
+      focused === document.body ||
+      (focused instanceof HTMLButtonElement &&
+        focused.disabled &&
+        dialogRef.current?.contains(focused))
+    ) {
+      const neighbor = position === 0 ? nextRef.current : previousRef.current
+      const target = neighbor && !neighbor.disabled ? neighbor : closeRef.current
+      target?.focus({ preventScroll: true })
+    }
+  }, [position, total])
+  const close = () => selectGalleryMedia(null)
   return (
     <dialog
       ref={dialogRef}
@@ -208,11 +183,10 @@ const GalleryViewer = ({
       aria-labelledby={titleId}
       onCancel={(event) => {
         event.preventDefault()
-        onClose()
+        close()
       }}
       onKeyDown={(event) => {
-        // Preserve the video player's native arrow-key seeking.
-        if ((event.target as HTMLElement).tagName === 'VIDEO') return
+        if (event.target instanceof HTMLVideoElement) return
         if (event.key === 'ArrowLeft') {
           event.preventDefault()
           onPrevious()
@@ -225,62 +199,52 @@ const GalleryViewer = ({
     >
       <div className="viewer-toolbar">
         <div className="viewer-caption">
-          <p id={titleId}>{item.name || t('moment')}</p>
-          <span className="viewer-credit">
-            {item.uploadedBy ? t('addedBy', { name: item.uploadedBy }) : t('unknownContributor')}
-          </span>
+          <p id={titleId}>{item?.name || t('moment')}</p>
+          {item ? (
+            <span className="viewer-credit">
+              {item.uploadedBy ? t('addedBy', { name: item.uploadedBy }) : t('unknownContributor')}
+            </span>
+          ) : null}
         </div>
         <div className="viewer-actions">
-          {original && (
+          {item?.original ? (
             <a
               className="viewer-download"
-              href={getStorageAssetHref(original, { action: 'download' })}
+              href={getStorageAssetHref(item.original, { action: 'download' })}
             >
               {t('download')}
             </a>
-          )}
-          <button ref={closeRef} type="button" onClick={onClose} aria-label={t('close')}>
-            {t('closeButton')} <span aria-hidden="true">×</span>
+          ) : null}
+          <button ref={closeRef} type="button" onClick={close} aria-label={t('close')}>
+            ×
           </button>
         </div>
       </div>
-      <div className="viewer-media">
-        {reducedMotion ? (
-          media
+      <div className="viewer-stage">
+        {item ? (
+          <GallerySlide
+            key={JSON.stringify([item.id, item.original?.workspace, viewerDelivery])}
+            item={item}
+            neighbor={neighbor}
+            direction={direction}
+          />
         ) : (
-          <AnimateView
-            key={item.id}
-            name={name}
-            transition={{ type: spring, duration: 0.45, bounce: 0.12 }}
-            enter={(types) =>
-              isNavigation(types)
-                ? {
-                    opacity: 1,
-                    transform: [`translateX(${slideOffset(types)}%)`, 'translateX(0%)'],
-                    transition: slideTransition,
-                  }
-                : {}
-            }
-            exit={(types) =>
-              isNavigation(types)
-                ? {
-                    opacity: 0,
-                    transform: `translateX(${-slideOffset(types)}%)`,
-                    transition: slideTransition,
-                  }
-                : {}
-            }
-          >
-            {media}
-          </AnimateView>
+          <p role={pending ? 'status' : 'alert'}>{pending ? t('loading') : t('unavailable')}</p>
         )}
       </div>
       <div className="viewer-toolbar viewer-navigation">
-        <button type="button" onClick={onPrevious} disabled={position === 0}>
+        <button ref={previousRef} type="button" onClick={onPrevious} disabled={position <= 0}>
           {t('previous')}
         </button>
-        <span aria-live="polite">{t('position', { current: position + 1, total })}</span>
-        <button type="button" onClick={onNext} disabled={position === total - 1}>
+        <span aria-live="polite">
+          {item && position >= 0 ? t('position', { current: position + 1, total }) : ''}
+        </span>
+        <button
+          ref={nextRef}
+          type="button"
+          onClick={onNext}
+          disabled={position < 0 || position >= total - 1}
+        >
           {t('next')}
         </button>
       </div>
@@ -288,110 +252,86 @@ const GalleryViewer = ({
   )
 }
 
-export const Gallery = ({
-  results,
+export function Gallery({
   storageAssets = [],
+  linkedAsset,
+  linkLoading = false,
   onLoadMore,
   loadFailed = false,
 }: {
-  results: GalleryResult[]
   storageAssets?: StorageGalleryAsset[]
+  linkedAsset?: StorageGalleryAsset | null
+  linkLoading?: boolean
   onLoadMore?: () => void
   loadFailed?: boolean
-}) => {
+}) {
   const t = useTranslations('album')
-  const items = mergeGalleryItems(
-    buildStorageGalleryItems(storageAssets),
-    buildGalleryItems(results),
-  )
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  // Subscribe to changes too: Motion's hook currently snapshots this preference at mount.
-  const reducedMotion = useSyncExternalStore(
-    subscribeToMotionPreference,
-    readMotionPreference,
-    () => true,
-  )
-  const instanceId = useId()
+  const selectedId = useGalleryLocation()
+  const [direction, setDirection] = useState<'next' | 'previous'>('next')
+  const items = loadFailed ? [] : buildStorageGalleryItems(storageAssets)
   const position = items.findIndex((item) => item.id === selectedId)
-  const selected = items[position]
-  const select = (id: string | null) => startTransition(() => setSelectedId(id))
-  const navigate = (direction: 'next' | 'previous') => {
-    startTransition(() => {
-      addTransitionType(direction)
-      setSelectedId((currentId) => {
-        const currentPosition = items.findIndex((item) => item.id === currentId)
-        if (currentPosition === -1) return currentId
-        return items[currentPosition + (direction === 'next' ? 1 : -1)]?.id ?? currentId
-      })
-    })
+  // A deep-linked item outside loaded pages has no known neighbors or ordinal. Keep its live
+  // authorized subscription, but do not append it to the grid or invent a pagination position.
+  const linked = linkedAsset && !loadFailed ? buildStorageGalleryItems([linkedAsset]) : []
+  const selected = items[position] ?? linked.find((item) => item.id === selectedId)
+  const navigate = (value: 'next' | 'previous') => {
+    // Read the current URL, not a render closure, so rapid clicks never collapse into one move.
+    const id = new URLSearchParams(window.location.search).get('media')
+    const current = items.findIndex((item) => item.id === id)
+    const next = current < 0 ? undefined : items[current + (value === 'next' ? 1 : -1)]
+    if (!next) return
+    setDirection(value)
+    selectGalleryMedia(next.id)
   }
-  // Encode every character so arbitrary filenames cannot collide or become invalid CSS names.
-  const transitionName = (id: string) =>
-    `photo-${Array.from(`${instanceId}-${id}`, (char) => char.codePointAt(0)?.toString(16)).join('-')}`
-
-  const failure = loadFailed ? (
-    <p className="gallery-error" role="alert">
-      {t('loadFailed')}
-    </p>
-  ) : null
-
-  const more = onLoadMore ? (
-    <button type="button" className="button gallery-more" onClick={onLoadMore}>
-      {t('loadMore')}
-    </button>
-  ) : null
-
-  if (!items.length) {
-    // Filtering can empty a page while later pages still hold photos: keep the way forward.
-    if (failure || more)
-      return (
-        <>
-          {failure}
-          {more}
-        </>
-      )
-    return (
-      <div className="gallery-empty" data-testid="gallery-empty">
-        <span className="empty-flower" aria-hidden="true">
-          ✳
-        </span>
-        <h3>{t('emptyTitle')}</h3>
-        <p>{t('emptyHint')}</p>
-      </div>
-    )
-  }
-
   return (
     <>
-      {failure}
-      <p className="gallery-count">{t('count', { count: items.length })}</p>
-      <div className="gallery" data-testid="gallery">
-        {items.map((item) => (
-          // Named thumbnail boundaries leave the tree to share with the viewer, then stay absent
-          // during navigation so it stays a slide. This simple demo remounts thumbnail media;
-          // an archive-scale gallery should virtualize that handoff to avoid remounting every tile.
-          <GalleryCard
-            key={item.id}
-            item={item}
-            name={transitionName(item.id)}
-            animate={!selected && !reducedMotion}
-            onSelect={() => select(item.id)}
-          />
-        ))}
-      </div>
-      {more}
-      {selected && (
+      {loadFailed ? (
+        <p className="gallery-error" role="alert">
+          {t('loadFailed')}
+        </p>
+      ) : null}
+      {items.length ? (
+        <>
+          <p className="gallery-count">{t('count', { count: items.length })}</p>
+          <div className="gallery" data-testid="gallery">
+            {items.map((item) => (
+              <GalleryCard
+                key={item.id}
+                item={item}
+                onSelect={() => {
+                  setDirection('next')
+                  selectGalleryMedia(item.id)
+                }}
+              />
+            ))}
+          </div>
+        </>
+      ) : !loadFailed && !onLoadMore && !selectedId ? (
+        <div className="gallery-empty" data-testid="gallery-empty">
+          <span className="empty-flower" aria-hidden="true">
+            ✳
+          </span>
+          <h3>{t('emptyTitle')}</h3>
+          <p>{t('emptyHint')}</p>
+        </div>
+      ) : null}
+      {onLoadMore ? (
+        <button type="button" className="button gallery-more" onClick={onLoadMore}>
+          {t('loadMore')}
+        </button>
+      ) : null}
+      {selectedId !== null ? (
         <GalleryViewer
           item={selected}
-          name={transitionName(selected.id)}
+          neighbor={position >= 0 ? items[position + (direction === 'next' ? 1 : -1)] : undefined}
           position={position}
           total={items.length}
-          reducedMotion={reducedMotion}
-          onClose={() => select(null)}
+          pending={linkLoading}
+          direction={direction}
           onPrevious={() => navigate('previous')}
           onNext={() => navigate('next')}
         />
-      )}
+      ) : null}
     </>
   )
 }

@@ -25,7 +25,9 @@
     "loadMore": "Show more memories",
     "loadFailed": "Some photos could not be loaded. Please reload the page."
   },
-  "language": { "label": "Language: {language}" },
+  "language": {
+    "label": "Language: {language}"
+  },
   "access": {
     "eyebrow": "You’re invited",
     "intro": "Our day, through everyone’s eyes. Tell us your name to open the album.",
@@ -47,7 +49,6 @@
       "archive": "This is a demo, not a private archive.",
       "media": "Share only test photos and videos you can replace.",
       "visibility": "{hours, plural, one {The album shows uploads for one hour.} other {The album shows uploads for # hours.}} Hidden files are not erased right away.",
-      "delivery": "This legacy local test uses public media links.",
       "privateDelivery": "New photos, videos and originals use private Transloadit Storage. Older public links are not made private retroactively."
     },
     "gettingReady": "Getting your upload ready…",
@@ -81,7 +82,10 @@
     "position": "{current, number} / {total, number}",
     "addedBy": "Added by {name}",
     "unknownContributor": "Contributor unknown",
-    "download": "Download original"
+    "download": "Download original",
+    "loading": "Loading photo…",
+    "loadFailed": "This photo could not be loaded. You can try another photo or reload.",
+    "unavailable": "This memory is unavailable or no longer in the album."
   },
   "notifications": {
     "guest": "A guest",

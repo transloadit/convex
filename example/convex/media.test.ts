@@ -32,6 +32,10 @@ const api = anyApi
 const components = componentsGeneric()
 const workspace = 'open-test-prod'
 const damId = (seed: string) => `${seed.padEnd(21, 'x').slice(0, 21)}A`
+const link = (asset: { asset_id: string; version_id: string }) => ({
+  assetId: asset.asset_id,
+  versionId: asset.version_id,
+})
 
 const setup = () => {
   const t = convexTest(schema, {
@@ -117,7 +121,6 @@ beforeEach(() => {
   vi.stubEnv('TRANSLOADIT_KEY', 'test-key')
   vi.stubEnv('TRANSLOADIT_SECRET', 'test-secret')
   vi.stubEnv('TRANSLOADIT_NOTIFY_URL', 'https://example.com/notify')
-  vi.stubEnv('TRANSLOADIT_R2_CREDENTIALS', '')
   vi.stubEnv('TRANSLOADIT_WORKSPACE', workspace)
   vi.stubEnv('CONVEX_CLOUD_URL', 'https://happy-otter-123.convex.cloud')
 })
@@ -189,7 +192,7 @@ describe('private Storage uploads', () => {
     ])
   })
 
-  test('a configured Workspace without a unique namespace fails closed instead of using R2', async () => {
+  test('a configured Workspace without a unique namespace fails closed', async () => {
     vi.stubEnv('CONVEX_CLOUD_URL', 'http://127.0.0.1:3210')
     const t = setup()
     const guest = await admit(t, 'Alex')
@@ -238,6 +241,25 @@ describe('private Storage uploads', () => {
 })
 
 describe('gallery and delivery authorization', () => {
+  test('a shared exact-version link resolves outside the loaded page, without listing all pages', async () => {
+    const t = setup()
+    const alex = await admit(t, 'Alex')
+    const { asset } = await upload(alex, t, 'older')
+    const { asset: newer } = await upload(alex, t, 'newer')
+    const first = await alex.query(api.media.list, {
+      paginationOpts: { numItems: 1, cursor: null },
+    })
+    expect(first.page).toHaveLength(1)
+    expect(first.page[0].asset.asset_id).toBe(newer.asset_id)
+    expect(await alex.query(api.media.get, link(asset))).toMatchObject({
+      asset: { asset_id: asset.asset_id, version_id: asset.version_id },
+      uploadedBy: 'Alex',
+    })
+    expect(
+      await alex.query(api.media.get, { ...link(asset), versionId: damId('absent') }),
+    ).toBeNull()
+  })
+
   test('keeps existing private photos reported under their producing step', async () => {
     const t = setup()
     const guest = await admit(t, 'Alex')
@@ -305,6 +327,8 @@ describe('gallery and delivery authorization', () => {
         poster: expect.objectContaining({ asset_id: poster.asset_id }),
       }),
     ])
+    expect(await guest.query(api.media.get, link(original))).toEqual(first.page[0])
+    expect(await guest.query(api.media.get, link(video))).toBeNull()
     // Video dimensions do not turn a video into an authorized image-preview input.
     expect(await guest.query(api.media.forDelivery, request(video))).toBeNull()
     expect(await guest.query(api.media.forDelivery, request(poster))).toMatchObject({
@@ -385,6 +409,7 @@ describe('gallery and delivery authorization', () => {
     expect(page.page).toHaveLength(1)
     expect(page.page[0]).not.toHaveProperty('video')
     expect(page.page[0]).not.toHaveProperty('poster')
+    expect(await guest.query(api.media.get, link(asset))).toEqual(page.page[0])
     expect(JSON.stringify(page)).not.toContain('AAAAAAAA')
     expect(await guest.query(api.media.forDelivery, request(playback, 'original'))).toBeNull()
     expect(await guest.query(api.media.forDelivery, request(poster, 'preview'))).toBeNull()
@@ -404,6 +429,8 @@ describe('gallery and delivery authorization', () => {
     const expired = await admit(t, 'Late', -1)
     expect(await t.query(api.media.forDelivery, request(asset))).toBeNull()
     expect(await expired.query(api.media.forDelivery, request(asset))).toBeNull()
+    expect(await t.query(api.media.get, link(asset))).toBeNull()
+    expect(await expired.query(api.media.get, link(asset))).toBeNull()
     await expect(
       t.query(api.media.list, { paginationOpts: { numItems: 10, cursor: null } }),
     ).rejects.toThrow('ACCESS_REQUIRED')
@@ -412,6 +439,7 @@ describe('gallery and delivery authorization', () => {
     ).rejects.toThrow('ACCESS_REQUIRED')
     vi.stubEnv('WEDDING_UPLOAD_CODE', 'rotated-invitation')
     expect(await alex.query(api.media.forDelivery, request(asset, 'download'))).toBeNull()
+    expect(await alex.query(api.media.get, link(asset))).toBeNull()
   })
 
   test('denies wrong versions, unknown assets and unsupported actions', async () => {
@@ -442,8 +470,10 @@ describe('gallery and delivery authorization', () => {
       paginationOpts: { numItems: 10, cursor: null },
     })
     expect(page.page).toEqual([])
-    for (const { asset } of cases)
+    for (const { asset } of cases) {
       expect(await alex.query(api.media.forDelivery, request(asset, 'original'))).toBeNull()
+      expect(await alex.query(api.media.get, link(asset))).toBeNull()
+    }
   })
 
   test('previews need image geometry, while originals of other media remain deliverable', async () => {
@@ -516,6 +546,7 @@ describe('gallery and delivery authorization', () => {
       createdBefore: Date.now() + 1,
     })
     expect(await alex.query(api.media.forDelivery, request(asset, 'original'))).toBeNull()
+    expect(await alex.query(api.media.get, link(asset))).toBeNull()
     const page = await alex.query(api.media.list, {
       paginationOpts: { numItems: 10, cursor: null },
     })
@@ -573,7 +604,7 @@ describe('cleanup previews follow the expiry rules', () => {
 })
 
 describe('council regressions', () => {
-  test('the R2 gallery query never returns Storage receipts or their ThumbHash', async () => {
+  test('the retired gallery query returns no public exports', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')
     await upload(alex, t, 'a', (prefix) => ({ path: `${prefix}a.jpg`, thumbhash: 'AAAAAAAA' }))
@@ -594,26 +625,6 @@ describe('council regressions', () => {
 })
 
 describe('cleanup summary', () => {
-  test('counts legacy public exports under producing steps before forgetting their references', async () => {
-    const t = setup()
-    await t.action(components.transloadit.lib.handleWebhook, {
-      verifySignature: false,
-      payload: {
-        assembly_id: 'legacy-public',
-        ok: 'ASSEMBLY_COMPLETED',
-        fields: { album: 'wedding-gallery' },
-        results: {
-          images_resized: [{ id: 'photo', ssl_url: 'https://legacy.example/photo.jpg' }],
-          videos_encoded: [{ id: 'video', ssl_url: 'https://legacy.example/clip.mp4' }],
-          videos_thumbs: [{ id: 'poster', ssl_url: 'https://legacy.example/poster.jpg' }],
-        },
-      },
-    })
-    expect(await t.query(api.storageCleanup.summary, { album: 'wedding-gallery' })).toMatchObject({
-      r2Results: 3,
-    })
-  })
-
   test('reports the backend prefix and pages visible receipts per album', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')
