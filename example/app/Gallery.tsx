@@ -2,6 +2,7 @@
 
 import { getStorageAssetHref, Image } from '@transloadit/viewer/react'
 import { ImagePrefetch, ImagePreview } from '@transloadit/viewer/react/preview'
+import { Video } from '@transloadit/viewer/react/video'
 import { useTranslations } from 'next-intl'
 import { type CSSProperties, useId, useLayoutEffect, useRef, useState } from 'react'
 import {
@@ -11,7 +12,6 @@ import {
   thumbnailSizes,
 } from '../lib/gallery'
 import { selectGalleryMedia, useGalleryLocation } from '../lib/gallery-location'
-import { renewExpiredGrants } from '../lib/media-grant'
 import { ShareMemory } from './ShareMemory'
 
 const viewerDelivery = { sizes: '100vw' }
@@ -54,13 +54,11 @@ function Media({
         objectFit="cover"
       />
     )
-  if (!item.url) return <p>{t('videoUnavailable')}</p>
+  if (!item.video) return <p>{t('videoUnavailable')}</p>
   return (
-    // biome-ignore lint/a11y/useMediaCaption: Guest clips do not have caption tracks.
-    <video
-      ref={renewExpiredGrants}
-      src={item.url}
-      poster={item.posterUrl}
+    <Video
+      src={item.video}
+      poster={item.poster}
       controls={viewing}
       playsInline
       preload={viewing ? 'metadata' : 'none'}

@@ -82,9 +82,11 @@ Current implementation (October 2026; deployment must be verified separately):
   and only for versions that guest may preview.
 - **Activation order.** Configure the delivery key on the Next.js host before enabling hosted
   uploads on Convex; without it the route answers 404. Validate in an isolated preview first.
-- **Video.** `/video/encode` and `/video/thumbs` produce private stored MP4s and posters. They use
-  Viewer's `getStorageAssetHref` and the same authorized route, with native browser playback/range
-  seeking. Download selects the original, not the MP4. A missing derivative leaves an explicit
+- **Video.** `/video/encode` and `/video/thumbs` produce private stored MP4s and posters. The optional
+  `Video` component from `@transloadit/viewer/react/video` takes their exact Storage receipts and
+  uses the same authorized route with native browser controls. Viewer owns bounded renewal of
+  expired range grants, preserving position and playback intent; the app has no renewal helper.
+  Download selects the original, not the MP4. A missing derivative leaves an explicit
   preview-unavailable message and an original download, not a public fallback.
 - **Consumer code.** `yarn template:ensure --wedding` optionally publishes the shared processing
   recipe. Only literal per-upload Storage paths stay in signed server instructions: multipart

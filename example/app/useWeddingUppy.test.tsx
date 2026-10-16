@@ -54,7 +54,7 @@ test('loads once on demand, survives close/reopen and destroys the instance on g
   fireEvent.click(screen.getByRole('button'))
   await screen.findByText('Ready')
   expect(create).toHaveBeenCalledOnce()
-  expect(setOptions).toHaveBeenCalledWith({ locale: {} })
+  await waitFor(() => expect(setOptions).toHaveBeenCalledWith({ locale: {} }))
   fireEvent.click(screen.getByRole('button'))
   fireEvent.click(screen.getByRole('button'))
   expect(create).toHaveBeenCalledOnce()
