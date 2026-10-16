@@ -71,6 +71,9 @@ Current implementation (October 2026; deployment must be verified separately):
   uploader. The viewer's Share action uses native sharing or copies a clean exact-version album
   link, with a selectable-link fallback when clipboard access is unavailable. Sharing does not
   grant admission or expose a signed CDN URL.
+  Browser regressions cover delayed image loading, keyboard/URL navigation and manual sharing
+  with long filenames on 320, 768 and 1280px viewports. Startup measurements from a local build
+  are not production speed guarantees; measure the deployed guest journey separately.
 - **Placeholders.** Thumbnails use `placeholder="blur"` with an explicit `objectFit="cover"`: the
   receipt's ThumbHash is painted as an inline background that the loaded opaque pixels cover, with
   no load handler. The full-photo `ImagePreview` removes its blur once the image loads and provides
