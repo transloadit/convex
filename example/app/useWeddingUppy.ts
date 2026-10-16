@@ -1,10 +1,9 @@
 'use client'
 
-import Uppy from '@uppy/core'
-import Transloadit from '@uppy/transloadit'
+import type Uppy from '@uppy/core'
+import type { AssemblyResponse } from '@uppy/transloadit'
 import { useLocale, useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
-import { uppyLocales } from '../i18n/uppy'
 import type { AssemblyOptions } from '../lib/transloadit'
 import { getUploadErrorCode } from '../lib/upload-errors'
 
@@ -24,16 +23,10 @@ export const stageRank: Record<UploadStage, number> = {
 export const shouldAdvanceStage = (current: UploadStage, next: UploadStage) =>
   stageRank[next] >= stageRank[current]
 
-const resolveAssemblyId = (assembly: unknown): string | null => {
-  if (!assembly || typeof assembly !== 'object') return null
-  const record = assembly as Record<string, unknown>
-  if (typeof record.assembly_id === 'string') return record.assembly_id
-  if (typeof record.assemblyId === 'string') return record.assemblyId
-  if (typeof record.id === 'string') return record.id
-  return null
-}
-
-export const useWeddingUppy = (getAssemblyOptions: () => Promise<AssemblyOptions>): WeddingUppy => {
+export const useWeddingUppy = (
+  getAssemblyOptions: () => Promise<AssemblyOptions>,
+  enabled: boolean,
+) => {
   const locale = useLocale()
   const t = useTranslations('errors')
   const getAssemblyOptionsRef = useRef(getAssemblyOptions)
@@ -44,58 +37,62 @@ export const useWeddingUppy = (getAssemblyOptions: () => Promise<AssemblyOptions
     translateError.current = t
   }, [getAssemblyOptions, t])
 
-  const [uppy] = useState(() =>
-    new Uppy<Record<string, unknown>, Record<string, unknown>>({
-      autoProceed: false,
-      locale: uppyLocales[locale],
-      restrictions: {
-        allowedFileTypes: ['image/*', 'video/*'],
-        maxNumberOfFiles: 12,
-      },
-    }).use(Transloadit, {
-      waitForEncoding: true,
-      assemblyOptions: async () => {
-        try {
-          return await getAssemblyOptionsRef.current()
-        } catch (error) {
-          // Uppy also shows signing failures in its own informer, outside our error panel.
-          throw Object.assign(new Error(translateError.current(getUploadErrorCode(error))), {
-            cause: error,
-          })
-        }
-      },
-    }),
-  )
+  const [loaded, setLoaded] = useState<ReturnType<
+    typeof import('./createWeddingUppy').createWeddingUppy
+  > | null>(null)
+  const [failed, setFailed] = useState(false)
 
   useEffect(() => {
-    uppy.setOptions({ locale: uppyLocales[locale] })
-  }, [uppy, locale])
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      ;(window as { __uppy?: WeddingUppy }).__uppy = uppy
-    }
+    // The guest flips this on once; closing the dialog keeps the instance and selected files.
+    // Leaving the album unmounts this hook. Chunk failures deliberately ask for a page reload.
+    if (!enabled) return
+    let active = true
+    let instance: WeddingUppy | undefined
+    void import('./createWeddingUppy')
+      .then(({ createWeddingUppy }) => {
+        if (!active) return
+        const value = createWeddingUppy(async () => {
+          try {
+            return await getAssemblyOptionsRef.current()
+          } catch (error) {
+            // Uppy also shows signing failures in its informer; never expose server error details.
+            throw Object.assign(new Error(translateError.current(getUploadErrorCode(error))), {
+              cause: error,
+            })
+          }
+        })
+        instance = value.uppy
+        ;(window as { __uppy?: WeddingUppy }).__uppy = instance
+        setLoaded(value)
+      })
+      .catch(() => {
+        if (active) setFailed(true)
+      })
     return () => {
-      // Avoid StrictMode dev cleanup nuking plugins on the shared instance.
-      if (process.env.NODE_ENV === 'production') {
-        uppy.destroy()
-      }
+      active = false
+      instance?.destroy()
+      const testWindow = window as { __uppy?: WeddingUppy }
+      if (testWindow.__uppy === instance) delete testWindow.__uppy
     }
-  }, [uppy])
+  }, [enabled])
 
-  return uppy
+  useEffect(() => {
+    loaded?.uppy.setOptions({ locale: loaded.locales[locale] })
+  }, [loaded, locale])
+
+  return { uppy: loaded?.uppy ?? null, failed }
 }
 
 export const useAssemblyEvents = (
-  uppy: WeddingUppy,
+  uppy: WeddingUppy | null,
   setAssemblyId: (id: string) => void,
   setStage: (stage: UploadStage) => void,
 ) => {
   useEffect(() => {
-    const handleAssemblyCreated = (assembly: unknown) => {
-      const nextId = resolveAssemblyId(assembly)
-      if (!nextId) return
-      setAssemblyId(nextId)
+    if (!uppy) return
+    const handleAssemblyCreated = (assembly: AssemblyResponse) => {
+      if (!assembly.assembly_id) return
+      setAssemblyId(assembly.assembly_id)
       setStage('uploading')
     }
     const handleComplete = () => {

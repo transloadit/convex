@@ -21,13 +21,18 @@ const photo = (index: number): StorageGalleryAsset => ({
   },
 })
 const assets = [photo(1), photo(2), photo(3)]
+const linkedAsset = photo(99)
+if (new URLSearchParams(window.location.search).has('longName')) {
+  linkedAsset.asset.path =
+    'a-very-long-wedding-photo-name-that-must-not-push-controls-offscreen.jpg'
+}
 const root = document.getElementById('root')
 if (!root) throw new Error('Missing gallery fixture root')
 createRoot(root).render(
   <AlbumIntlProvider initialLocale="en">
     <main className="album-section">
       <h1>Wedding memories</h1>
-      <Gallery storageAssets={assets} linkedAsset={photo(99)} />
+      <Gallery storageAssets={assets} linkedAsset={linkedAsset} />
     </main>
   </AlbumIntlProvider>,
 )

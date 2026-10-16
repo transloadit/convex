@@ -285,3 +285,52 @@ test('a shared photo outside loaded pages has no invented neighbors or gallery p
     await context.close()
   }
 })
+
+test.each([320, 768, 1280])(
+  'sharing a long filename keeps controls and the manual link usable at %ipx',
+  async (width) => {
+    const context = await browser.newContext({
+      baseURL: fixture.url,
+      viewport: { width, height: 800 },
+      reducedMotion: 'reduce',
+    })
+    await context.addInitScript(() => {
+      Object.defineProperty(navigator, 'share', { value: undefined })
+      Object.defineProperty(navigator, 'clipboard', { value: undefined })
+    })
+    const page = await context.newPage()
+    const errors = browserErrors(page)
+    try {
+      await page.goto(`/?media=${mediaId(99)}&longName=1`)
+      const dialog = page.getByRole('dialog')
+      await browserExpect(dialog).toBeVisible()
+      const close = dialog.getByRole('button', { name: 'Close viewer' })
+      const initialClose = await close.boundingBox()
+      await dialog.getByRole('button', { name: 'Share', exact: true }).click()
+      const input = dialog.getByRole('textbox', { name: 'Link to this memory' })
+      await browserExpect(input).toBeVisible()
+      await input.focus()
+      const bounds = await input.boundingBox()
+      expect(bounds).not.toBeNull()
+      expect(bounds?.x).toBeGreaterThanOrEqual(0)
+      expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(width)
+      expect(await close.boundingBox()).toEqual(initialClose)
+      const download = await dialog.getByRole('link', { name: 'Download original' }).boundingBox()
+      expect(download?.height).toBeLessThanOrEqual(50)
+      const feedback = await dialog.getByRole('status').boundingBox()
+      expect((feedback?.y ?? 0) + (feedback?.height ?? 0) + 4).toBeLessThanOrEqual(bounds?.y ?? 0)
+      await browserExpect(input).toHaveValue(`${fixture.url}/?media=${mediaId(99)}`)
+      if (process.env.E2E_SCREENSHOT_DIR) {
+        await mkdir(process.env.E2E_SCREENSHOT_DIR, { recursive: true })
+        await page.screenshot({
+          path: join(process.env.E2E_SCREENSHOT_DIR, `gallery-manual-share-${width}.png`),
+        })
+      }
+      await close.click()
+      await browserExpect(dialog).toHaveCount(0)
+      expect(errors).toEqual([])
+    } finally {
+      await context.close()
+    }
+  },
+)

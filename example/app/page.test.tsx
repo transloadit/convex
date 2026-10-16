@@ -39,6 +39,7 @@ describe('gallery deployment connection', () => {
 
     const html = renderToStaticMarkup(await WeddingUploadsPage())
     expect(html).toContain('data-convex-url="https://actual-preview.convex.cloud"')
+    expect(html).toContain('rel="preload" as="image" href="/wedding-cover.avif"')
   })
 
   test('requires the same authenticated backend outside Vercel', async () => {

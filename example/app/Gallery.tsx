@@ -12,6 +12,7 @@ import {
 } from '../lib/gallery'
 import { selectGalleryMedia, useGalleryLocation } from '../lib/gallery-location'
 import { renewExpiredGrants } from '../lib/media-grant'
+import { ShareMemory } from './ShareMemory'
 
 const viewerDelivery = { sizes: '100vw' }
 
@@ -186,7 +187,9 @@ function GalleryViewer({
         close()
       }}
       onKeyDown={(event) => {
-        if (event.target instanceof HTMLVideoElement) return
+        // Native media controls and text selection own their arrow keys.
+        if (event.target instanceof HTMLVideoElement || event.target instanceof HTMLInputElement)
+          return
         if (event.key === 'ArrowLeft') {
           event.preventDefault()
           onPrevious()
@@ -207,6 +210,7 @@ function GalleryViewer({
           ) : null}
         </div>
         <div className="viewer-actions">
+          {item ? <ShareMemory id={item.id} name={item.name || t('moment')} /> : null}
           {item?.original ? (
             <a
               className="viewer-download"
@@ -258,12 +262,16 @@ export function Gallery({
   linkLoading = false,
   onLoadMore,
   loadFailed = false,
+  loading = false,
+  loadingMore = false,
 }: {
   storageAssets?: StorageGalleryAsset[]
   linkedAsset?: StorageGalleryAsset | null
   linkLoading?: boolean
   onLoadMore?: () => void
   loadFailed?: boolean
+  loading?: boolean
+  loadingMore?: boolean
 }) {
   const t = useTranslations('album')
   const selectedId = useGalleryLocation()
@@ -290,6 +298,11 @@ export function Gallery({
           {t('loadFailed')}
         </p>
       ) : null}
+      {loading ? (
+        <p className="gallery-loading" role="status">
+          {t('loading')}
+        </p>
+      ) : null}
       {items.length ? (
         <>
           <p className="gallery-count">{t('count', { count: items.length })}</p>
@@ -306,7 +319,7 @@ export function Gallery({
             ))}
           </div>
         </>
-      ) : !loadFailed && !onLoadMore && !selectedId ? (
+      ) : !loadFailed && !loading && !onLoadMore && !selectedId ? (
         <div className="gallery-empty" data-testid="gallery-empty">
           <span className="empty-flower" aria-hidden="true">
             ✳
@@ -315,9 +328,14 @@ export function Gallery({
           <p>{t('emptyHint')}</p>
         </div>
       ) : null}
-      {onLoadMore ? (
-        <button type="button" className="button gallery-more" onClick={onLoadMore}>
-          {t('loadMore')}
+      {onLoadMore || loadingMore ? (
+        <button
+          type="button"
+          className="button gallery-more"
+          onClick={onLoadMore}
+          disabled={loadingMore}
+        >
+          {loadingMore ? t('loading') : t('loadMore')}
         </button>
       ) : null}
       {selectedId !== null ? (

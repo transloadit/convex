@@ -1,10 +1,4 @@
-'use client'
-
-import dynamic from 'next/dynamic'
-
-const WeddingUploadsClient = dynamic(() => import('./WeddingUploadsClient'), {
-  ssr: false,
-})
+import WeddingUploadsClient from './WeddingUploadsClient'
 
 export default function WeddingUploadsApp({ convexUrl }: { convexUrl: string }) {
   return <WeddingUploadsClient convexUrl={convexUrl} />

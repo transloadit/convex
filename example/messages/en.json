@@ -23,6 +23,7 @@
     "unavailable": "Gallery temporarily unavailable",
     "unavailableHint": "Uploads are unavailable right now. Please try again later.",
     "loadMore": "Show more memories",
+    "loading": "Loading memories…",
     "loadFailed": "Some photos could not be loaded. Please reload the page."
   },
   "language": {
@@ -52,6 +53,7 @@
       "privateDelivery": "New photos, videos and originals use private Transloadit Storage. Older public links are not made private retroactively."
     },
     "gettingReady": "Getting your upload ready…",
+    "loadFailed": "The uploader could not be loaded. Please reload the page to try again.",
     "name": "Your name",
     "guestPlaceholder": "Guest",
     "inviteCode": "Invite code",
@@ -83,6 +85,10 @@
     "addedBy": "Added by {name}",
     "unknownContributor": "Contributor unknown",
     "download": "Download original",
+    "share": "Share",
+    "copied": "Link copied",
+    "shareLink": "Link to this memory",
+    "shareManually": "Copy this link to share this memory. Album access is still required.",
     "loading": "Loading photo…",
     "loadFailed": "This photo could not be loaded. You can try another photo or reload.",
     "unavailable": "This memory is unavailable or no longer in the album."
