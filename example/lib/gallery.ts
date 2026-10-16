@@ -1,5 +1,5 @@
 import type { StoredAsset } from '@transloadit/convex'
-import { getStorageAssetHref, type StorageImageReceipt } from '@transloadit/viewer/react'
+import type { StorageImageReceipt } from '@transloadit/viewer/react'
 
 /** One private original plus its authorized video renditions, from `media:list`. */
 export type StorageGalleryAsset = {
@@ -25,12 +25,11 @@ export type GalleryItem = {
   id: string
   assemblyId?: string
   name: string
-  /** Authorized Storage video route. */
-  url?: string
   receipt?: StorageImageReceipt
   original?: StoredAsset
   kind: 'image' | 'video'
-  posterUrl?: string
+  video?: StoredAsset
+  poster?: StoredAsset
   aspectRatio?: number
   uploadedBy?: string
   createdAt?: number
@@ -60,8 +59,8 @@ export const buildStorageGalleryItems = (
           kind: 'video',
           // Encoders can apply a phone's rotation metadata; size the card for playback.
           aspectRatio: video?.width && video.height ? video.width / video.height : base.aspectRatio,
-          url: video ? getStorageAssetHref(video, { action: 'original' }) : undefined,
-          posterUrl: poster ? getStorageAssetHref(poster, { action: 'original' }) : undefined,
+          video,
+          poster,
         },
       ]
     if (!asset.mime?.startsWith('image/') || !width || !height) return []

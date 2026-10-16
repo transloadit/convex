@@ -29,10 +29,13 @@ describe('private Storage photos', () => {
     const video = stored('mp4', 1000, { mime: 'video/mp4' }).asset
     const poster = stored('poster', 1000).asset
     const [item] = buildStorageGalleryItems([{ ...original, video, poster }], { now: 1000 })
-    expect(item).toMatchObject({ kind: 'video', name: 'clip.mov', original: original.asset })
-    expect(item?.url).toContain(`asset_id=${video.asset_id}`)
-    expect(item?.posterUrl).toContain(`asset_id=${poster.asset_id}`)
-    expect(item?.url).toMatch(/^\/api\/transloadit\/media\?/)
+    expect(item).toMatchObject({
+      kind: 'video',
+      name: 'clip.mov',
+      original: original.asset,
+      video,
+      poster,
+    })
     expect(item?.receipt).toBeUndefined()
   })
 
@@ -62,7 +65,7 @@ describe('private Storage photos', () => {
       uploadedBy: 'Alex',
       receipt: { asset_id: stored('a', 0).asset.asset_id, width: 1600, height: 1000 },
     })
-    expect(item?.url).toBeUndefined()
+    expect(item).not.toHaveProperty('url')
   })
 
   test('apply the retention boundary and skip receipts without image geometry', () => {

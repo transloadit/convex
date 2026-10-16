@@ -220,7 +220,8 @@ const openPlayer = () => {
     </AlbumIntlProvider>,
   )
   fireEvent.click(screen.getByRole('button', { name: 'View clip.mov' }))
-  const player = within(screen.getByRole('dialog')).getByLabelText('clip.mov') as HTMLVideoElement
+  const player = within(screen.getByRole('dialog')).getByLabelText('clip.mov')
+  if (!(player instanceof HTMLVideoElement)) throw new Error('expected a native video player')
   const media = { currentTime: 0, paused: true, error: null as { code: number } | null }
   for (const name of ['currentTime', 'paused', 'error'] as const)
     Object.defineProperty(player, name, {
@@ -232,6 +233,9 @@ const openPlayer = () => {
   })
   const play = vi.spyOn(player, 'play').mockImplementation(async () => {
     media.paused = false
+  })
+  vi.spyOn(player, 'pause').mockImplementation(() => {
+    media.paused = true
   })
   // Chromium reports a refused byte range (expired grant) as a network error, then pauses.
   const fail = (code = 2) => {
