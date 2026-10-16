@@ -22,3 +22,16 @@ second grant-renewal state machine. The canonical DAM plan remains API2's
 Post-merge acceptance belongs in the canonical plan: confirm the normal production deployment,
 collect fresh desktop/mobile evidence, then obtain and reconcile an independent Opus 5.5 review.
 Keep live-browser observations separate from simulated range expiry and field performance.
+
+## Post-release favicon regression
+
+- [x] Fresh live video QA traced the sole resource error to `/favicon.ico`, not private media.
+      Serve the existing album icon at that native-media fallback path; no second icon design.
+- [x] Add a route regression and check the actual endpoint in preview/production browser QA.
+- [x] Council reports no issues; `yarn check` passes 283 tests and the production build passes.
+- [x] First CI passed the code checks but correctly refused the new branch preview without its
+      public backend URL. Bind only `video-icon` to its assigned `affable-lark-654` preview and
+      rebuild. No secrets, production settings or Storage opt-in changed.
+- [x] Hosted QA exposed a MIME alias at `.ico`. Keep image-type validation and require exact
+      equality with `/icon` bytes, with the existing preview protection header on both requests.
+- [ ] Deploy through ordinary main CI before the final evidence pass.
