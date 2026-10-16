@@ -32,4 +32,6 @@ Keep live-browser observations separate from simulated range expiry and field pe
 - [x] First CI passed the code checks but correctly refused the new branch preview without its
       public backend URL. Bind only `video-icon` to its assigned `affable-lark-654` preview and
       rebuild. No secrets, production settings or Storage opt-in changed.
+- [x] Hosted QA exposed a MIME alias at `.ico`. Keep image-type validation and require exact
+      equality with `/icon` bytes, with the existing preview protection header on both requests.
 - [ ] Deploy through ordinary main CI before the final evidence pass.
