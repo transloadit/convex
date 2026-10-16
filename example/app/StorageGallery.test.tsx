@@ -89,6 +89,27 @@ const album = (
 )
 const shown = () => screen.queryAllByRole('button', { name: /View photo-/ }).length
 
+test('announces loading instead of claiming an unanswered album is empty', () => {
+  respond = () => undefined
+  render(album)
+  expect(screen.getByRole('status').textContent).toBe('Loading memories…')
+  expect(screen.queryByText('The first memory is yours.')).toBeNull()
+  update(() => ({ page: [], isDone: true, continueCursor: 'end' }))
+  expect(screen.queryByRole('status')).toBeNull()
+  expect(screen.getByText('The first memory is yours.')).toBeTruthy()
+})
+
+test('keeps the next-page button disabled and announces loading while a page is pending', () => {
+  respond = ({ cursor }) =>
+    cursor === null ? { page: [photo(1)], isDone: false, continueCursor: 'next' } : undefined
+  render(album)
+  fireEvent.click(screen.getByRole('button', { name: 'Show more memories' }))
+  expect(screen.getByRole('button', { name: 'Loading memories…' }).hasAttribute('disabled')).toBe(
+    true,
+  )
+  expect(shown()).toBe(1)
+})
+
 test('refused cursors restart the album, other failures replace its photos with an alert', () => {
   respond = ({ cursor }) =>
     cursor === null

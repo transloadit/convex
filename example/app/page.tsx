@@ -1,5 +1,6 @@
 import { getTranslations } from 'next-intl/server'
 import { getConvexUrl } from '../lib/convex-url'
+import { wedding } from '../lib/wedding'
 import WeddingUploadsApp from './WeddingUploadsApp'
 
 export const dynamic = 'force-dynamic'
@@ -21,5 +22,11 @@ export default async function WeddingUploadsPage() {
       </main>
     )
   }
-  return <WeddingUploadsApp convexUrl={convexUrl} />
+  return (
+    <>
+      {/* This public decoration can download before the private album's guest check resolves. */}
+      <link rel="preload" as="image" href={wedding.cover} fetchPriority="high" />
+      <WeddingUploadsApp convexUrl={convexUrl} />
+    </>
+  )
 }

@@ -5,7 +5,13 @@ import { afterEach, expect, test, vi } from 'vitest'
 import { AlbumIntlProvider } from '../i18n/AlbumIntlProvider'
 import { WeddingLayout } from './WeddingLayout'
 
-vi.mock('next/dynamic', () => ({ default: () => () => null }))
+const dashboard = vi.hoisted(() => ({ failed: false }))
+vi.mock('next/dynamic', () => ({
+  default: () => () => {
+    if (dashboard.failed) throw new Error('Dashboard chunk unavailable')
+    return null
+  },
+}))
 
 // JSDOM does not implement the browser's modal/top-layer behavior.
 HTMLDialogElement.prototype.showModal = function () {
@@ -15,10 +21,15 @@ HTMLDialogElement.prototype.close = function () {
   this.open = false
 }
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  dashboard.failed = false
+  vi.restoreAllMocks()
+})
 
 const props: ComponentProps<typeof WeddingLayout> = {
   uppy: {} as ComponentProps<typeof WeddingLayout>['uppy'],
+  onUploadRequest: vi.fn(),
   guestName: 'Alex',
   onGuestNameChange: vi.fn(),
   onLeave: vi.fn(),
@@ -37,6 +48,39 @@ const Album = (overrides: Partial<ComponentProps<typeof WeddingLayout>>) => (
     <WeddingLayout {...props} {...overrides} />
   </AlbumIntlProvider>
 )
+
+test('requests the uploader only on opening and disables submission until it is ready', () => {
+  const onUploadRequest = vi.fn()
+  const { rerender } = render(
+    <Album uppy={null} onUploadRequest={onUploadRequest} isUploading={false} stage="idle" />,
+  )
+  expect(onUploadRequest).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Share photos' }))
+  expect(onUploadRequest).toHaveBeenCalledOnce()
+  expect(screen.getByRole('status').textContent).toBe('Getting your upload ready…')
+  expect(screen.getByRole('button', { name: 'Add to the album' }).hasAttribute('disabled')).toBe(
+    true,
+  )
+  rerender(<Album onUploadRequest={onUploadRequest} isUploading={false} stage="idle" />)
+  expect(screen.getByRole('button', { name: 'Add to the album' }).hasAttribute('disabled')).toBe(
+    false,
+  )
+})
+
+test('contains a failed Dashboard chunk inside the uploader without losing the album', () => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { rerender } = render(<Album uppy={null} isUploading={false} stage="idle" />)
+  fireEvent.click(screen.getByRole('button', { name: 'Share photos' }))
+  dashboard.failed = true
+  rerender(<Album isUploading={false} stage="idle" />)
+  expect(screen.getByText('The album')).toBeTruthy()
+  expect(screen.getByRole('alert').textContent).toBe(
+    'The uploader could not be loaded. Please reload the page to try again.',
+  )
+  expect(screen.queryByRole('button', { name: 'Add to the album' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Close upload' }))
+  expect(screen.queryByRole('dialog')).toBeNull()
+})
 
 test('keeps failed uploads discoverable after guests close the uploader to browse', () => {
   const { rerender } = render(<Album />)

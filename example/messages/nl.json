@@ -23,6 +23,7 @@
     "unavailable": "De galerij is tijdelijk niet beschikbaar",
     "unavailableHint": "Uploaden is momenteel niet mogelijk. Probeer het later opnieuw.",
     "loadMore": "Meer herinneringen tonen",
+    "loading": "Herinneringen laden…",
     "loadFailed": "Sommige foto's konden niet worden geladen. Laad de pagina opnieuw."
   },
   "language": {
@@ -52,6 +53,7 @@
       "privateDelivery": "Nieuwe foto’s, video’s en originelen staan privé in Transloadit Storage. Oudere openbare links worden niet achteraf privé."
     },
     "gettingReady": "We maken je upload klaar…",
+    "loadFailed": "De uploader kon niet worden geladen. Herlaad de pagina om het opnieuw te proberen.",
     "name": "Je naam",
     "guestPlaceholder": "Gast",
     "inviteCode": "Uitnodigingscode",
@@ -83,6 +85,10 @@
     "addedBy": "Toegevoegd door {name}",
     "unknownContributor": "Toegevoegd door een onbekende gast",
     "download": "Origineel downloaden",
+    "share": "Delen",
+    "copied": "Link gekopieerd",
+    "shareLink": "Link naar deze herinnering",
+    "shareManually": "Kopieer deze link om deze herinnering te delen. Toegang tot het album blijft vereist.",
     "loading": "Foto laden…",
     "loadFailed": "Deze foto kon niet worden geladen. Kies een andere foto of vernieuw de pagina.",
     "unavailable": "Deze herinnering is niet beschikbaar of staat niet meer in het album."

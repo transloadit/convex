@@ -737,6 +737,7 @@ summary:focus-visible {
 
 .gallery-viewer[open] {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 16px;
 }
@@ -818,9 +819,52 @@ summary:focus-visible {
 }
 
 .viewer-actions {
+  position: relative;
   display: flex;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  max-width: 100%;
+  align-items: center;
+  justify-content: flex-end;
   gap: 8px;
+}
+
+.viewer-share {
+  font-size: 13px;
+}
+
+/* Feedback overlays the photo instead of moving the close button or resizing the slide. */
+.viewer-share-feedback {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1;
+  width: min(300px, calc(100vw - 40px));
+  padding: 12px;
+  background: #191714;
+  border: 1px solid #847466;
+  border-radius: 8px;
+}
+
+.viewer-share-feedback p {
+  margin-bottom: 8px;
+  white-space: normal;
+}
+
+.viewer-share-feedback input {
+  width: 100%;
+  min-height: 44px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid currentColor;
+  font: inherit;
+}
+
+.gallery-loading {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  font: 14px / 1.5 var(--ui-font);
 }
 
 .viewer-download {
@@ -832,6 +876,7 @@ summary:focus-visible {
   border-radius: 999px;
   color: inherit;
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .gallery-more {

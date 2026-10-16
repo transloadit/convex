@@ -34,6 +34,8 @@ const StoragePages = () => {
       linkedAsset={linked}
       linkLoading={Boolean(identity && !listed && linked === undefined)}
       storageAssets={media.results}
+      loading={media.status === 'LoadingFirstPage'}
+      loadingMore={media.status === 'LoadingMore'}
       onLoadMore={media.status === 'CanLoadMore' ? () => media.loadMore(pageSize) : undefined}
     />
   )

@@ -1,8 +1,9 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { useLocale, useTranslations } from 'next-intl'
+import { useTranslations } from 'next-intl'
 import {
+  Component,
   type FocusEvent,
   type ReactNode,
   useEffect,
@@ -11,7 +12,6 @@ import {
   useRef,
   useState,
 } from 'react'
-import { uppyLocales } from '../i18n/uppy'
 import { galleryRetentionMs } from '../lib/gallery'
 import { maxGuestNameLength } from '../lib/guest-name'
 import type { UploadErrorCode } from '../lib/upload-errors'
@@ -19,7 +19,31 @@ import { wedding } from '../lib/wedding'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { stageRank, type UploadStage, type WeddingUppy } from './useWeddingUppy'
 
-const Dashboard = dynamic(() => import('@uppy/react/dashboard'), { ssr: false })
+const Dashboard = dynamic(() => import('./WeddingDashboard'), {
+  ssr: false,
+  loading: UploaderLoading,
+})
+
+function UploaderLoading() {
+  const t = useTranslations('upload')
+  return <p role="status">{t('gettingReady')}</p>
+}
+
+// A failed lazy Dashboard chunk must not take down the album or leave a submit button behind.
+class UploaderBoundary extends Component<
+  { children: ReactNode; fallback: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false }
+
+  static getDerivedStateFromError() {
+    return { failed: true }
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children
+  }
+}
 
 export type Toast = { id: string; guestName?: string; fileCount?: number }
 export type UploadSuccess = { id: string; count: number }
@@ -118,6 +142,8 @@ const UploadTimeline = ({ stage }: { stage: UploadStage }) => {
 
 export const WeddingLayout = ({
   uppy,
+  onUploadRequest,
+  uploaderFailed = false,
   guestName,
   onGuestNameChange,
   onLeave,
@@ -134,7 +160,9 @@ export const WeddingLayout = ({
   retentionMs = galleryRetentionMs,
   children,
 }: {
-  uppy: WeddingUppy
+  uppy: WeddingUppy | null
+  onUploadRequest: () => void
+  uploaderFailed?: boolean
   guestName: string
   onGuestNameChange: (value: string) => void
   onLeave: () => void
@@ -152,7 +180,6 @@ export const WeddingLayout = ({
   children: ReactNode
 }) => {
   const t = useTranslations()
-  const locale = useLocale()
   const formId = useId()
   const [uploadOpen, setUploadOpen] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -320,7 +347,10 @@ export const WeddingLayout = ({
           <button
             className={`button share-button${stage === 'error' ? ' upload-failed' : ''}`}
             type="button"
-            onClick={() => setUploadOpen(true)}
+            onClick={() => {
+              onUploadRequest()
+              setUploadOpen(true)
+            }}
             data-testid="open-upload"
             aria-live="polite"
           >
@@ -439,34 +469,36 @@ export const WeddingLayout = ({
             />
           </label>
         </form>
-        <div data-testid="uppy-dashboard">
-          <Dashboard
-            uppy={uppy}
-            disabled={isUploading}
-            locale={uppyLocales[locale]}
-            height={280}
-            width="100%"
-            proudlyDisplayPoweredByUppy={false}
-            hideUploadButton
-            // Keep retries on our validated submit path so they also close the dialog on success.
-            hideRetryButton
-            note={t('upload.limit')}
-          />
-        </div>
-        <div className="cta">
-          <button
-            className="button"
-            type="submit"
-            form={formId}
-            disabled={isUploading || (authState && authState !== 'authenticated')}
-            data-testid="start-upload"
-          >
-            {isUploading ? t('upload.uploading') : t('upload.add')}
-          </button>
-          {(isUploading || stage === 'processing') && (
-            <p className="upload-hint">{t('upload.keepBrowsing')}</p>
-          )}
-        </div>
+        <UploaderBoundary fallback={<p role="alert">{t('upload.loadFailed')}</p>}>
+          <div data-testid="uppy-dashboard">
+            {uploaderFailed ? (
+              <p role="alert">{t('upload.loadFailed')}</p>
+            ) : uppy ? (
+              <Dashboard uppy={uppy} disabled={isUploading} />
+            ) : (
+              <UploaderLoading />
+            )}
+          </div>
+          <div className="cta">
+            <button
+              className="button"
+              type="submit"
+              form={formId}
+              disabled={
+                uploaderFailed ||
+                !uppy ||
+                isUploading ||
+                (authState && authState !== 'authenticated')
+              }
+              data-testid="start-upload"
+            >
+              {isUploading ? t('upload.uploading') : t('upload.add')}
+            </button>
+            {(isUploading || stage === 'processing') && (
+              <p className="upload-hint">{t('upload.keepBrowsing')}</p>
+            )}
+          </div>
+        </UploaderBoundary>
         <UploadTimeline stage={stage} />
         {error && (
           <p className="status upload-error" data-testid="upload-error" role="alert">

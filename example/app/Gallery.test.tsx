@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { StoredAsset } from '@transloadit/convex'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AlbumIntlProvider } from '../i18n/AlbumIntlProvider'
@@ -30,6 +30,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 const photo = (
@@ -58,6 +59,129 @@ const photo = (
 // ThumbHashes of a small opaque image and of one with transparent pixels (encoded alpha bit set).
 const opaqueHash = 'IvkFHYx/iHiHh3h3d3h4d494+IiI'
 const alphaHash = '4eiFE4gbb2iHh3dvePiGiHGAiIiHiIg='
+
+test('copies only the exact-version album link, and updates it on navigation', async () => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('navigator', { clipboard: { writeText } })
+  window.history.replaceState(null, '', '/?tracking=discard#old')
+  const first = photo(1)
+  const second = photo(2)
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[first, second]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-1.jpg' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+  await waitFor(() => expect(screen.getByText('Link copied').getAttribute('role')).toBe('status'))
+  expect(writeText).toHaveBeenLastCalledWith(
+    `${window.location.origin}/?media=${first.asset.asset_id}.${first.asset.version_id}`,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+  expect(screen.queryByText('Link copied')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+  await waitFor(() =>
+    expect(writeText).toHaveBeenLastCalledWith(
+      `${window.location.origin}/?media=${second.asset.asset_id}.${second.asset.version_id}`,
+    ),
+  )
+})
+
+test('native sharing is preferred; cancellation does not copy or report an error', async () => {
+  const share = vi.fn().mockRejectedValue(new DOMException('Cancelled', 'AbortError'))
+  const writeText = vi.fn()
+  vi.stubGlobal('navigator', { share, clipboard: { writeText } })
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[photo(1)]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-1.jpg' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+  await waitFor(() => expect(share).toHaveBeenCalledOnce())
+  expect(writeText).not.toHaveBeenCalled()
+  expect(screen.queryByRole('alert')).toBeNull()
+})
+
+test('keeps Share focused when arrow navigation changes an interior photo', () => {
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[photo(1), photo(2), photo(3), photo(4)]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-2.jpg' }))
+  const share = screen.getByRole('button', { name: 'Share' })
+  share.focus()
+  fireEvent.keyDown(share, { key: 'ArrowRight' })
+  expect(screen.getByRole('dialog', { name: 'photo-3.jpg' })).toBeTruthy()
+  expect(document.activeElement).toBe(share)
+  fireEvent.keyDown(share, { key: 'ArrowLeft' })
+  expect(screen.getByRole('dialog', { name: 'photo-2.jpg' })).toBeTruthy()
+})
+
+test('does not show a late clipboard result for a different visit to the photo', async () => {
+  let resolve!: () => void
+  vi.stubGlobal('navigator', {
+    clipboard: {
+      writeText: () =>
+        new Promise<void>((done) => {
+          resolve = done
+        }),
+    },
+  })
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[photo(1), photo(2)]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-1.jpg' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Previous' }))
+  await act(async () => resolve())
+  expect(screen.queryByText('Link copied')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Share' }).hasAttribute('disabled')).toBe(false)
+})
+
+test('allows arrow-key selection of a manual link without changing the photo', async () => {
+  vi.stubGlobal('navigator', {})
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[photo(1), photo(2), photo(3)]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-2.jpg' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+  const link = await screen.findByRole('textbox', { name: 'Link to this memory' })
+  link.focus()
+  fireEvent.keyDown(link, { key: 'ArrowLeft', shiftKey: true })
+  fireEvent.keyDown(link, { key: 'ArrowRight' })
+  expect(screen.getByRole('dialog', { name: 'photo-2.jpg' })).toBeTruthy()
+  expect(document.activeElement).toBe(link)
+})
+
+test('a refused clipboard write leaves a selectable link and a useful message', async () => {
+  vi.stubGlobal('navigator', {
+    clipboard: { writeText: vi.fn().mockRejectedValue(new Error('Denied')) },
+  })
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[photo(1)]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View photo-1.jpg' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Share' }))
+  await waitFor(() =>
+    expect(
+      screen
+        .getByText('Copy this link to share this memory. Album access is still required.')
+        .getAttribute('role'),
+    ).toBe('status'),
+  )
+  expect(
+    screen.getByRole('textbox', { name: 'Link to this memory' }).getAttribute('value'),
+  ).toContain('?media=')
+})
 
 test.each([true, false])(
   'downloads the private video original, with playback available=%s',

@@ -64,6 +64,13 @@ Current implementation (October 2026; deployment must be verified separately):
   pages so live uploads never shift photos between pages. A shared exact-version link outside the
   loaded pages uses the same album authorization through `media:get`. The example pins its
   published Viewer alpha in `example/package.json`.
+- **Startup and sharing.** The public entry screen is server-rendered and the public cover is
+  preloaded without waiting for admission. Private album queries still wait for the live guest
+  check. Uppy, Transloadit's upload plugin and Dashboard load on the first upload interaction;
+  closing the dialog preserves files and ongoing uploads, while leaving the album destroys the
+  uploader. The viewer's Share action uses native sharing or copies a clean exact-version album
+  link, with a selectable-link fallback when clipboard access is unavailable. Sharing does not
+  grant admission or expose a signed CDN URL.
 - **Placeholders.** Thumbnails use `placeholder="blur"` with an explicit `objectFit="cover"`: the
   receipt's ThumbHash is painted as an inline background that the loaded opaque pixels cover, with
   no load handler. The full-photo `ImagePreview` removes its blur once the image loads and provides

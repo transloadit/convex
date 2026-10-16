@@ -126,6 +126,7 @@ const CloudWeddingUploads = ({
   const [guestName, setGuestName] = useState(initialName)
   const [uploadSuccess, setUploadSuccess] = useState<UploadSuccess | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [uploadRequested, setUploadRequested] = useState(false)
   const { isAuthenticated, isLoading } = useConvexAuth()
   const assemblyOptionsPromise = useRef<Promise<WeddingAssemblyOptionsResponse> | null>(null)
   const fileCountRef = useRef(0)
@@ -149,7 +150,7 @@ const CloudWeddingUploads = ({
     setAssemblyParams(resolved.params ?? null)
     return resolved.assemblyOptions
   }, [createAssemblyOptions, guestName, isAuthenticated])
-  const uppy = useWeddingUppy(getAssemblyOptions)
+  const { uppy, failed: uploaderFailed } = useWeddingUppy(getAssemblyOptions, uploadRequested)
   const status = useQuery(getAssemblyStatusRef, assemblyId ? { assemblyId } : 'skip')
   const results = useQuery(listResultsRef, assemblyId ? { assemblyId } : 'skip')
   const assemblies = useQuery(listAssembliesRef, {
@@ -198,6 +199,7 @@ const CloudWeddingUploads = ({
   const statusOk = parsedStatus && typeof parsedStatus.ok === 'string' ? parsedStatus.ok : 'pending'
 
   const startUpload = async () => {
+    if (!uppy) return
     setError(null)
     if (!isValidGuestName(guestName)) {
       setError('NAME_REQUIRED')
@@ -241,6 +243,8 @@ const CloudWeddingUploads = ({
   return (
     <WeddingLayout
       uppy={uppy}
+      onUploadRequest={() => setUploadRequested(true)}
+      uploaderFailed={uploaderFailed}
       guestName={guestName}
       onGuestNameChange={setGuestName}
       onLeave={onLeave}
