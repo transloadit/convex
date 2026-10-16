@@ -129,7 +129,8 @@ QA opens the ordinary preview URL without a `convexUrl` override.
 
 All new hosted media uses private Transloadit Storage: unchanged originals, MP4 playback and video
 posters. Use the published Viewer alpha and SDK versions pinned in `package.json`. Existing public
-R2 uploads remain readable and retain their old lifecycle; they are not migrated or made private.
+R2 public links retain their external lifecycle; the demo no longer renders or manages those objects.
+They are not migrated or made private by this code change.
 
 Before enabling uploads, configure `TRANSLOADIT_SMART_CDN_KEY`, `TRANSLOADIT_SMART_CDN_SECRET` and
 `TRANSLOADIT_SMART_CDN_WORKSPACE` on the matching Vercel environment. They must belong to the same

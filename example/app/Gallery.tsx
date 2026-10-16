@@ -143,6 +143,8 @@ function GalleryViewer({
   const t = useTranslations('viewer')
   const dialogRef = useRef<HTMLDialogElement>(null)
   const closeRef = useRef<HTMLButtonElement>(null)
+  const previousRef = useRef<HTMLButtonElement>(null)
+  const nextRef = useRef<HTMLButtonElement>(null)
   const titleId = useId()
   useLayoutEffect(() => {
     const dialog = dialogRef.current
@@ -167,8 +169,11 @@ function GalleryViewer({
       (focused instanceof HTMLButtonElement &&
         focused.disabled &&
         dialogRef.current?.contains(focused))
-    )
-      closeRef.current?.focus({ preventScroll: true })
+    ) {
+      const neighbor = position === 0 ? nextRef.current : previousRef.current
+      const target = neighbor && !neighbor.disabled ? neighbor : closeRef.current
+      target?.focus({ preventScroll: true })
+    }
   }, [position, total])
   const close = () => selectGalleryMedia(null)
   return (
@@ -228,13 +233,18 @@ function GalleryViewer({
         )}
       </div>
       <div className="viewer-toolbar viewer-navigation">
-        <button type="button" onClick={onPrevious} disabled={position <= 0}>
+        <button ref={previousRef} type="button" onClick={onPrevious} disabled={position <= 0}>
           {t('previous')}
         </button>
         <span aria-live="polite">
           {item && position >= 0 ? t('position', { current: position + 1, total }) : ''}
         </span>
-        <button type="button" onClick={onNext} disabled={position < 0 || position >= total - 1}>
+        <button
+          ref={nextRef}
+          type="button"
+          onClick={onNext}
+          disabled={position < 0 || position >= total - 1}
+        >
           {t('next')}
         </button>
       </div>
