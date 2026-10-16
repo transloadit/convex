@@ -98,6 +98,9 @@ describeE2e('e2e upload flow', () => {
       await browserExpect(page.locator('.cover-image')).toHaveCount(0)
       expect(navigation?.headers()['x-robots-tag']).toContain('noindex')
       await browserExpect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /noindex/)
+      const favicon = await page.request.get(new URL('/favicon.ico', serverUrl).href)
+      expect(favicon.status()).toBe(200)
+      expect(favicon.headers()['content-type']).toBe('image/png')
       if (remoteConvexUrl) {
         const unauthenticated = new ConvexHttpClient(remoteConvexUrl)
         await expect(
