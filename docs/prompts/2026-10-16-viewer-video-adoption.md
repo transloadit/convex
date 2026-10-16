@@ -14,6 +14,10 @@ second grant-renewal state machine. The canonical DAM plan remains API2's
 - [x] Verify receipt mapping, original downloads, native controls and bounded renewal/refusal.
 - [x] Reconcile council's pending-lockfile finding after publication. `yarn check` passes with
   282 tests, the production build passes, and all ten local Chromium browser tests pass.
+- [x] First PR CI passed codegen, builds, lint, browser tests and Node 24/26 tests. Preview QA
+  correctly refused a new branch without its public Convex URL. Configure only that branch's
+  `NEXT_PUBLIC_CONVEX_URL` to its assigned backend and rebuild; no Storage opt-in or credentials
+  change. The original failed QA receipt remains in run `38969602939`.
 
 Post-merge acceptance belongs in the canonical plan: confirm the normal production deployment,
 collect fresh desktop/mobile evidence, then obtain and reconcile an independent Opus 5.5 review.
