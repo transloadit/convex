@@ -46,14 +46,16 @@ Changing the code invalidates existing album access. Without a code, entering a 
 Cloud tests accept `E2E_WEDDING_UPLOAD_CODE` for protected previews. Search indexing is disabled
 separately; it is not access control.
 
-The gallery hides items after `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default 24).
+The gallery displays the last `NEXT_PUBLIC_GALLERY_RETENTION_HOURS` (default 24), measured when
+the album opens. Its fixed `createdAfter` bound is applied before pagination, so loading another
+page does not spend it on hidden history or move the display cutoff. Reloading starts a new visit.
 This is a display policy, not deletion or permission revocation. The Storage cleanup job below
 performs deletion. Existing public R2 objects and their lifecycle configuration are untouched by
 this code removal; old URLs cannot be made private retroactively.
 
 ## Demo deployment (Vercel + stable Convex)
 
-The hosted wedding app is a Yarn workspace with an exact `@transloadit/convex@0.5.0` registry
+The hosted wedding app is a Yarn workspace with an exact `@transloadit/convex@0.6.0` registry
 dependency. It does not alias package imports to this repository's `src/`. Both `example:build` and
 the production backend deploy check the resolved package before proceeding. Publish a component
 release first, then update `example/package.json` and the lockfile to dogfood it on the live demo.

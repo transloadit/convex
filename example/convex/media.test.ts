@@ -125,7 +125,10 @@ beforeEach(() => {
   vi.stubEnv('CONVEX_CLOUD_URL', 'https://happy-otter-123.convex.cloud')
 })
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
+})
 
 describe('private Storage uploads', () => {
   test.each([0, -1, 1.5, 13])(
@@ -241,6 +244,43 @@ describe('private Storage uploads', () => {
 })
 
 describe('gallery and delivery authorization', () => {
+  test('excludes hidden history before paging without revoking retained exact versions', async () => {
+    const startedAt = Date.now()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(startedAt)
+    const t = setup()
+    const guest = await admit(t, 'Alex')
+    const { asset: old } = await upload(guest, t, 'old')
+    now.mockReturnValue(startedAt + 100)
+    await upload(guest, t, 'boundary')
+    now.mockReturnValue(startedAt + 200)
+    const { asset: recent } = await upload(guest, t, 'recent')
+    now.mockReturnValue(startedAt + 300)
+    const { asset: newest } = await upload(guest, t, 'newest')
+    const createdAfter = startedAt + 100
+
+    const first = await guest.query(api.media.list, {
+      createdAfter,
+      paginationOpts: { numItems: 1, cursor: null },
+    })
+    expect(first.page.map((row: { asset: { asset_id: string } }) => row.asset.asset_id)).toEqual([
+      newest.asset_id,
+    ])
+    const rest = await guest.query(api.media.list, {
+      createdAfter,
+      paginationOpts: { numItems: 24, cursor: first.continueCursor },
+    })
+    expect(rest.page.map((row: { asset: { asset_id: string } }) => row.asset.asset_id)).toEqual([
+      recent.asset_id,
+    ])
+    expect(rest.isDone).toBe(true)
+    expect(await guest.query(api.media.get, link(old))).toMatchObject({
+      asset: { asset_id: old.asset_id, version_id: old.version_id },
+    })
+    expect(await guest.query(api.media.forDelivery, request(old))).toMatchObject({
+      asset_id: old.asset_id,
+    })
+  })
+
   test('a shared exact-version link resolves outside the loaded page, without listing all pages', async () => {
     const t = setup()
     const alex = await admit(t, 'Alex')
@@ -272,7 +312,7 @@ describe('gallery and delivery authorization', () => {
     ])
   })
 
-  test('joins private video renditions by source identity across pages, not by filename', async () => {
+  test('joins private video renditions by source identity even in an Assembly with over 500 results', async () => {
     const t = setup()
     const guest = await admit(t, 'Alex')
     const { assemblyOptions } = await guest.action(api.wedding.createWeddingAssemblyOptions, {
@@ -306,7 +346,13 @@ describe('gallery and delivery authorization', () => {
         fields: params.fields,
         results: {
           ':original': [original],
-          video_encode: [video, other],
+          video_encode: [
+            video,
+            other,
+            ...Array.from({ length: 500 }, (_, i) =>
+              result(`unrelated-${i}`, 'video/mp4', `unrelated-${i}`),
+            ),
+          ],
           video_poster: [poster],
         },
       },
@@ -342,6 +388,13 @@ describe('gallery and delivery authorization', () => {
     await t.mutation(components.transloadit.lib.requestStoredAssetDeletion, {
       album: 'wedding-gallery',
       createdBefore: Date.now() + 1,
+      limit: 500,
+    })
+    // The large Assembly spans two bounded deletion batches; no receipt is revoked until selected.
+    await t.mutation(components.transloadit.lib.requestStoredAssetDeletion, {
+      album: 'wedding-gallery',
+      createdBefore: Date.now() + 1,
+      limit: 500,
     })
     expect(await guest.query(api.media.forDelivery, request(video, 'original'))).toBeNull()
     expect(await guest.query(api.media.forDelivery, request(poster, 'original'))).toBeNull()
@@ -449,9 +502,22 @@ describe('gallery and delivery authorization', () => {
     for (const denied of [
       { ...asset, version_id: damId('otherversion') },
       { ...asset, asset_id: damId('otherasset') },
-    ])
+    ]) {
       expect(await alex.query(api.media.forDelivery, request(denied))).toBeNull()
+      expect(await alex.query(api.media.get, link(denied))).toBeNull()
+    }
     await expect(alex.query(api.media.forDelivery, request(asset, 'thumbnail'))).rejects.toThrow()
+  })
+
+  test('rejects non-finite display cutoffs with a fixed component error', async () => {
+    const t = setup()
+    const guest = await admit(t, 'Alex')
+    await expect(
+      guest.query(api.media.list, {
+        createdAfter: Number.POSITIVE_INFINITY,
+        paginationOpts: { numItems: 10, cursor: null },
+      }),
+    ).rejects.toThrow('Invalid Storage media cutoff')
   })
 
   test('ignores receipts that are not bound to a matching server-created upload', async () => {

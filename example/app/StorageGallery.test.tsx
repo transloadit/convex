@@ -5,7 +5,7 @@ import type { PaginationOptions } from 'convex/server'
 import { ConvexError } from 'convex/values'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { AlbumIntlProvider } from '../i18n/AlbumIntlProvider'
-import type { StorageGalleryAsset } from '../lib/gallery'
+import { galleryRetentionMs, type StorageGalleryAsset } from '../lib/gallery'
 import { StorageGallery } from './StorageGallery'
 
 // A client whose subscriptions answer from `respond`; `update` pushes a new answer to all of them.
@@ -108,6 +108,33 @@ test('keeps the next-page button disabled and announces loading while a page is 
     true,
   )
   expect(shown()).toBe(1)
+})
+
+test('keeps one display cutoff for query pages and rendered memories throughout the visit', () => {
+  const openedAt = Date.now()
+  const now = vi.spyOn(Date, 'now').mockReturnValue(openedAt)
+  const watch = vi.spyOn(client, 'watchQuery')
+  const first = { ...photo(1), createdAt: openedAt - galleryRetentionMs + 2000 }
+  const second = { ...photo(2), createdAt: openedAt - galleryRetentionMs + 1000 }
+  respond = ({ cursor }) =>
+    cursor === null
+      ? { page: [first], isDone: false, continueCursor: 'next' }
+      : { page: [second], isDone: true, continueCursor: 'end' }
+  render(album)
+  expect(shown()).toBe(1)
+  expect(watch).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({ createdAfter: openedAt - galleryRetentionMs }),
+    expect.anything(),
+  )
+
+  now.mockReturnValue(openedAt + 5000)
+  fireEvent.click(screen.getByRole('button', { name: 'Show more memories' }))
+  expect(shown()).toBe(2)
+  expect(screen.queryByRole('button', { name: 'Show more memories' })).toBeNull()
+  expect(
+    watch.mock.calls.every(([, args]) => args?.createdAfter === openedAt - galleryRetentionMs),
+  ).toBe(true)
 })
 
 test('refused cursors restart the album, other failures replace its photos with an alert', () => {
