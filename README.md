@@ -162,6 +162,26 @@ const transloadit = new Transloadit(components.transloadit, { storageWorkspace: 
   performed. Original-only items remain visible even without a source ID. The existing cursor and
   page-split contract applies; pages are capped at 100 originals, with loaded ranges split at 200
   originals to bound rendition lookups. Producer mappings are app configuration, not browser input.
+  An optional `createdAfter` (exclusive Unix timestamp in milliseconds) bounds the original index
+  reads before pagination. Keep that cutoff fixed for a pagination session, so a gallery doesn't
+  page through history it will hide. This is a display filter, not deletion or access control.
+
+  For an exact shared link, use the same grouping without walking the album:
+
+  ```ts
+  const media = await transloadit.getStoredMedia(ctx, {
+    album: authorizedAlbum,
+    assetId: args.assetId,
+    versionId: args.versionId,
+    originalSteps: [":original"],
+    renditions: { playback: "video_encode", poster: "video_poster" },
+  });
+  ```
+
+  The Workspace defaults to the client's Storage configuration. The result is `{ original,
+  renditions }`, or `null` for an unknown, hidden, wrong-album or non-original version. This exact
+  lookup does not apply the listing's display cutoff. Authorize the viewer and every returned
+  receipt in your app before exposing metadata or delivery, just as for the listing.
 - Deletion is a ledger for your own retention job: `previewStoredAssetExpiry` dry-runs a selection,
   `requestStoredAssetDeletion` hides every version of expired assets at once,
   `adoptStoredAssetsForDeletion` brings in Storage objects that no receipt registered, and

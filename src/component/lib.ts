@@ -25,6 +25,7 @@ import {
   vCreateAssemblyReturn,
   vFailStoredAssetDeletionArgs,
   vGetStoredAssetArgs,
+  vGetStoredMediaArgs,
   vHandleWebhookArgs,
   vListAlbumResultsArgs,
   vListAssembliesArgs,
@@ -47,7 +48,9 @@ import {
   vStoredAssetDeletionPage,
   vStoredAssetPage,
   vStoredAssetRow,
+  vStoredMedia,
   vStoredMediaPage,
+  type vStoredMediaProducers,
   vTransloaditConfig,
   vUpsertAssemblyArgs,
   vWebhookArgs,
@@ -940,6 +943,47 @@ const findRendition = async (ctx: QueryCtx, original: Doc<'storedAssets'>, stepN
   return matches.length === 1 ? (matches[0] ?? null) : null
 }
 
+const mediaProducers = (args: ObjectType<typeof vStoredMediaProducers>) => {
+  const originalSteps = [...new Set(args.originalSteps)]
+  const roles = Object.entries(args.renditions)
+  if (
+    originalSteps.length === 0 ||
+    originalSteps.length > 4 ||
+    originalSteps.some((step) => step.length === 0) ||
+    roles.length > 4 ||
+    roles.some(([role, step]) => !role || !step || originalSteps.includes(step))
+  ) {
+    throw transloaditError('storage', 'Invalid Storage media producers')
+  }
+  return { originalSteps, roles }
+}
+
+const groupStoredMedia = async (
+  ctx: QueryCtx,
+  original: Doc<'storedAssets'>,
+  roles: [string, string][],
+) => {
+  const renditions = new Map<string, Doc<'storedAssets'>>()
+  for (const [role, stepName] of roles) {
+    const rendition = await findRendition(ctx, original, stepName)
+    if (rendition) renditions.set(role, rendition)
+  }
+  return { original, renditions: Object.fromEntries(renditions) }
+}
+
+const visibleStoredAsset = async (ctx: QueryCtx, args: ObjectType<typeof vGetStoredAssetArgs>) => {
+  const row = await ctx.db
+    .query('storedAssets')
+    .withIndex('by_version', (q) =>
+      q
+        .eq('asset.workspace', args.workspace)
+        .eq('asset.asset_id', args.assetId)
+        .eq('asset.version_id', args.versionId),
+    )
+    .first()
+  return row && row.deletionRequestedAt === undefined ? row : null
+}
+
 /**
  * Pages visible originals, with optional single-source renditions, entirely from local indexes.
  * Producer names are trusted app configuration, not browser input. Every returned receipt still
@@ -949,16 +993,10 @@ export const listStoredMedia = query({
   args: vListStoredMediaArgs,
   returns: vStoredMediaPage,
   handler: async (ctx, args) => {
-    const originalSteps = [...new Set(args.originalSteps)]
-    const roles = Object.entries(args.renditions)
-    if (
-      originalSteps.length === 0 ||
-      originalSteps.length > 4 ||
-      originalSteps.some((step) => step.length === 0) ||
-      roles.length > 4 ||
-      roles.some(([role, step]) => !role || !step || originalSteps.includes(step))
-    ) {
-      throw transloaditError('storage', 'Invalid Storage media producers')
+    const { originalSteps, roles } = mediaProducers(args)
+    const { createdAfter } = args
+    if (createdAfter !== undefined && !Number.isFinite(createdAfter)) {
+      throw transloaditError('storage', 'Invalid Storage media cutoff')
     }
     // The shared cursor is an album/time boundary, not an authorization token or producer identity.
     // Keep the server-owned producer configuration stable across pages of one gallery.
@@ -966,9 +1004,13 @@ export const listStoredMedia = query({
     const originals = originalSteps.map((stepName) =>
       stream(ctx.db, schema)
         .query('storedAssets')
-        .withIndex('by_step_album_visibility', (q) =>
-          q.eq('stepName', stepName).eq('album', args.album).eq('deletionRequestedAt', undefined),
-        )
+        .withIndex('by_step_album_visibility', (q) => {
+          const visible = q
+            .eq('stepName', stepName)
+            .eq('album', args.album)
+            .eq('deletionRequestedAt', undefined)
+          return createdAfter === undefined ? visible : visible.gt('createdAt', createdAfter)
+        })
         .order('desc'),
     )
     const result = keepLoadedRange(
@@ -982,14 +1024,7 @@ export const listStoredMedia = query({
       args.paginationOpts.endCursor,
     )
     const page = await Promise.all(
-      result.page.map(async (original) => {
-        const renditions = new Map<string, Doc<'storedAssets'>>()
-        for (const [role, stepName] of roles) {
-          const rendition = await findRendition(ctx, original, stepName)
-          if (rendition) renditions.set(role, rendition)
-        }
-        return { original, renditions: Object.fromEntries(renditions) }
-      }),
+      result.page.map((original) => groupStoredMedia(ctx, original, roles)),
     )
     return { ...result, page }
   },
@@ -999,17 +1034,22 @@ export const listStoredMedia = query({
 export const getStoredAsset = query({
   args: vGetStoredAssetArgs,
   returns: v.union(vStoredAssetRow, v.null()),
+  handler: visibleStoredAsset,
+})
+
+/**
+ * One exact original and its indexed renditions, with the same producer/provenance rules as the
+ * listing. This lookup has no display cutoff; the app still authorizes every returned receipt.
+ */
+export const getStoredMedia = query({
+  args: vGetStoredMediaArgs,
+  returns: v.union(vStoredMedia, v.null()),
   handler: async (ctx, args) => {
-    const row = await ctx.db
-      .query('storedAssets')
-      .withIndex('by_version', (q) =>
-        q
-          .eq('asset.workspace', args.workspace)
-          .eq('asset.asset_id', args.assetId)
-          .eq('asset.version_id', args.versionId),
-      )
-      .first()
-    return row && row.deletionRequestedAt === undefined ? row : null
+    const { originalSteps, roles } = mediaProducers(args)
+    const original = await visibleStoredAsset(ctx, args)
+    if (!original || original.album !== args.album || !originalSteps.includes(original.stepName))
+      return null
+    return groupStoredMedia(ctx, original, roles)
   },
 })
 
