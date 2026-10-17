@@ -25,6 +25,11 @@ yarn verify
 
 ## Local development and browser tests
 
+To learn the Storage upload-once/delivery flow without setting up Convex or Vercel, start with the
+[SDK's runnable example](https://github.com/transloadit/node-sdk/tree/main/packages/node/examples/upload-once).
+Its CLI owns login and local seeding; it does not configure this application's credentials or guest
+access rules. The full wedding example below is for developing and testing the integration.
+
 The wedding example has one backend: Convex Auth and private Transloadit Storage. Configure
 `NEXT_PUBLIC_CONVEX_URL` and the server-only delivery credentials for your own deployment
 as described below, then run `yarn example:dev`. Missing backend configuration displays an
