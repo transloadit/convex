@@ -255,6 +255,7 @@ function GalleryViewer({
 }
 
 export function Gallery({
+  displayTime,
   storageAssets = [],
   linkedAsset,
   linkLoading = false,
@@ -263,6 +264,7 @@ export function Gallery({
   loading = false,
   loadingMore = false,
 }: {
+  displayTime?: number
   storageAssets?: StorageGalleryAsset[]
   linkedAsset?: StorageGalleryAsset | null
   linkLoading?: boolean
@@ -274,11 +276,12 @@ export function Gallery({
   const t = useTranslations('album')
   const selectedId = useGalleryLocation()
   const [direction, setDirection] = useState<'next' | 'previous'>('next')
-  const items = loadFailed ? [] : buildStorageGalleryItems(storageAssets)
+  const items = loadFailed ? [] : buildStorageGalleryItems(storageAssets, { now: displayTime })
   const position = items.findIndex((item) => item.id === selectedId)
   // A deep-linked item outside loaded pages has no known neighbors or ordinal. Keep its live
   // authorized subscription, but do not append it to the grid or invent a pagination position.
-  const linked = linkedAsset && !loadFailed ? buildStorageGalleryItems([linkedAsset]) : []
+  const linked =
+    linkedAsset && !loadFailed ? buildStorageGalleryItems([linkedAsset], { now: displayTime }) : []
   const selected = items[position] ?? linked.find((item) => item.id === selectedId)
   const navigate = (value: 'next' | 'previous') => {
     // Read the current URL, not a render closure, so rapid clicks never collapse into one move.

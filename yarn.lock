@@ -1890,9 +1890,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@transloadit/convex@npm:0.5.0":
-  version: 0.5.0
-  resolution: "@transloadit/convex@npm:0.5.0"
+"@transloadit/convex@npm:0.6.0":
+  version: 0.6.0
+  resolution: "@transloadit/convex@npm:0.6.0"
   dependencies:
     "@transloadit/utils": "npm:^4.8.1"
     "@transloadit/zod": "npm:5.0.1"
@@ -1902,7 +1902,7 @@ __metadata:
   dependenciesMeta:
     esbuild:
       built: true
-  checksum: 10c0/cff302af49cd9cf17e7e0c74c40a073d72732e2e33d970159efbbb50885664ec70742c0449b95385dac8b7bff2c71c7ce9b4beca03ec8c16f9f120cb43ae84de
+  checksum: 10c0/46ca74924ff03003f019d422cca856cf7fb708b8aed8a384a899a8bf06f876c30833f178b3b6aa0f11a9ad9cb627a6abbe97a36a5346d2e4b4884fa837bccc11
   languageName: node
   linkType: hard
 
@@ -4847,7 +4847,7 @@ __metadata:
   dependencies:
     "@auth/core": "npm:^0.41.3"
     "@convex-dev/auth": "npm:^0.0.95"
-    "@transloadit/convex": "npm:0.5.0"
+    "@transloadit/convex": "npm:0.6.0"
     "@transloadit/node": "npm:5.0.1"
     "@transloadit/viewer": "npm:0.0.8"
     "@transloadit/zod": "npm:5.0.1"

@@ -10,6 +10,12 @@ import { findGuest, requireGuest } from './guests'
 type StoredAssetRow = Infer<typeof vStoredAssetResponse>
 
 const vAction = v.union(v.literal('preview'), v.literal('original'), v.literal('download'))
+const mediaProducers = {
+  album,
+  // Keep old private photos readable alongside direct originals, without a data migration.
+  originalSteps: [':original', 'images_filtered'],
+  renditions: { playback: 'video_encode', poster: 'video_poster' },
+}
 
 const vGalleryAsset = v.object({
   id: v.string(),
@@ -93,15 +99,13 @@ const galleryAsset = async (
  * convex-helpers uses to keep loaded pages stable in a live album.
  */
 export const list = query({
-  args: { paginationOpts: paginationOptsValidator },
+  args: { paginationOpts: paginationOptsValidator, createdAfter: v.optional(v.number()) },
   returns: paginationResultValidator(vGalleryAsset),
   handler: async (ctx, args) => {
     await requireGuest(ctx)
     const result = await ctx.runQuery(components.transloadit.lib.listStoredMedia, {
-      album,
-      // Keep old private photos readable alongside direct originals, without a data migration.
-      originalSteps: [':original', 'images_filtered'],
-      renditions: { playback: 'video_encode', poster: 'video_poster' },
+      ...mediaProducers,
+      createdAfter: args.createdAfter,
       paginationOpts: args.paginationOpts,
     })
     const page = []
@@ -142,43 +146,11 @@ export const get = query({
   handler: async (ctx, args) => {
     const workspace = getStorageWorkspace()
     if (!workspace || !(await findGuest(ctx))) return null
-    const row = await ctx.runQuery(components.transloadit.lib.getStoredAsset, {
+    const media = await ctx.runQuery(components.transloadit.lib.getStoredMedia, {
+      ...mediaProducers,
       workspace,
       ...args,
     })
-    if (
-      !row ||
-      ![':original', 'images_filtered'].includes(row.stepName) ||
-      !(await findBoundUpload(ctx, row))
-    )
-      return null
-    if (!row.asset.mime?.startsWith('video/')) return galleryAsset(ctx, row, {})
-    // This app signs batches of at most 12 uploads with three stored outputs per video. Reuse
-    // the component's bounded Assembly lookup; custom/ambiguous excess results fail closed.
-    const siblings = await ctx.runQuery(components.transloadit.lib.listStoredAssetsForAssembly, {
-      assemblyId: row.assemblyId,
-      limit: 500,
-    })
-    if (siblings.length === 500) return null
-    const sourceId = (id: StoredAssetRow['originalId']) =>
-      typeof id === 'string' ? id : id?.length === 1 ? id[0] : undefined
-    const original = sourceId(row.originalId)
-    const rendition = (step: string) => {
-      if (!original) return undefined
-      const matches = siblings.filter(
-        (item) =>
-          item.stepName === step &&
-          sourceId(item.originalId) === original &&
-          item.album === row.album &&
-          item.userId === row.userId &&
-          item.uploadId === row.uploadId &&
-          item.asset.workspace === workspace,
-      )
-      return matches.length === 1 ? matches[0] : undefined
-    }
-    return galleryAsset(ctx, row, {
-      playback: rendition('video_encode'),
-      poster: rendition('video_poster'),
-    })
+    return media ? galleryAsset(ctx, media.original, media.renditions) : null
   },
 })

@@ -10,7 +10,7 @@
   "dependencies": {
     "@auth/core": "^0.41.3",
     "@convex-dev/auth": "^0.0.95",
-    "@transloadit/convex": "0.5.0",
+    "@transloadit/convex": "0.6.0",
     "@transloadit/node": "5.0.1",
     "@transloadit/viewer": "0.0.8",
     "@transloadit/zod": "5.0.1",
