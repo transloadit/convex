@@ -257,6 +257,23 @@ For status parsing and polling helpers, see `docs/advanced.md`.
 
 ## Example app (Next.js + Uppy wedding gallery)
 
+New to Storage and Smart CDN? Try the small, framework-neutral SDK example first:
+
+```bash
+npx @transloadit/node@latest init upload-once my-gallery
+cd my-gallery
+npm run demo
+```
+
+It opens browser login when needed, stores one original and renders three variants. Edit the sizes
+and rerun it without re-uploading the matching original. The
+[canonical example](https://github.com/transloadit/node-sdk/tree/main/packages/node/examples/upload-once)
+is shipped and tested with the CLI; this repository does not maintain a copy. You need a
+Storage-enabled workspace. Initialization only creates local files and installs dependencies;
+running the demo uploads. This does not configure Convex or deploy the wedding app.
+
+### Build a user-uploaded gallery
+
 The `example/` app is a wedding gallery where guests upload photos + short videos. It uses Uppy on
 the client and Convex Auth with a required guest name to enter the album. Hosted uploads store
 original photos/videos, MP4 playback renditions and posters in private Transloadit Storage.
@@ -266,7 +283,12 @@ any uploads. An optional saved Transloadit Template holds the reusable processin
 
 Live demo: `https://convex-demo.transload.it`
 
-For setup, deployment, and verification details, see `CONTRIBUTING.md`.
+For setup, deployment, and verification details, see [CONTRIBUTING.md](CONTRIBUTING.md).
+Use separate server-side application credentials, not the local example's browser-login key:
+CLI logout revokes that key. The wedding app shares Storage receipts, Built-in previews and the
+published Viewer with the SDK ecosystem, but keeps guest authorization, webhook ownership and
+retention policy in the app. The local example's static catalog is not a replacement for the
+component's reactive receipt queries.
 
 The [living DAM plan in API2](https://github.com/transloadit/api2/blob/main/docs/prompts/2026-10-15-handover-dam.md)
 tracks the cross-repository dogfooding work, release boundaries and next product slice.
