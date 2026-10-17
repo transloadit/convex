@@ -156,6 +156,84 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         } | null,
         Name
       >;
+      getStoredMedia: FunctionReference<
+        "query",
+        "internal",
+        {
+          album: string;
+          assetId: string;
+          originalSteps: Array<string>;
+          renditions: Record<string, string>;
+          versionId: string;
+          workspace: string;
+        },
+        {
+          original: {
+            _creationTime: number;
+            _id: string;
+            album?: string;
+            assemblyId: string;
+            asset: {
+              asset_id: string;
+              has_alpha?: boolean;
+              height?: number;
+              md5hash?: string;
+              mime: string | null;
+              path: string;
+              sha256?: string;
+              size: number;
+              thumbhash?: string;
+              version_id: string;
+              width?: number;
+              workspace: string;
+            };
+            createdAt: number;
+            deletedAt?: number;
+            deletionAttempts?: number;
+            deletionError?: string;
+            deletionRequestedAt?: number;
+            originalId?: string | Array<string | null>;
+            resultId: string;
+            stepName: string;
+            uploadId?: string;
+            userId?: string;
+          };
+          renditions: Record<
+            string,
+            {
+              _creationTime: number;
+              _id: string;
+              album?: string;
+              assemblyId: string;
+              asset: {
+                asset_id: string;
+                has_alpha?: boolean;
+                height?: number;
+                md5hash?: string;
+                mime: string | null;
+                path: string;
+                sha256?: string;
+                size: number;
+                thumbhash?: string;
+                version_id: string;
+                width?: number;
+                workspace: string;
+              };
+              createdAt: number;
+              deletedAt?: number;
+              deletionAttempts?: number;
+              deletionError?: string;
+              deletionRequestedAt?: number;
+              originalId?: string | Array<string | null>;
+              resultId: string;
+              stepName: string;
+              uploadId?: string;
+              userId?: string;
+            }
+          >;
+        } | null,
+        Name
+      >;
       handleWebhook: FunctionReference<
         "action",
         "internal",
@@ -374,6 +452,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         "internal",
         {
           album: string;
+          createdAfter?: number;
           originalSteps: Array<string>;
           paginationOpts: {
             cursor: string | null;

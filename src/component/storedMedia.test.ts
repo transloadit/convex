@@ -40,12 +40,27 @@ const insert = (t: Test, seed: string, fields: Partial<Fields> = {}) =>
     }),
   )
 
-const list = (t: Test, paginationOpts: PaginationOptions = { numItems: 10, cursor: null }) =>
+const list = (
+  t: Test,
+  paginationOpts: PaginationOptions = { numItems: 10, cursor: null },
+  createdAfter?: number,
+) =>
   t.query(api.lib.listStoredMedia, {
     album: 'album-1',
     originalSteps: [':original', 'legacy-original'],
     renditions: { playback: 'encode', poster: 'poster' },
+    createdAfter,
     paginationOpts,
+  })
+
+const get = (t: Test, seed: string) =>
+  t.query(api.lib.getStoredMedia, {
+    album: 'album-1',
+    originalSteps: [':original', 'legacy-original'],
+    renditions: { playback: 'encode', poster: 'poster' },
+    workspace: 'test-workspace',
+    assetId: `asset-${seed}`,
+    versionId: `version-${seed}`,
   })
 
 describe('stored media', () => {
@@ -73,6 +88,7 @@ describe('stored media', () => {
         },
       }),
     ])
+    expect(await get(t, 'original')).toEqual(first.page[0])
     const rest = await list(t, { numItems: 10, cursor: first.continueCursor })
     expect(rest.page).toEqual([])
     expect(rest.isDone).toBe(true)
@@ -119,6 +135,7 @@ describe('stored media', () => {
       ...mismatch,
     })
     expect((await list(t)).page[0]?.renditions).toEqual({})
+    expect((await get(t, 'original'))?.renditions).toEqual({})
   })
 
   test('keeps identical filenames from two originals separate, accepting either single-ID shape', async () => {
@@ -144,8 +161,12 @@ describe('stored media', () => {
     expect((await list(t)).page[0]?.renditions).toEqual({
       poster: expect.objectContaining({ _id: poster }),
     })
+    expect((await get(t, 'original'))?.renditions).toEqual({
+      poster: expect.objectContaining({ _id: poster }),
+    })
     await t.run((ctx) => ctx.db.patch(original, { originalId: ['source-original', 'second'] }))
     expect((await list(t)).page[0]?.renditions).toEqual({})
+    expect((await get(t, 'original'))?.renditions).toEqual({})
     await t.run((ctx) => ctx.db.patch(original, { originalId: undefined }))
     expect((await list(t)).page).toEqual([
       expect.objectContaining({
@@ -168,31 +189,128 @@ describe('stored media', () => {
     expect(result.page).toHaveLength(1)
     expect(result.page[0]?.original.asset.asset_id).toBe('asset-visible')
     expect(result.page[0]?.renditions).toEqual({})
+    expect(await get(t, 'hidden')).toBeNull()
+    expect((await get(t, 'visible'))?.renditions).toEqual({})
   })
 
-  test('keeps loaded ranges stable across inserts, deletions and required page splits', async () => {
+  test('resolves only the exact visible original in the configured album and Workspace', async () => {
     const t = setup()
+    await insert(t, 'original')
+    await insert(t, 'overwrite', {
+      asset: { ...asset('original'), version_id: 'new-version' },
+    })
+    const args = {
+      album: 'album-1',
+      originalSteps: [':original'],
+      renditions: {},
+      workspace: 'test-workspace',
+      assetId: 'asset-original',
+      versionId: 'version-original',
+    }
+    expect(await t.query(api.lib.getStoredMedia, args)).toMatchObject({
+      original: { asset: asset('original') },
+      renditions: {},
+    })
+    for (const mismatch of [
+      { album: 'another-album' },
+      { workspace: 'another-workspace' },
+      { assetId: 'another-asset' },
+      { versionId: 'another-version' },
+      { originalSteps: ['another-producer'] },
+    ]) {
+      expect(await t.query(api.lib.getStoredMedia, { ...args, ...mismatch })).toBeNull()
+    }
+    await insert(t, 'rendition', { stepName: 'encode', originalId: 'source-original' })
+    expect(await get(t, 'rendition')).toBeNull()
+  })
+
+  test('applies an exclusive display cutoff to both original indexes before pagination', async () => {
+    const t = setup()
+    await insert(t, 'old', { createdAt: 1 })
+    await insert(t, 'boundary', { createdAt: 2, stepName: 'legacy-original' })
+    await insert(t, 'fresh', { createdAt: 3 })
+    await insert(t, 'legacy-fresh', { createdAt: 4, stepName: 'legacy-original' })
+    const args = {
+      album: 'album-1',
+      originalSteps: [':original', 'legacy-original'],
+      renditions: {},
+      createdAfter: 2,
+    }
+    const first = await t.query(api.lib.listStoredMedia, {
+      ...args,
+      paginationOpts: { numItems: 1, cursor: null },
+    })
+    const rest = await t.query(api.lib.listStoredMedia, {
+      ...args,
+      paginationOpts: { numItems: 10, cursor: first.continueCursor },
+    })
+    expect([...first.page, ...rest.page].map(({ original }) => original.asset.asset_id)).toEqual([
+      'asset-legacy-fresh',
+      'asset-fresh',
+    ])
+    expect(rest.isDone).toBe(true)
+    // Display filtering is not access revocation or deletion of the exact-version receipt.
+    expect((await get(t, 'old'))?.original.asset.asset_id).toBe('asset-old')
+  })
+
+  test('ends an all-old gallery immediately without spending pages on hidden history', async () => {
+    const t = setup()
+    for (let index = 0; index < 250; index += 1) {
+      await insert(t, `old-${index}`, {
+        createdAt: index,
+        stepName: index % 2 ? ':original' : 'legacy-original',
+      })
+    }
+    expect(
+      await t.query(api.lib.listStoredMedia, {
+        album: 'album-1',
+        originalSteps: [':original', 'legacy-original'],
+        renditions: {},
+        createdAfter: 250,
+        paginationOpts: { numItems: 1, cursor: null, maximumRowsRead: 2 },
+      }),
+    ).toMatchObject({ page: [], isDone: true })
+  })
+
+  test.each([Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+    'refuses a nonfinite display cutoff: %s',
+    async (createdAfter) => {
+      await expect(
+        setup().query(api.lib.listStoredMedia, {
+          album: 'album-1',
+          originalSteps: [':original'],
+          renditions: {},
+          createdAfter,
+          paginationOpts: { numItems: 1, cursor: null },
+        }),
+      ).rejects.toThrow('Invalid Storage media cutoff')
+    },
+  )
+
+  test.each([undefined, 0])('keeps loaded ranges stable with cutoff %s', async (createdAfter) => {
+    const t = setup()
+    const page = (opts: PaginationOptions) => list(t, opts, createdAfter)
     for (let index = 0; index < 5; index += 1)
       await insert(t, `original-${index}`, {
         stepName: index % 2 ? ':original' : 'legacy-original',
         createdAt: index,
       })
-    const first = await list(t, { numItems: 2, cursor: null })
-    const second = await list(t, { numItems: 2, cursor: first.continueCursor })
+    const first = await page({ numItems: 2, cursor: null })
+    const second = await page({ numItems: 2, cursor: first.continueCursor })
     const newest = await insert(t, 'newest', { createdAt: 10 })
-    const grown = await list(t, { numItems: 2, cursor: null, endCursor: first.continueCursor })
+    const grown = await page({ numItems: 2, cursor: null, endCursor: first.continueCursor })
     expect(grown.page.map((item) => item.original._id)).toEqual([
       newest,
       ...first.page.map((item) => item.original._id),
     ])
     expect(grown.continueCursor).toBe(first.continueCursor)
-    const unchanged = await list(t, {
+    const unchanged = await page({
       numItems: 2,
       cursor: first.continueCursor,
       endCursor: second.continueCursor,
     })
     expect(unchanged.page).toEqual(second.page)
-    const split = await list(t, {
+    const split = await page({
       numItems: 1,
       cursor: null,
       endCursor: first.continueCursor,
@@ -204,21 +322,21 @@ describe('stored media', () => {
       continueCursor: first.continueCursor,
     })
     const [left, right] = await Promise.all([
-      list(t, { numItems: 1, cursor: null, endCursor: split.splitCursor }),
-      list(t, { numItems: 1, cursor: split.splitCursor ?? null, endCursor: first.continueCursor }),
+      page({ numItems: 1, cursor: null, endCursor: split.splitCursor }),
+      page({ numItems: 1, cursor: split.splitCursor ?? null, endCursor: first.continueCursor }),
     ])
     expect([...left.page, ...right.page]).toEqual(grown.page)
     const hidden = first.page[1]?.original
     if (!hidden) throw new Error('Expected a complete original page')
     await t.run((ctx) => ctx.db.patch(hidden._id, { deletionRequestedAt: 1 }))
     expect(
-      (await list(t, { numItems: 2, cursor: null, endCursor: first.continueCursor })).page.map(
+      (await page({ numItems: 2, cursor: null, endCursor: first.continueCursor })).page.map(
         (item) => item.original._id,
       ),
     ).toEqual([newest, first.page[0]?.original._id])
     expect(
       (
-        await list(t, {
+        await page({
           numItems: 2,
           cursor: first.continueCursor,
           endCursor: second.continueCursor,
@@ -244,10 +362,21 @@ describe('stored media', () => {
       { renditions: { playback: ':original' } },
       { renditions: { playback: '' } },
     ]
-    for (const producers of invalidProducers)
+    for (const producers of invalidProducers) {
       await expect(t.query(api.lib.listStoredMedia, { ...args, ...producers })).rejects.toThrow(
         'Invalid Storage media producers',
       )
+      const { paginationOpts: _paginationOpts, ...config } = args
+      await expect(
+        t.query(api.lib.getStoredMedia, {
+          ...config,
+          ...producers,
+          workspace: 'test-workspace',
+          assetId: 'asset-original',
+          versionId: 'version-original',
+        }),
+      ).rejects.toThrow('Invalid Storage media producers')
+    }
     await expect(list(t, { numItems: Number.NaN, cursor: null })).rejects.toThrow('page limits')
     await expect(list(t, { numItems: 1, cursor: '[1,2]' })).rejects.toThrow('InvalidCursor')
     const first = await list(t, { numItems: 1, cursor: null })

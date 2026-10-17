@@ -11,6 +11,7 @@ import {
   type StorageConfig,
   type StoredAssetReference,
   type StoredAssetResponse,
+  type StoredMediaResponse,
   vAlbumResultResponse,
   vAssemblyIdArgs,
   vAssemblyOptions,
@@ -18,6 +19,7 @@ import {
   vAssemblyResultResponse,
   vCreateAssemblyArgs,
   vCreateAssemblyReturn,
+  type vGetStoredMediaArgs,
   vListAlbumResultsArgs,
   vListAssembliesArgs,
   vListResultsArgs,
@@ -263,6 +265,23 @@ export class TransloaditClient {
   /** Grouped receipts for an app-authorized viewer; producer mappings must be server-chosen. */
   async listStoredMedia(ctx: RunQueryCtx, args: ObjectType<typeof vListStoredMediaArgs>) {
     return ctx.runQuery(this.component.lib.listStoredMedia, args)
+  }
+
+  /** One exact grouped original; app access checks still apply to every returned receipt. */
+  async getStoredMedia(
+    ctx: RunQueryCtx,
+    args: Omit<ObjectType<typeof vGetStoredMediaArgs>, 'workspace'> & { workspace?: string },
+  ): Promise<StoredMediaResponse | null> {
+    const workspace = args.workspace ?? this.config.storageWorkspace
+    if (!workspace) return null
+    return ctx.runQuery(this.component.lib.getStoredMedia, {
+      workspace,
+      assetId: args.assetId,
+      versionId: args.versionId,
+      album: args.album,
+      originalSteps: args.originalSteps,
+      renditions: args.renditions,
+    })
   }
 
   /** One exact visible version, or null when it is unknown or awaiting deletion. */

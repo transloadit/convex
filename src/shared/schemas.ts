@@ -120,10 +120,16 @@ export const vListStoredAssetsArgs = {
 }
 
 /** Server-selected producers: one or more original Steps and named, single-source renditions. */
-export const vListStoredMediaArgs = {
+export const vStoredMediaProducers = {
   album: v.string(),
   originalSteps: v.array(v.string()),
   renditions: v.record(v.string(), v.string()),
+}
+
+export const vListStoredMediaArgs = {
+  ...vStoredMediaProducers,
+  /** Exclusive creation-time bound in milliseconds; keep fixed across a pagination session. */
+  createdAfter: v.optional(v.number()),
   paginationOpts: paginationOptsValidator,
 }
 
@@ -157,6 +163,11 @@ export const vGetStoredAssetArgs = {
   workspace: v.string(),
   assetId: v.string(),
   versionId: v.string(),
+}
+
+export const vGetStoredMediaArgs = {
+  ...vGetStoredAssetArgs,
+  ...vStoredMediaProducers,
 }
 
 export const vListStoredAssetsForAssemblyArgs = {
