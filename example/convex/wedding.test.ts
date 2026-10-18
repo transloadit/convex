@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import { generateKeyPairSync } from 'node:crypto'
+import { createHmac, generateKeyPairSync } from 'node:crypto'
 import { anyApi, componentsGeneric } from 'convex/server'
 import { convexTest } from 'convex-test'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
@@ -16,6 +16,7 @@ vi.mock('./_generated/api', async () => {
 vi.mock('./_generated/server', async () => {
   const {
     actionGeneric,
+    httpActionGeneric,
     internalActionGeneric,
     internalMutationGeneric,
     internalQueryGeneric,
@@ -23,6 +24,7 @@ vi.mock('./_generated/server', async () => {
   } = await import('convex/server')
   return {
     action: actionGeneric,
+    httpAction: httpActionGeneric,
     internalAction: internalActionGeneric,
     internalMutation: internalMutationGeneric,
     internalQuery: internalQueryGeneric,
@@ -41,6 +43,7 @@ const setup = (modules = componentModules, transactionLimits = false) => {
       './guests.ts': () => import('./guests'),
       './transloadit.ts': () => import('./transloadit'),
       './auth.ts': () => import('./auth'),
+      './http.ts': () => import('./http'),
       './_generated/server.ts': () => import('convex/server'),
     },
     transactionLimits,
@@ -87,7 +90,42 @@ const admitted = async (t = setup()) => {
 
 beforeEach(() => vi.stubEnv('WEDDING_UPLOAD_CODE', ''))
 
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.useRealTimers()
+})
+
+test('the HTTP webhook verifies before queueing with only a secret, never an API key', async () => {
+  vi.stubEnv('TRANSLOADIT_KEY', undefined)
+  vi.stubEnv('TRANSLOADIT_SECRET', 'test-webhook-secret')
+  vi.stubEnv('TRANSLOADIT_WORKSPACE', undefined)
+  vi.useFakeTimers()
+  const t = setup()
+  const rawBody = JSON.stringify({ assembly_id: 'signed-http', ok: 'ASSEMBLY_COMPLETED' })
+  const body = new FormData()
+  body.set('transloadit', rawBody)
+  body.set(
+    'signature',
+    `sha384:${createHmac('sha384', 'test-webhook-secret').update(rawBody).digest('hex')}`,
+  )
+  const response = await t.fetch('/transloadit/webhook', { method: 'POST', body })
+  expect(response.status).toBe(202)
+  await t.finishAllScheduledFunctions(vi.runAllTimers)
+  expect(
+    await t.query(components.transloadit.lib.getAssemblyStatus, { assemblyId: 'signed-http' }),
+  ).not.toBeNull()
+
+  body.set(
+    'transloadit',
+    JSON.stringify({ assembly_id: 'unsigned-http', ok: 'ASSEMBLY_COMPLETED' }),
+  )
+  await expect(t.fetch('/transloadit/webhook', { method: 'POST', body })).rejects.toThrow(
+    'Invalid Transloadit webhook signature',
+  )
+  expect(
+    await t.query(components.transloadit.lib.getAssemblyStatus, { assemblyId: 'unsigned-http' }),
+  ).toBeNull()
+})
 
 test.each(['', ' \n\t ', 'x'.repeat(101)])(
   'rejects invalid guest names before signing or consuming the upload limit (%j)',

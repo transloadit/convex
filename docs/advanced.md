@@ -2,6 +2,29 @@
 
 This page collects optional helpers that build on the Uppy-first integration path.
 
+## Legacy public wrappers
+
+`makeTransloaditAPI(component, config)` and `client.api()` still return the same public Convex
+functions for compatibility, but are deprecated. They do not check authentication, album membership
+or Assembly ownership. Merely keeping the API secret server-side does not make those endpoints
+safe: callers can request signatures for their own Steps, read metadata or invoke `purgeAlbum`.
+
+For an existing integration, replace the exported factory functions with app-owned wrappers around
+`new Transloadit(components.transloadit)` (or direct component calls):
+
+- Authorize public signing actions and fix the recipe, ownership fields and Storage paths on the
+  server. Do not accept arbitrary `CreateAssemblyArgs` from the browser.
+- Authorize reads and refresh against the caller's album/Assembly, not just a logged-in session.
+- Keep webhook ingestion, metadata writes and cleanup internal. Update HTTP routes and server
+  callers to use `internal.transloadit.*` references when moving a function from public to internal.
+- Keep receipt reads app-owned; the factory does not expose them or the `assemblyFields` selector.
+
+Use the [wedding app's functions](../example/convex/) as the concrete reference. Existing factory
+exports are not changed automatically by upgrading this package; review them before deploying.
+The class's writable `config` API and explicit credential overrides remain supported. Environment
+credentials resolve when an operation needs them, so local receipt reads and codegen need neither
+an Assembly key nor a secret. Webhook handlers need only the secret; signing and refresh need both.
+
 ## Typed helpers (raw payload parsing)
 
 When working with raw assembly payloads, use these helpers to avoid stringly-typed access.
@@ -71,11 +94,13 @@ This reads `TRANSLOADIT_KEY/TRANSLOADIT_SECRET` from `.env` and prints the templ
 
 ## Webhook handling (sync mode)
 
-By default, the README shows the queued flow. If you need synchronous handling, you can use:
+By default, the README shows the queued flow. For synchronous handling, define an `internalAction`
+with the same webhook validators as that example, calling `transloadit.handleWebhook(ctx, args)`
+instead. The HTTP route then uses its internal reference:
 
 ```ts
 return handleWebhookRequest(request, {
   mode: "sync",
-  runAction: (args) => ctx.runAction(api.transloadit.handleWebhook, args),
+  runAction: (args) => ctx.runAction(internal.transloadit.handleWebhook, args),
 });
 ```
