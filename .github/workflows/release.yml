@@ -27,10 +27,12 @@ jobs:
       - run: yarn install --immutable
       # Never version or publish a manifest whose dependencies point at local files.
       - run: node scripts/assert-publishable.ts
+      # Keep the maintained Changesets 2 npm publisher: v3 selects Yarn, whose bundled
+      # provenance client fails this release with a duplicate transparency-log entry.
       - uses: changesets/action@66d7d1ddafddf1ef45f98ee51a7496f9cdadb2f4 # v2.1.2
         with:
           version-script: corepack yarn changeset version
           publish-script: corepack yarn changeset publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          YARN_NPM_PUBLISH_PROVENANCE: "true"
+          NPM_CONFIG_PROVENANCE: "true"
