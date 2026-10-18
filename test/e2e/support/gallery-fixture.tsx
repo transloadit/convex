@@ -20,7 +20,18 @@ const photo = (index: number): StorageGalleryAsset => ({
     thumbhash: 'IvkFHYx/iHiHh3h3d3h4d494+IiI',
   },
 })
-const assets = [photo(1), photo(2), photo(3)]
+const video = (index: number): StorageGalleryAsset => {
+  const original = photo(index)
+  const playback = photo(index * 10).asset
+  return {
+    ...original,
+    asset: { ...original.asset, path: `video-${index}.mp4`, mime: 'video/mp4' },
+    video: { ...playback, path: `video-${index}.mp4`, mime: 'video/mp4' },
+  }
+}
+const assets = new URLSearchParams(window.location.search).has('mixed')
+  ? [photo(1), video(2), photo(3), video(4)]
+  : [photo(1), photo(2), photo(3)]
 const linkedAsset = photo(99)
 if (new URLSearchParams(window.location.search).has('longName')) {
   linkedAsset.asset.path =
