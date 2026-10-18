@@ -95,14 +95,19 @@ export const useAssemblyEvents = (
       setAssemblyId(assembly.assembly_id)
       setStage('uploading')
     }
-    const handleComplete = () => {
+    const handleExecuting = () => {
       setStage('processing')
     }
+    const handleError = () => {
+      setStage('error')
+    }
     uppy.on('transloadit:assembly-created', handleAssemblyCreated)
-    uppy.on('transloadit:complete', handleComplete)
+    uppy.on('transloadit:assembly-executing', handleExecuting)
+    uppy.on('transloadit:assembly-error', handleError)
     return () => {
       uppy.off('transloadit:assembly-created', handleAssemblyCreated)
-      uppy.off('transloadit:complete', handleComplete)
+      uppy.off('transloadit:assembly-executing', handleExecuting)
+      uppy.off('transloadit:assembly-error', handleError)
     }
   }, [uppy, setAssemblyId, setStage])
 }

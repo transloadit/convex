@@ -62,6 +62,7 @@ function Media({
       controls={viewing}
       playsInline
       preload={viewing ? 'metadata' : 'none'}
+      onLoadedData={onLoad}
       aria-label={item.name || t('moment')}
     />
   )

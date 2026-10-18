@@ -461,6 +461,53 @@ test('preloads the previous neighbor after navigating backwards and loading the 
   expect(dialog.querySelectorAll('img[fetchpriority="low"]')).toHaveLength(1)
 })
 
+test('warms only the next photo after the current video has a frame, not just metadata', async () => {
+  const original = photo(1, 1920, 1080, { mime: 'video/quicktime', path: 'upload/clip.mov' })
+  const video = { ...photo(10).asset, mime: 'video/mp4', path: 'upload/play.mp4' }
+  const next = photo(2)
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[{ ...original, video }, next, photo(3)]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View clip.mov' }))
+  const dialog = screen.getByRole('dialog', { name: 'clip.mov' })
+  const player = within(dialog).getByLabelText('clip.mov')
+  expect(dialog.querySelector('img[fetchpriority="low"]')).toBeNull()
+  fireEvent.loadedMetadata(player)
+  expect(dialog.querySelector('img[fetchpriority="low"]')).toBeNull()
+  fireEvent.loadedData(player)
+  await waitFor(() => {
+    expect(dialog.querySelector('img[fetchpriority="low"]')?.getAttribute('src')).toContain(
+      next.asset.asset_id,
+    )
+  })
+  expect(dialog.querySelectorAll('img[fetchpriority="low"]')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+  expect(screen.getByRole('dialog', { name: 'photo-2.jpg' })).toBeTruthy()
+  expect(new URLSearchParams(location.search).get('media')).toBe(
+    `${next.asset.asset_id}.${next.asset.version_id}`,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Previous' }))
+  expect(screen.getByRole('dialog').querySelector('img[fetchpriority="low"]')).toBeNull()
+})
+
+test('a loaded video never speculatively loads the next video', () => {
+  const first = photo(1, 1920, 1080, { mime: 'video/quicktime', path: 'upload/first.mov' })
+  const second = photo(2, 1920, 1080, { mime: 'video/quicktime', path: 'upload/second.mov' })
+  const video = { ...photo(10).asset, mime: 'video/mp4', path: 'upload/play.mp4' }
+  render(
+    <AlbumIntlProvider initialLocale="en">
+      <Gallery storageAssets={[{ ...first, video }, { ...second, video }]} />
+    </AlbumIntlProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'View first.mov' }))
+  const dialog = screen.getByRole('dialog')
+  fireEvent.loadedData(within(dialog).getByLabelText('first.mov'))
+  expect(dialog.querySelector('img[fetchpriority="low"]')).toBeNull()
+  expect(dialog.querySelectorAll('video')).toHaveLength(1)
+})
+
 test('returning to a photo waits for its current render instead of reusing old ready state', async () => {
   render(
     <AlbumIntlProvider initialLocale="en">
