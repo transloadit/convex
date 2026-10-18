@@ -55,7 +55,7 @@ this code removal; old URLs cannot be made private retroactively.
 
 ## Demo deployment (Vercel + stable Convex)
 
-The hosted wedding app is a Yarn workspace with an exact `@transloadit/convex@0.6.0` registry
+The hosted wedding app is a Yarn workspace with an exact `@transloadit/convex` registry
 dependency. It does not alias package imports to this repository's `src/`. Both `example:build` and
 the production backend deploy check the resolved package before proceeding. Publish a component
 release first, then update `example/package.json` and the lockfile to dogfood it on the live demo.
