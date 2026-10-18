@@ -271,9 +271,10 @@ describeE2e('e2e upload flow', () => {
         mimeType: 'image/jpeg',
         buffer: Buffer.alloc(0),
       })
-      await browserExpect(uploadDialog.getByRole('alert')).toContainText(
+      // Dashboard 6 currently renders two Informers; don't require that duplicate UI to persist.
+      await browserExpect(uploadDialog.getByRole('alert')).toContainText([
         'This file is smaller than the allowed size of 1 B',
-      )
+      ])
       await browserExpect(uploadDialog.locator('.uppy-Dashboard-Item')).toHaveCount(0)
       expect(
         diagnostics.requestLog.filter((request) =>
