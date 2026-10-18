@@ -138,7 +138,7 @@ export type { AssemblyOptions, AssemblyResponse, AssemblyResultResponse, CreateA
 export { vAssemblyOptions }
 
 /**
- * @deprecated Prefer `makeTransloaditAPI` or `Transloadit` for new code.
+ * @deprecated Prefer `Transloadit` for new code.
  */
 export class TransloaditClient {
   declare component: TransloaditComponent
@@ -146,9 +146,22 @@ export class TransloaditClient {
 
   constructor(component: TransloaditComponent, config?: Partial<TransloaditConfig>) {
     this.component = component
+    let { authKey, authSecret } = config ?? {}
+    // Keep the writable config API, but do not require signing credentials for local receipt reads
+    // or Convex's module analysis. Each operation reads only the credentials it needs.
     this.config = {
-      authKey: config?.authKey ?? requireEnv(['TRANSLOADIT_KEY']),
-      authSecret: config?.authSecret ?? requireEnv(['TRANSLOADIT_SECRET']),
+      get authKey() {
+        return authKey ?? requireEnv(['TRANSLOADIT_KEY'])
+      },
+      set authKey(value: string) {
+        authKey = value
+      },
+      get authSecret() {
+        return authSecret ?? requireEnv(['TRANSLOADIT_SECRET'])
+      },
+      set authSecret(value: string) {
+        authSecret = value
+      },
       storageWorkspace: config?.storageWorkspace ?? optionalEnv('TRANSLOADIT_WORKSPACE'),
     }
   }
@@ -181,6 +194,7 @@ export class TransloaditClient {
       payload: unknown
       rawBody?: string
       signature?: string
+      /** Trusted server-side opt-out only; never accept this flag from HTTP or client input. */
       verifySignature?: boolean
     },
   ) {
@@ -197,6 +211,7 @@ export class TransloaditClient {
       payload: unknown
       rawBody?: string
       signature?: string
+      /** Trusted server-side opt-out only; never accept this flag from HTTP or client input. */
       verifySignature?: boolean
     },
   ) {
@@ -354,6 +369,7 @@ export class TransloaditClient {
     return ctx.runMutation(this.component.lib.storeAssemblyMetadata, args)
   }
 
+  /** @deprecated Public wrappers have no app authorization; call client methods from your own functions. */
   api() {
     return makeTransloaditAPI(this.component, this.config)
   }
@@ -362,7 +378,7 @@ export class TransloaditClient {
 export class Transloadit extends TransloaditClient {}
 
 /**
- * @deprecated Prefer `new Transloadit(...)` or `makeTransloaditAPI(...)`.
+ * @deprecated Prefer `new Transloadit(...)`.
  */
 export function createTransloadit(
   component: TransloaditComponent,
@@ -371,16 +387,25 @@ export function createTransloadit(
   return new Transloadit(component, config)
 }
 
+/**
+ * @deprecated These public wrappers do not authorize callers. Use `Transloadit` from app functions
+ * that check access and choose signing inputs on the server. Retained for existing integrations.
+ */
 export function makeTransloaditAPI(
   component: TransloaditComponent,
   config?: Partial<TransloaditConfig>,
 ) {
-  const resolveConfig = (): TransloaditConfig => ({
-    authKey: config?.authKey ?? requireEnv(['TRANSLOADIT_KEY']),
+  const resolveWebhookConfig = () => ({
     authSecret: config?.authSecret ?? requireEnv(['TRANSLOADIT_SECRET']),
     storageWorkspace: config?.storageWorkspace ?? optionalEnv('TRANSLOADIT_WORKSPACE'),
   })
-  const resolveStorage = (resolved: TransloaditConfig): StorageConfig | undefined =>
+  const resolveConfig = (): TransloaditConfig => ({
+    authKey: config?.authKey ?? requireEnv(['TRANSLOADIT_KEY']),
+    ...resolveWebhookConfig(),
+  })
+  const resolveStorage = (
+    resolved: Pick<TransloaditConfig, 'storageWorkspace'>,
+  ): StorageConfig | undefined =>
     resolved.storageWorkspace ? { workspace: resolved.storageWorkspace } : undefined
   // Stored asset reads are intentionally absent: expose receipts only through app-authorized queries.
   // Likewise, callers cannot pick Assembly `fields` to join onto album results: an app query that
@@ -414,7 +439,7 @@ export function makeTransloaditAPI(
       args: vWebhookActionArgs,
       returns: vWebhookResponse,
       handler: async (ctx, args) => {
-        const resolvedConfig = resolveConfig()
+        const resolvedConfig = resolveWebhookConfig()
         return ctx.runAction(component.lib.handleWebhook, {
           ...args,
           config: { authSecret: resolvedConfig.authSecret },
@@ -426,7 +451,7 @@ export function makeTransloaditAPI(
       args: vWebhookActionArgs,
       returns: vQueueWebhookResponse,
       handler: async (ctx, args) => {
-        const resolvedConfig = resolveConfig()
+        const resolvedConfig = resolveWebhookConfig()
         return ctx.runAction(component.lib.queueWebhook, {
           ...args,
           config: { authSecret: resolvedConfig.authSecret },

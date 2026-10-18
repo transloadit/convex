@@ -38,44 +38,53 @@ app.use(transloadit);
 export default app;
 ```
 
-### 2) Set environment variables
+### 2) Configure server-side credentials
 
 ```bash
 npx convex env set TRANSLOADIT_KEY <your_auth_key>
 npx convex env set TRANSLOADIT_SECRET <your_auth_secret>
 ```
 
+Creating a client, registering functions and reading stored metadata do not require these
+credentials. Assembly creation, upload signing and refresh require both when called; webhook
+verification requires only the secret. Missing credentials fail the operation, not module loading
+or codegen. Keep credentials on the Convex backend, never in browser code.
+
 ## Upload flow
 
-1. **Server-only create**: a Convex action creates signed `assemblyOptions` (auth secret stays server-side).
+1. **Authorize and sign**: your app action checks access, chooses the pipeline on the server, and creates signed `assemblyOptions`.
 2. **Client upload**: use Uppy + `@uppy/transloadit` with `assemblyOptions()`.
 3. **Webhook ingestion**: verify the signature and `queueWebhook` for durable processing.
 4. **Realtime UI**: query status/results and render the gallery.
 
-## Backend API
+## Backend API: app-owned functions
 
 ```ts
-// convex/transloadit.ts
-import { makeTransloaditAPI } from "@transloadit/convex";
+// convex/transloaditClient.ts
+import { Transloadit } from "@transloadit/convex";
 import { components } from "./_generated/api";
 
-export const {
-  createAssembly,
-  createAssemblyOptions,
-  handleWebhook,
-  queueWebhook,
-  refreshAssembly,
-  getAssemblyStatus,
-  listAssemblies,
-  listResults,
-  storeAssemblyMetadata,
-} = makeTransloaditAPI(components.transloadit);
+export const transloadit = new Transloadit(components.transloadit);
 ```
 
-These wrappers do not add application authorization. Expose only the operations your app needs,
-and add membership/ownership checks for signing, queries, refresh, edits, and deletion. The example
-limits guest signing to its wedding pipeline and keeps cleanup internal; album reads require an
-admitted guest.
+This creates a server-side helper, **not public Convex endpoints**. Call its methods from your own
+`action`, `query` or `mutation` after checking the caller's access. An authenticated caller is not
+automatically allowed to access every album or Assembly. Keep pipeline, Template, Workspace,
+ownership fields and Storage paths server-chosen; do not forward arbitrary browser signing inputs.
+
+The runnable [wedding app](example/) is the reference integration, rather than a second copy of its
+access rules here:
+
+| Boundary | Existing app implementation |
+| --- | --- |
+| Upload signing | [`wedding.ts`](example/convex/wedding.ts): admitted guest, bounded batch, server-chosen recipe and upload record/path |
+| Gallery and exact media | [`media.ts`](example/convex/media.ts): live admission, album and upload ownership, server-chosen rendition map |
+| Assembly activity and refresh | [`transloadit.ts`](example/convex/transloadit.ts): album-wide activity summaries, owner-only status/results and expected owner fields on refresh |
+| Webhooks and deletion | [`http.ts`](example/convex/http.ts), [`transloadit.ts`](example/convex/transloadit.ts) and [`storageCleanup.ts`](example/convex/storageCleanup.ts): verified ingestion and internal-only mutations |
+
+`makeTransloaditAPI()` and `client.api()` remain compatible for existing integrations, but are
+deprecated: they register public functions without app authorization. Do not re-export them as a
+new app's backend. See [migration guidance](docs/advanced.md#legacy-public-wrappers).
 
 Note: pass `expires` in `createAssembly` when you need a custom expiry; otherwise the component defaults to 1 hour from now.
 
@@ -121,7 +130,7 @@ can keep each canonical receipt (`workspace`, `asset_id`, `version_id`, `path`,
 
 ```ts
 const transloadit = new Transloadit(components.transloadit, { storageWorkspace: "my-workspace" });
-// or set TRANSLOADIT_WORKSPACE for makeTransloaditAPI and the class defaults
+// or set TRANSLOADIT_WORKSPACE for the default
 ```
 
 - Only completed Assemblies register receipts, from verified webhooks or authoritative refreshes.
@@ -206,12 +215,34 @@ example strips it from versions its guests may only fetch as originals).
 ## Webhook route
 
 Transloadit sends webhooks as `multipart/form-data` with `transloadit` (JSON) and `signature` fields.
+Keep the Convex ingestion function internal; only the HTTP route should invoke it. With the client
+above, define:
+
+```ts
+// convex/transloadit.ts
+import { v } from "convex/values";
+import { internalAction } from "./_generated/server";
+import { transloadit } from "./transloaditClient";
+
+export const queueWebhook = internalAction({
+  args: {
+    payload: v.any(),
+    rawBody: v.optional(v.string()),
+    signature: v.optional(v.string()),
+  },
+  handler: (ctx, args) => transloadit.queueWebhook(ctx, args),
+});
+```
+
+`queueWebhook` verifies the raw body's signature before enqueueing anything. Do not expose a
+`verifySignature` argument to clients or disable verification for HTTP requests. Configure
+`TRANSLOADIT_WORKSPACE` too if these notifications should register Storage receipts.
 
 ```ts
 // convex/http.ts
 import { httpRouter } from "convex/server";
 import { handleWebhookRequest } from "@transloadit/convex";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 
 const http = httpRouter();
@@ -222,7 +253,7 @@ http.route({
   handler: httpAction((ctx, request) =>
     handleWebhookRequest(request, {
       mode: "queue",
-      runAction: (args) => ctx.runAction(api.transloadit.queueWebhook, args),
+      runAction: (args) => ctx.runAction(internal.transloadit.queueWebhook, args),
     }),
   ),
 });
@@ -230,45 +261,18 @@ http.route({
 export default http;
 ```
 
-## Client wrapper (optional)
+## Uppy client
 
-Most integrations should use `makeTransloaditAPI` (above). If you prefer a class-based API
-(similar to other Convex components), use `Transloadit`:
+Use Uppy + `@uppy/transloadit` directly. Start at
+[`WeddingUploadsClient.tsx`](example/app/WeddingUploadsClient.tsx): it calls the authorized wedding
+action for each batch, derives its file count from Uppy, and handles authentication and upload errors.
+[`useWeddingUppy.ts`](example/app/useWeddingUppy.ts) and
+[`createWeddingUppy.ts`](example/app/createWeddingUppy.ts) manage the Uppy instance and plugin.
+Start from that flow rather than exposing a generic signing action.
 
-```ts
-import { Transloadit } from "@transloadit/convex";
-import { components } from "./_generated/api";
-
-const transloadit = new Transloadit(components.transloadit, {
-  authKey: process.env.TRANSLOADIT_KEY!,
-  authSecret: process.env.TRANSLOADIT_SECRET!,
-});
-```
-
-## Uppy client (React example)
-
-```tsx
-import Uppy from "@uppy/core";
-import Transloadit from "@uppy/transloadit";
-import { api } from "../convex/_generated/api";
-
-const uppy = new Uppy().use(Transloadit, {
-  waitForEncoding: true,
-  assemblyOptions: async () => {
-    const { assemblyOptions } = await runAction(
-      api.wedding.createWeddingAssemblyOptions,
-      { fileCount, guestName },
-    );
-    return assemblyOptions;
-  },
-});
-
-await uppy.upload();
-```
-Note: `assemblyOptions()` is called once per batch, so pass per-file metadata via Uppy file meta
-(e.g. `uppy.setFileMeta(fileId, {...})`) and use `fields` for shared values.
-The wedding action requires an existing guest session; an optional invitation code belongs to
-sign-in, not the upload action.
+`assemblyOptions()` is called once per batch. Use Uppy file metadata for per-file values and
+Assembly `fields` for shared display values, not as the sole ownership proof. The optional wedding
+invitation code belongs to sign-in, not the upload action.
 
 Migration note: the `@transloadit/convex/react` entrypoint has been removed; use Uppy +
 `@uppy/transloadit` directly.
