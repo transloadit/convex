@@ -310,6 +310,11 @@ so breaking changes are allowed but must be described in the changeset.
 yarn changeset
 ```
 
-2. Commit and push it to `main`.
+2. Commit it on a branch and merge the reviewed PR into `main`.
 3. The Changesets workflow will open a “Version Packages” PR.
 4. Merge that PR to publish to npm and tag the release.
+
+Yarn installs and builds the project. Changesets is pinned to the maintained 2.x publisher so
+the release uses npm's trusted-publishing/OIDC and provenance support. Changesets 3 switches a
+Yarn workspace to Yarn's publisher; do not upgrade it until that path passes publication with
+provenance enabled. The 0.6.1 release hit a duplicate transparency-log entry in that path.
