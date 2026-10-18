@@ -314,7 +314,7 @@ yarn changeset
 3. The Changesets workflow will open a “Version Packages” PR.
 4. Merge that PR to publish to npm and tag the release.
 
-Yarn installs and builds the project. Changesets is pinned to the maintained 2.x publisher so
+Yarn installs and builds the project. Changesets CLI 2 and its compatible Action 1 are pinned so
 the release uses npm's trusted-publishing/OIDC and provenance support. Changesets 3 switches a
 Yarn workspace to Yarn's publisher; do not upgrade it until that path passes publication with
 provenance enabled. The 0.6.1 release hit a duplicate transparency-log entry in that path.
