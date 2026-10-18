@@ -498,7 +498,12 @@ test('a loaded video never speculatively loads the next video', () => {
   const video = { ...photo(10).asset, mime: 'video/mp4', path: 'upload/play.mp4' }
   render(
     <AlbumIntlProvider initialLocale="en">
-      <Gallery storageAssets={[{ ...first, video }, { ...second, video }]} />
+      <Gallery
+        storageAssets={[
+          { ...first, video },
+          { ...second, video },
+        ]}
+      />
     </AlbumIntlProvider>,
   )
   fireEvent.click(screen.getByRole('button', { name: 'View first.mov' }))

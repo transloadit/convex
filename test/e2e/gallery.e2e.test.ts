@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { type Browser, expect as browserExpect, chromium, type Page } from '@playwright/test'
 import { afterAll, beforeAll, expect, test, vi } from 'vitest'
@@ -160,6 +160,108 @@ test('only the next full photo is prefetched after current readiness, never on S
     await browserExpect(page.getByRole('dialog').getByRole('status')).toHaveCount(0)
     expect(fullPhotos.some((id) => id.startsWith('1'))).toBe(true)
     expect(fullPhotos.some((id) => id.startsWith('2') || id.startsWith('3'))).toBe(false)
+    expect(errors).toEqual([])
+  } finally {
+    await context.close()
+  }
+})
+
+test('video readiness warms one neighboring photo without prefetching another video', async () => {
+  const context = await browser.newContext({
+    baseURL: fixture.url,
+    viewport: { width: 1280, height: 800 },
+  })
+  const page = await context.newPage()
+  const errors = browserErrors(page)
+  const fullPhotos: string[] = []
+  const videos: string[] = []
+  let release = () => {}
+  const delayedVideo = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  await page.route('**/api/transloadit/media?**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.searchParams.get('action') === 'original') {
+      videos.push(url.searchParams.get('asset_id') ?? '')
+      await delayedVideo
+    } else if (Number(url.searchParams.get('w')) >= 1280) {
+      fullPhotos.push(url.searchParams.get('asset_id') ?? '')
+    }
+    await route.continue()
+  })
+  try {
+    await page.goto('/?mixed=1')
+    await page.getByRole('button', { name: 'View photo-1.jpg' }).click()
+    await browserExpect(page.getByRole('dialog').getByRole('status')).toHaveCount(0)
+    expect(videos).toEqual([])
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+    const video = page.getByRole('dialog', { name: 'video-2.mp4' }).getByLabel('video-2.mp4')
+    await browserExpect(video).toBeVisible({ timeout: 1000 })
+    expect(new URL(page.url()).searchParams.get('media')).toBe(mediaId(2))
+    await browserExpect.poll(() => videos.length).toBeGreaterThan(0)
+    expect(fullPhotos.some((id) => id.startsWith('3'))).toBe(false)
+    const readyStarted = performance.now()
+    release()
+    await browserExpect
+      .poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState))
+      .toBeGreaterThanOrEqual(2)
+    const videoReadyMs = performance.now() - readyStarted
+    await video.evaluate((element: HTMLVideoElement) => element.play())
+    await browserExpect
+      .poll(() => video.evaluate((element: HTMLVideoElement) => element.currentTime))
+      .toBeGreaterThan(0)
+    await browserExpect.poll(() => fullPhotos.some((id) => id.startsWith('3'))).toBe(true)
+    expect(videos.every((id) => id.startsWith('20'))).toBe(true)
+    const navigationStarted = performance.now()
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+    const photo = page.getByRole('dialog', { name: 'photo-3.jpg' })
+    await browserExpect(photo).toBeVisible({ timeout: 1000 })
+    const navigationMs = performance.now() - navigationStarted
+    expect(new URL(page.url()).searchParams.get('media')).toBe(mediaId(3))
+    await browserExpect(photo.getByRole('status')).toHaveCount(0)
+    expect(videos.every((id) => id.startsWith('20'))).toBe(true)
+    if (process.env.E2E_SCREENSHOT_DIR) {
+      await mkdir(process.env.E2E_SCREENSHOT_DIR, { recursive: true })
+      await page.screenshot({ path: join(process.env.E2E_SCREENSHOT_DIR, 'mixed-next-photo.png') })
+      await writeFile(
+        join(process.env.E2E_SCREENSHOT_DIR, 'mixed-local-timings.json'),
+        `${JSON.stringify({ videoReadyMs, navigationMs, fullPhotos, videos, errors }, null, 2)}\n`,
+      )
+    }
+    expect(errors).toEqual([])
+  } finally {
+    release()
+    await context.close()
+  }
+})
+
+test.each([
+  { saveData: true, effectiveType: '4g' },
+  { saveData: false, effectiveType: '3g' },
+])('video readiness respects connection preferences: %j', async (connection) => {
+  const context = await browser.newContext({ baseURL: fixture.url })
+  await context.addInitScript((value) => {
+    Object.defineProperty(navigator, 'connection', { value })
+  }, connection)
+  const page = await context.newPage()
+  const errors = browserErrors(page)
+  const fullPhotos: string[] = []
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (url.pathname === '/api/transloadit/media' && Number(url.searchParams.get('w')) >= 1280)
+      fullPhotos.push(url.searchParams.get('asset_id') ?? '')
+  })
+  try {
+    await page.goto(`/?mixed=1&media=${mediaId(2)}`)
+    const video = page.getByRole('dialog').getByLabel('video-2.mp4')
+    await browserExpect
+      .poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState))
+      .toBeGreaterThanOrEqual(2)
+    expect(fullPhotos).toEqual([])
+    await page.getByRole('button', { name: 'Next', exact: true }).click()
+    await browserExpect(page.getByRole('dialog', { name: 'photo-3.jpg' })).toBeVisible()
+    await browserExpect(page.getByRole('dialog').getByRole('status')).toHaveCount(0)
+    expect(fullPhotos.some((id) => id.startsWith('3'))).toBe(true)
     expect(errors).toEqual([])
   } finally {
     await context.close()

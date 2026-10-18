@@ -7,7 +7,11 @@ import type { AssemblyOptions } from '../lib/transloadit'
 export function createWeddingUppy(getAssemblyOptions: () => Promise<AssemblyOptions>) {
   const uppy = new Uppy<Record<string, unknown>, Record<string, unknown>>({
     autoProceed: false,
-    restrictions: { allowedFileTypes: ['image/*', 'video/*'], maxNumberOfFiles: 12, minFileSize: 1 },
+    restrictions: {
+      allowedFileTypes: ['image/*', 'video/*'],
+      maxNumberOfFiles: 12,
+      minFileSize: 1,
+    },
   }).use(Transloadit, { waitForEncoding: true, assemblyOptions: getAssemblyOptions })
   return { uppy, locales: uppyLocales }
 }

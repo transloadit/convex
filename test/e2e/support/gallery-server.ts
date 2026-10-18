@@ -19,8 +19,10 @@ export async function startGalleryFixture() {
   if (!script) throw new Error('Gallery fixture did not build')
   const css = await readFile('example/app/globals.css')
   const photo = await readFile('test/e2e/fixtures/wedding-photo-01.png')
+  const video = await readFile('test/e2e/fixtures/wedding-video-01.mp4')
   const server = createServer((request, response) => {
-    const path = new URL(request.url ?? '/', 'http://localhost').pathname
+    const url = new URL(request.url ?? '/', 'http://localhost')
+    const path = url.pathname
     if (path === '/gallery.js') {
       response.writeHead(200, { 'content-type': 'text/javascript' })
       response.end(script.contents)
@@ -28,8 +30,12 @@ export async function startGalleryFixture() {
       response.writeHead(200, { 'content-type': 'text/css' })
       response.end(css)
     } else if (path === '/api/transloadit/media') {
-      response.writeHead(200, { 'content-type': 'image/png', 'cache-control': 'no-store' })
-      response.end(photo)
+      const isVideo = url.searchParams.get('action') === 'original'
+      response.writeHead(200, {
+        'content-type': isVideo ? 'video/mp4' : 'image/png',
+        'cache-control': 'no-store',
+      })
+      response.end(isVideo ? video : photo)
     } else if (path === '/') {
       response.writeHead(200, { 'content-type': 'text/html' })
       response.end(
