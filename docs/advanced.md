@@ -24,6 +24,8 @@ exports are not changed automatically by upgrading this package; review them bef
 The class's writable `config` API and explicit credential overrides remain supported. Environment
 credentials resolve when an operation needs them, so local receipt reads and codegen need neither
 an Assembly key nor a secret. Webhook handlers need only the secret; signing and refresh need both.
+Reading or copying `client.config` also evaluates its credential getters and can throw if credentials
+are absent. Do not serialize that credential-bearing object into logs or browser data.
 
 ## Typed helpers (raw payload parsing)
 

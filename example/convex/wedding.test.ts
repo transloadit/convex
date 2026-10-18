@@ -122,6 +122,10 @@ test('the HTTP webhook verifies before queueing with only a secret, never an API
   await expect(t.fetch('/transloadit/webhook', { method: 'POST', body })).rejects.toThrow(
     'Invalid Transloadit webhook signature',
   )
+  body.delete('signature')
+  await expect(t.fetch('/transloadit/webhook', { method: 'POST', body })).rejects.toThrow(
+    'Invalid Transloadit webhook signature',
+  )
   expect(
     await t.query(components.transloadit.lib.getAssemblyStatus, { assemblyId: 'unsigned-http' }),
   ).toBeNull()

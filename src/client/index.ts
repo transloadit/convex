@@ -194,6 +194,7 @@ export class TransloaditClient {
       payload: unknown
       rawBody?: string
       signature?: string
+      /** Trusted server-side opt-out only; never accept this flag from HTTP or client input. */
       verifySignature?: boolean
     },
   ) {
@@ -210,6 +211,7 @@ export class TransloaditClient {
       payload: unknown
       rawBody?: string
       signature?: string
+      /** Trusted server-side opt-out only; never accept this flag from HTTP or client input. */
       verifySignature?: boolean
     },
   ) {

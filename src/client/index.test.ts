@@ -145,8 +145,15 @@ describe('makeTransloaditAPI', () => {
       await t.query(anyApi.transloadit.getAssemblyStatus, { assemblyId: 'tampered' }),
     ).toBeNull()
     await expect(
-      t.action(anyApi.transloadit[method], { ...args, signature: 'invalid' }),
-    ).rejects.toThrow()
+      t.action(anyApi.transloadit[method], {
+        ...args,
+        rawBody: JSON.stringify({ assembly_id: 'unsigned', ok: 'ASSEMBLY_COMPLETED' }),
+        signature: 'invalid',
+      }),
+    ).rejects.toThrow('Invalid Transloadit webhook signature')
+    expect(
+      await t.query(anyApi.transloadit.getAssemblyStatus, { assemblyId: 'unsigned' }),
+    ).toBeNull()
     vi.stubEnv('TRANSLOADIT_SECRET', undefined)
     await expect(t.action(anyApi.transloadit[method], args)).rejects.toThrow(
       'Missing TRANSLOADIT_SECRET environment variable',
@@ -176,11 +183,21 @@ describe('makeTransloaditAPI', () => {
       'stepNames',
     ])
   })
+
+  test.each(['handleWebhook', 'queueWebhook'] as const)(
+    '%s does not accept a caller-controlled signature-verification opt-out',
+    (method) => {
+      const api = makeTransloaditAPI(component)
+      expect(Object.keys(exportedArgs(api[method]).value).sort()).toEqual([
+        'payload',
+        'rawBody',
+        'signature',
+      ])
+    },
+  )
 })
 
 test('exact media lookup only forwards component fields, not caller app data', async () => {
-  // Convex's AnyComponentReference omits named exports; bind this test proxy to generated ComponentApi.
-  const component = componentsGeneric().transloadit as unknown as TransloaditComponent
   const client = new Transloadit(component, {
     authKey: 'test-key',
     authSecret: 'test-secret',

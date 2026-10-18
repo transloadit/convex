@@ -79,7 +79,7 @@ access rules here:
 | --- | --- |
 | Upload signing | [`wedding.ts`](example/convex/wedding.ts): admitted guest, bounded batch, server-chosen recipe and upload record/path |
 | Gallery and exact media | [`media.ts`](example/convex/media.ts): live admission, album and upload ownership, server-chosen rendition map |
-| Assembly status and refresh | [`transloadit.ts`](example/convex/transloadit.ts): own-Assembly reads and expected owner fields on refresh |
+| Assembly activity and refresh | [`transloadit.ts`](example/convex/transloadit.ts): album-wide activity summaries, owner-only status/results and expected owner fields on refresh |
 | Webhooks and deletion | [`http.ts`](example/convex/http.ts), [`transloadit.ts`](example/convex/transloadit.ts) and [`storageCleanup.ts`](example/convex/storageCleanup.ts): verified ingestion and internal-only mutations |
 
 `makeTransloaditAPI()` and `client.api()` remain compatible for existing integrations, but are
@@ -130,7 +130,7 @@ can keep each canonical receipt (`workspace`, `asset_id`, `version_id`, `path`,
 
 ```ts
 const transloadit = new Transloadit(components.transloadit, { storageWorkspace: "my-workspace" });
-// or set TRANSLOADIT_WORKSPACE for makeTransloaditAPI and the class defaults
+// or set TRANSLOADIT_WORKSPACE for the default
 ```
 
 - Only completed Assemblies register receipts, from verified webhooks or authoritative refreshes.
@@ -263,10 +263,11 @@ export default http;
 
 ## Uppy client
 
-Use Uppy + `@uppy/transloadit` directly. The working React flow is
-[`useWeddingUppy.ts`](example/app/useWeddingUppy.ts) with
-[`createWeddingUppy.ts`](example/app/createWeddingUppy.ts): it calls the authorized wedding action
-for each batch, derives its file count from Uppy, and handles authentication and upload errors.
+Use Uppy + `@uppy/transloadit` directly. Start at
+[`WeddingUploadsClient.tsx`](example/app/WeddingUploadsClient.tsx): it calls the authorized wedding
+action for each batch, derives its file count from Uppy, and handles authentication and upload errors.
+[`useWeddingUppy.ts`](example/app/useWeddingUppy.ts) and
+[`createWeddingUppy.ts`](example/app/createWeddingUppy.ts) manage the Uppy instance and plugin.
 Start from that flow rather than exposing a generic signing action.
 
 `assemblyOptions()` is called once per batch. Use Uppy file metadata for per-file values and
