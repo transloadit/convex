@@ -263,6 +263,23 @@ describeE2e('e2e upload flow', () => {
         '[data-testid="uppy-dashboard"] input.uppy-Dashboard-input[name="files[]"]:not([webkitdirectory])',
       )
       await fileInput.waitFor({ state: 'attached' })
+      const assemblyRequests = diagnostics.requestLog.filter((request) =>
+        /POST https:\/\/[^/]+\/assemblies$/.test(request),
+      )
+      await fileInput.setInputFiles({
+        name: 'empty.jpg',
+        mimeType: 'image/jpeg',
+        buffer: Buffer.alloc(0),
+      })
+      await browserExpect(uploadDialog.getByRole('alert')).toContainText(
+        'This file is smaller than the allowed size of 1 B',
+      )
+      await browserExpect(uploadDialog.locator('.uppy-Dashboard-Item')).toHaveCount(0)
+      expect(
+        diagnostics.requestLog.filter((request) =>
+          /POST https:\/\/[^/]+\/assemblies$/.test(request),
+        ),
+      ).toEqual(assemblyRequests)
       await fileInput.setInputFiles([imagePath, imagePathAlt, videoPath])
       await page.waitForFunction(
         () => document.querySelectorAll('.uppy-Dashboard-Item').length >= 2,
