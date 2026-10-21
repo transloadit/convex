@@ -17,6 +17,13 @@ A Convex component for creating Transloadit Assemblies, signing Uppy uploads, an
 - `convex` 1.43+ (peer dependency). Storage receipt pages use convex-helpers' `paginator`, and the
   tested convex-helpers release (0.1.124) declares this Convex floor.
 
+Development and GitHub automation use Node.js 26.12.1+ in the 26.x line (`nvm use`).
+Node 26 does not bundle Corepack; install `corepack@0.36.0` and run `corepack enable`
+before `yarn install --immutable`. CI retains Node 24 unit coverage for the public runtime floor.
+The Vercel example stays on the provider-supported Node 24 runtime; Vercel currently supports
+[Node 22 and 24](https://vercel.com/docs/functions/runtimes/node-js/node-js-versions) and manages
+minor and patch updates. The package's public Node requirement above is unchanged.
+
 ## Install
 
 ```bash
