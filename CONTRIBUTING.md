@@ -5,7 +5,8 @@ them out.
 
 ## Development
 
-Use Node.js 24.15+ or 26+ and the Yarn version pinned in `package.json`:
+Use the latest Node.js 24.x (at least 24.22.1) or 26.x (at least 26.12.1) and the Yarn version
+pinned in `package.json`:
 
 ```bash
 npm install --global corepack@0.36.0
