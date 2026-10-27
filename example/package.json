@@ -12,7 +12,7 @@
     "@convex-dev/auth": "^0.0.95",
     "@transloadit/convex": "0.6.1",
     "@transloadit/node": "5.0.1",
-    "@transloadit/viewer": "0.0.8",
+    "@transloadit/viewer": "0.1.0",
     "@transloadit/zod": "5.0.1",
     "@uppy/core": "^6.0.1",
     "@uppy/dashboard": "^6.0.0",
