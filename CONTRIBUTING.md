@@ -146,6 +146,11 @@ posters. Use the published Viewer alpha and SDK versions pinned in `package.json
 R2 public links retain their external lifecycle; the demo no longer renders or manages those objects.
 They are not migrated or made private by this code change.
 
+Viewer 0.1.0 uses `builtin/storage-preview@0.0.4` for this app's private image previews. Before
+deploying this upgrade, confirm that API2's direct-encode preview pipeline is live, including its
+worker/FileInfoReader dependencies. The media route uses the package default; no old-template
+override or fallback is needed. Original downloads and video playback keep their existing route.
+
 Before enabling uploads, configure `TRANSLOADIT_SMART_CDN_KEY`, `TRANSLOADIT_SMART_CDN_SECRET` and
 `TRANSLOADIT_SMART_CDN_WORKSPACE` on the matching Vercel environment. They must belong to the same
 Workspace as the backend Assembly key; the delivery key needs `smart_cdn:sign`. Never expose them

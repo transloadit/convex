@@ -2013,7 +2013,7 @@ __metadata:
     "@testing-library/react": "npm:^16.3.3"
     "@transloadit/node": "npm:5.0.1"
     "@transloadit/utils": "npm:^4.8.1"
-    "@transloadit/viewer": "npm:0.0.8"
+    "@transloadit/viewer": "npm:0.1.0"
     "@transloadit/zod": "npm:5.0.1"
     "@types/node": "npm:^24.13.5"
     "@types/react": "npm:^19.3.0"
@@ -2098,19 +2098,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@transloadit/utils@npm:^4.8.1, @transloadit/utils@npm:^4.9.0":
-  version: 4.9.0
-  resolution: "@transloadit/utils@npm:4.9.0"
-  checksum: 10c0/f9665da8aa3a46f82108f47165d00f05449a591ae911d8e9b1fa33d3d1cfb8f8e50b96194ec2a78296255fc3f4fc5a4323f9476a2a11d9584e285ecc86c52f68
+"@transloadit/utils@npm:^4.10.1, @transloadit/utils@npm:^4.8.1, @transloadit/utils@npm:^4.9.0":
+  version: 4.10.1
+  resolution: "@transloadit/utils@npm:4.10.1"
+  checksum: 10c0/ab2bc727a1b4fad977996e0854c2e4cc9b0059efdecb968c0ee7597a899a531a541bdb35ca376df2fee6edd2df0a3a3b093ae2e6ea62a93f553517a375d8ea62
   languageName: node
   linkType: hard
 
-"@transloadit/viewer@npm:0.0.8":
-  version: 0.0.8
-  resolution: "@transloadit/viewer@npm:0.0.8"
+"@transloadit/viewer@npm:0.1.0":
+  version: 0.1.0
+  resolution: "@transloadit/viewer@npm:0.1.0"
   dependencies:
     "@noble/ciphers": "npm:^1.3.0"
-    "@transloadit/utils": "npm:^4.9.0"
+    "@transloadit/utils": "npm:^4.10.1"
     server-only: "npm:^0.0.1"
     thumbhash: "npm:0.1.1"
   peerDependencies:
@@ -2124,7 +2124,7 @@ __metadata:
       optional: true
     react-dom:
       optional: true
-  checksum: 10c0/9d3d55edcac1af67211a66b4ce95aa699b37de8f2a90ed9ea211e69f22a0d1146404d947aac493970667475eb931d6522884058d7628a41210b050bda87d1881
+  checksum: 10c0/8171d653580086aa87253deb465e5bdda67e84801c8fb46751cae0edf1257ddd5e80f877cffcd205da5a7f30df9ad1f21613f6047dafcaee3e9683eb3fec098b
   languageName: node
   linkType: hard
 
@@ -5367,7 +5367,7 @@ __metadata:
     "@convex-dev/auth": "npm:^0.0.95"
     "@transloadit/convex": "npm:0.6.1"
     "@transloadit/node": "npm:5.0.1"
-    "@transloadit/viewer": "npm:0.0.8"
+    "@transloadit/viewer": "npm:0.1.0"
     "@transloadit/zod": "npm:5.0.1"
     "@uppy/core": "npm:^6.0.1"
     "@uppy/dashboard": "npm:^6.0.0"
