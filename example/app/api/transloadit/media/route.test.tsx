@@ -87,7 +87,7 @@ describe('private media route', () => {
     expect(response.headers.get('cache-control')).toBe('private, no-store')
     const location = new URL(response.headers.get('location') ?? '')
     expect(location.hostname).toBe(`${workspace}.tlcdn.com`)
-    expect(decodeURIComponent(location.pathname)).toContain('builtin/storage-preview@')
+    expect(decodeURIComponent(location.pathname)).toContain('builtin/storage-preview@0.0.4')
     expect(location.searchParams.get('v')).toBe(receipt.version_id)
     expect(location.searchParams.get('sig')).toBeTruthy()
     // The Convex query receives the guest's cookie token and exactly the requested selection.
